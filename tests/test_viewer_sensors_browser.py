@@ -223,7 +223,12 @@ def test_a_switch_holds_for_its_sensor_in_its_world_only(playground, chrome):
             pg.new_world("second")
             pg.add_robot("dog", build=POST)
             pg.add_sensor("dog", {"type": "lidar3d"})
-            await _until(tab, f"{state}.points > 0")
+            # Old hidden lidar points can remain until the new scene arrives.
+            await _until(
+                tab,
+                f"window.__robotforge.scene.version === {pg.session.version} && "
+                f"window.__robotforge.scene.world === 'second' && {state}.points > 0",
+            )
             out["next_world"] = (await tab.eval(state))["shown"]
             pg.add_sensor("dog", {"type": "imu"})
             pg.show_sensors(["dog/lidar"])

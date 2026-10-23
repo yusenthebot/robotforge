@@ -57,6 +57,7 @@ from robotforge.viewer.server import ViewerHub
 if TYPE_CHECKING:
     from robotforge.design import generator
     from robotforge.viewer.creation import Addition
+    from robotforge.viewer.object_edit import Edit
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
 MAX_SIM_SECONDS = 60.0
@@ -122,8 +123,20 @@ class Playground:
     _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
     _play_addition: Addition | None = field(default=None, init=False, repr=False)
+    _play_edit: Edit | None = field(default=None, init=False, repr=False)
+    _play_world_sha256: str | None = field(default=None, init=False, repr=False)
+    _play_world_descriptor: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        if self.store is not None:
+            import hashlib
+
+            raw = self.store.file.read_bytes()
+            descriptor = hashlib.sha256(
+                World.from_yaml(raw.decode("utf-8")).model_dump_json().encode("utf-8")
+            ).hexdigest()
+            if descriptor == self._play_world_descriptor:
+                self._play_world_sha256 = hashlib.sha256(raw).hexdigest()
         self.behaviors = BehaviorManager(
             self.session, self._acting_world, lambda: self.store.dir if self.store is not None else None
         )
@@ -168,7 +181,7 @@ class Playground:
         contract_key: tuple | None = None
         contracts: dict[str, Any] = {}
 
-        def task_contracts(world: World | None) -> dict[str, Any]:
+        def task_contracts(world: World | None, *, copy_result: bool = True) -> dict[str, Any]:
             from robotforge.control.runtime import contract_catalog
             from robotforge.control.task_registry import task_registry_revision
             from robotforge.extend import REGISTRY
@@ -186,7 +199,7 @@ class Playground:
             if key != contract_key:
                 contracts = contract_catalog(world)
                 contract_key = key
-            return copy.deepcopy(contracts)
+            return copy.deepcopy(contracts) if copy_result else contracts
 
         def task_run(msg: dict[str, Any]) -> dict[str, Any]:
             from robotforge.control.runtime import start_control
@@ -203,11 +216,14 @@ class Playground:
                 )
 
         def extras() -> dict[str, Any]:
+            from robotforge.viewer.object_edit import metadata
+
             world = self.current_world()
             robots = self.behaviors.robots()
             learned = self.behaviors.learned_walkers()
             return {
                 "robots": robots,
+                "object_edit": metadata(self),
                 "task_contracts": task_contracts(world),
                 "learned": learned,
                 "world": world.name if world is not None else None,  # the page title; None for a loaded file
@@ -224,6 +240,8 @@ class Playground:
             action = msg.get("action")
             if action == "add_robot":
                 return self.add_robot_for_play(msg)
+            if action in {"edit_object", "remove_object", "undo_object_edit"}:
+                return self.edit_object_for_play(msg)
             if action in {"add_object", "undo_add"}:
                 return self.object_for_play(msg)
             if action == "scene":
@@ -284,14 +302,16 @@ class Playground:
                 "type": "robot_info",
                 "version": version,
                 "robots": rows,
-                "task_contracts": task_contracts(self.current_world()),
+                "task_contracts": task_contracts(self.current_world(), copy_result=False),
                 "learned": learned,
                 "modes": {r["name"]: modes.available(self, r, r["name"] in learned) for r in rows},
             }
             if self.session.version != version or description == last_description:
                 return None
+            # Keep the cached catalog private, but copy only a message we actually send.
+            emitted = copy.deepcopy(description)
             last_description = description
-            return description
+            return emitted
 
         hub.robot_stream = robot_update
         hub.state_extras = lambda: {"mode": modes.current(self), **self.demonstrations.viewer_state()}
@@ -429,6 +449,13 @@ class Playground:
         from robotforge.viewer.creation import place_object, undo_addition
 
         return undo_addition(self, message) if message.get("action") == "undo_add" else place_object(self, message)
+
+    @_one_edit_at_a_time
+    def edit_object_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Reposition/remove an exact existing rigid prop, or undo that one edit."""
+        from robotforge.viewer.object_edit import edit, undo
+
+        return undo(self, message) if message.get("action") == "undo_object_edit" else edit(self, message)
 
     @_one_edit_at_a_time
     def add_robot(
@@ -1098,7 +1125,13 @@ class Playground:
         return self.store
 
     def _load_world(self, compiled: CompiledWorld, created: bool = False) -> dict[str, Any]:
+        import hashlib
+
         store = self._require_store()
+        self._play_world_descriptor = compiled.world_sha256
+        raw = store.file.read_bytes()
+        descriptor = hashlib.sha256(World.from_yaml(raw.decode("utf-8")).model_dump_json().encode("utf-8")).hexdigest()
+        self._play_world_sha256 = hashlib.sha256(raw).hexdigest() if descriptor == compiled.world_sha256 else None
         self.session.load_model(compiled.model, str(store.file))
         self.last_doctor = compiled.doctor
         world = store.load()

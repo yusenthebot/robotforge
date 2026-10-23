@@ -113,7 +113,7 @@ def load_playground(path: Path, options: dict | None = None) -> Playground:
         compiled = store.compile()
         session = SimSession(model=compiled.model, data=mujoco.MjData(compiled.model), source=str(world_file))
         session.reset()
-        return Playground(session=session, store=store)
+        return Playground(session=session, store=store, _play_world_descriptor=compiled.world_sha256)
     return Playground(session=SimSession.from_path(path))
 
 

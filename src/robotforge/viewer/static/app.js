@@ -928,10 +928,10 @@ function pickBody(e) {
 canvas.addEventListener(
   "pointerdown",
   (e) => {
-    creationGesture.down(e, creator.active() && !busy && performance.now() >= creationClickUntil
+    creationGesture.down(e, (creator.active() || selectingObjects) && !busy && performance.now() >= creationClickUntil
       ? { session: creator.session(), version: sceneDesc?.version, generation: stateGeneration } : null);
-    if (creator.active()) {
-      clearCreationPoint();
+    if (creator.active() || selectingObjects) {
+      if (creator.active()) clearCreationPoint();
       return; // OrbitControls owns camera motion; only a qualified release will place.
     }
     if (e.button !== 0) return;
@@ -959,8 +959,8 @@ canvas.addEventListener(
 
 canvas.addEventListener("pointermove", (e) => {
   creationGesture.move(e);
-  if (creator.active()) {
-    if (!creationGesture.active() && e.pointerType !== "touch") creationPoint(e);
+  if (creator.active() || selectingObjects) {
+    if (creator.active() && !creationGesture.active() && e.pointerType !== "touch") creationPoint(e);
     return;
   }
   if (!drag) {
@@ -997,10 +997,11 @@ function finishCreationGesture(e) {
   // OrbitControls installs its release listener dynamically. Let it drain before a scene edit,
   // and recheck ownership in case the session changed during this pointer event.
   setTimeout(() => {
-    if (creationGesture.active() || creationGesture.epoch() !== epoch || !creator.active() || busy || creator.session() !== context.session
+    if (creationGesture.active() || creationGesture.epoch() !== epoch || !(creator.active() || selectingObjects) || busy || creator.session() !== context.session
         || sceneDesc?.version !== context.version || stateGeneration !== context.generation
         || performance.now() < creationClickUntil) return;
-    creationPoint(point); creator.place();
+    if (selectingObjects) pickObjectForEdit(point);
+    else { creationPoint(point); creator.place(); }
   }, 0);
 }
 window.addEventListener("pointerup", finishCreationGesture, { capture: true });
@@ -1017,7 +1018,7 @@ window.addEventListener("blur", () => {
 // destination) and shows its path. A robot or a loose object under the pointer is for dragging, not a place;
 // so is a wall's side: only a face that looks up (the floor, a ramp, a table top) is.
 canvas.addEventListener("dblclick", (e) => {
-  if (creator.active() || performance.now() < creationClickUntil) return;
+  if (creator.active() || selectingObjects || performance.now() < creationClickUntil) return;
   if (!sceneReadyToDraw() || renderedVersion !== sceneDesc.version) return;
   const robot = driveTarget();
   if (!robot || lessonActive() || !worldRoot || !sceneDesc) return;
@@ -1085,7 +1086,7 @@ function connect() {
     for (const p of pending.values()) p.reject(new Error(t("disconnected")));
     pending.clear();
     creationSelection?.reject(new Error(t("disconnected")));
-    lastAddition = null; updateUndo();
+    lastAddition = lastObjectEdit = null; updateUndo();
     cancelCreation(true);
     setTimeout(connect, retryMs);
     retryMs = Math.min(retryMs * 2, 5000);
@@ -1133,6 +1134,8 @@ let worldName = "";
 const robotByName = (name) => robots.find((r) => r.name === name) ?? null;
 
 function onScene(desc) {
+  clearObjectSelection();
+  if (lastObjectEdit?.version !== desc.version) lastObjectEdit = null;
   if (lastAddition?.version !== desc.version) lastAddition = null;
   if (creator.active() && !busy) cancelCreation(true);
   robots = desc.robots || [];
@@ -1180,6 +1183,7 @@ function renderTitle() {
 }
 
 function renderRobotList() {
+  renderEditableObjects();
   creator.render(worldInfo.catalog?.robot_templates || [], worldInfo.isWorld && !sceneDesc?.lesson, busy, worldInfo.catalog?.object_presets || []);
   const list = $("robot-list");
   list.replaceChildren(
@@ -1388,7 +1392,7 @@ let stateGeneration = null;
 function applyState(s) {
   if (Number.isInteger(s.generation)) {
     if (stateGeneration !== null && stateGeneration !== s.generation && !busy) {
-      lastAddition = null; cancelCreation(true);
+      lastAddition = lastObjectEdit = null; cancelCreation(true);
     }
     stateGeneration = s.generation; // retain changes during our own edit, then reconcile against its reply
     if (creator.active() && !busy && placementGeneration === null) placementGeneration = s.generation;
@@ -1447,7 +1451,7 @@ const pressed = new Set();
 let lastDrive = "";
 
 function driveTarget() {
-  if (creator.active()) return null;
+  if (creator.active() || selectingObjects) return null;
   const robot = robotByName(selected);
   return canMove(robot) ? robot : null;
 }
@@ -1800,7 +1804,7 @@ const togglePlay = () => send({ type: "cmd", cmd: paused ? "play" : "pause" });
 $("btn-play").addEventListener("click", togglePlay);
 function resetWorld() {
   cancelCreation(true);
-  lastAddition = null; updateUndo();
+  lastAddition = lastObjectEdit = null; updateUndo();
   send({ type: "cmd", cmd: "reset" });
 }
 $("btn-reset").addEventListener("click", resetWorld);
@@ -1884,9 +1888,11 @@ $("show-shadows").addEventListener("change", (e) => {
 
 window.addEventListener("keydown", (e) => {
   if (e.defaultPrevented) return;
+  if (selectingObjects && e.key === "Escape") { finishObjectSelection(); e.preventDefault(); return; }
   if (creator.active() && e.key === "Escape") { cancelCreation(); canvas.focus(); e.preventDefault(); return; }
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
       || e.target instanceof HTMLTextAreaElement || e.target.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (selectingObjects) return;
   if (creator.active()) {
     if (e.repeat && e.key === "Enter") { e.preventDefault(); return; }
     if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
@@ -1965,16 +1971,22 @@ async function runChoice(button, msg, { frame = false, done } = {}) {
 }
 
 function setPanelBusy(on) {
+  if (!on && selectingObjects && (placementVersion !== sceneDesc?.version || placementGeneration !== stateGeneration)) {
+    clearObjectSelection(); updateEmpty(); renderDrive();
+  }
   $("world-panel").setAttribute("aria-busy", String(on));
   $("drawer").setAttribute("aria-busy", String(on));
   for (const b of document.querySelectorAll("#world-panel .choice, #world-panel .swatch, #world-panel .object-card, #build-add-robot, #drawer .choice, #drawer .create-card")) b.disabled = on || b.dataset.off === "1";
   updateUndo();
+  renderEditableObjects();
+  for (const id of ["object-move", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
 }
 
 // ------------------------------------------------------------ pick a local robot, click to place
 
 let placementVersion = 0, placementGeneration = null, creationClickUntil = 0, creationSelection = null;
 let lastAddition = null, creationSurface = null;
+let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null;
 const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
 creationMarker.visible = false;
 scene3.add(creationMarker);
@@ -1982,13 +1994,14 @@ scene3.add(creationMarker);
 function updateEmpty() {
   const hasContent = water || flexMeshes.length || sceneDesc?.geoms.some((g) =>
     g.type !== "plane" && g.group < sceneDesc.visibleGroupLimit && g.rgba[3] > 0);
-  $("empty").hidden = !(sceneDesc?.world && robots.length === 0 && !hasContent) || creator.active()
+  $("empty").hidden = !(sceneDesc?.world && robots.length === 0 && !hasContent) || creator.active() || selectingObjects
     || !$("loading").hidden || !$("world-panel").hidden || !$("drawer").hidden || lessonActive();
 }
 
 $("empty-add").addEventListener("click", () => { setDrawer(true); creator.open(); });
 
 function beginCreation() {
+  clearObjectSelection();
   stopDriving(); endDrag();
   creationGesture.invalidate();
   placementVersion = sceneDesc.version;
@@ -2002,6 +2015,7 @@ function beginCreation() {
 }
 
 function cancelCreation(force = false) {
+  clearObjectSelection();
   if (busy && !force) return;
   if (force) creationSelection?.reject(new Error(t("create_scene_changed")));
   creationGesture.invalidate();
@@ -2022,7 +2036,8 @@ function creationPoint(e) {
     clearCreationPoint(); return;
   }
   setPointer(e);
-  const hit = worldRoot && raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
+  const excluded = creator.editing()?.geoms || [];
+  const hit = worldRoot && raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible && !excluded.includes(h.object.userData.geom));
   const body = hit?.object.userData.body;
   const up = hit?.face?.normal.clone().transformDirection(hit.object.matrixWorld);
   const dynamicSurface = body > 0 && sceneDesc.bodies[body]?.dynamic;
@@ -2037,6 +2052,96 @@ function creationPoint(e) {
 }
 
 function updateCreationPreview() { placementPreview.update(creator.preview(), creationSurface); }
+
+function editableObjects() {
+  return sceneDesc?.world && !sceneDesc?.lesson && sceneDesc?.object_edit?.version === sceneDesc.version
+    ? sceneDesc.object_edit.objects : [];
+}
+
+function renderEditableObjects() {
+  const entries = editableObjects();
+  $("edit-object-section").hidden = !entries.length;
+  $("edit-objects").disabled = busy;
+  $("edit-object-list").replaceChildren(...entries.map((entry) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "pill";
+    b.textContent = entry.name; b.dataset.editObject = entry.name; b.disabled = busy;
+    b.addEventListener("click", () => beginObjectSelection(entry));
+    return b;
+  }));
+}
+
+function clearObjectSelection() {
+  selectingObjects = false; objectSelection = null;
+  $("object-edit-bar").hidden = true;
+  creationGesture.invalidate();
+  if (objectHighlight) {
+    scene3.remove(objectHighlight); objectHighlight.geometry.dispose(); objectHighlight.material.dispose(); objectHighlight = null;
+  }
+}
+
+function beginObjectSelection(entry = null) {
+  if (busy || !editableObjects().length || !sceneReadyToDraw() || !Number.isInteger(stateGeneration)) return;
+  cancelCreation(); stopDriving(); endDrag();
+  placementVersion = sceneDesc.version; placementGeneration = stateGeneration;
+  selectingObjects = true; objectSelection = entry;
+  creationClickUntil = 0; // An explicit edit-mode choice starts a new deliberate interaction.
+  setWorldPanel(false); setDrawer(false); setHelp(false); canvas.focus();
+  $("object-edit-title").textContent = entry?.name || t("select_prop");
+  $("object-edit-bar").hidden = false;
+  $("object-move").disabled = $("object-remove").disabled = !entry;
+  if (entry) {
+    objectHighlight = new THREE.Box3Helper(new THREE.Box3(), theme.amber);
+    objectHighlight.name = "object-edit-highlight"; objectHighlight.material.depthTest = false;
+    scene3.add(objectHighlight); updateObjectHighlight();
+  }
+  updateEmpty(); updateUndo(); renderDrive();
+}
+
+function updateObjectHighlight() {
+  if (!objectHighlight || !objectSelection || !worldRoot) return;
+  worldRoot.updateMatrixWorld(); objectHighlight.box.makeEmpty();
+  worldRoot.traverse((o) => { if (o.isMesh && o.visible && objectSelection.geoms.includes(o.userData.geom)) objectHighlight.box.expandByObject(o); });
+  objectHighlight.visible = !objectHighlight.box.isEmpty();
+}
+
+function pickObjectForEdit(point) {
+  setPointer(point);
+  const hit = worldRoot && raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
+  const entry = hit && editableObjects().find((o) => o.geoms.includes(hit.object.userData.geom));
+  if (entry) beginObjectSelection(entry);
+}
+
+$("edit-objects").addEventListener("click", () => beginObjectSelection());
+function finishObjectSelection() {
+  if (busy) return;
+  clearObjectSelection(); updateUndo(); updateEmpty(); renderDrive(); canvas.focus();
+}
+$("object-edit-done").addEventListener("click", finishObjectSelection);
+$("object-move").addEventListener("click", () => { if (!busy && objectSelection) creator.edit(objectSelection); });
+
+async function removeSelectedObject() {
+  if (busy || !objectSelection || creationGesture.active()) return;
+  const entry = objectSelection;
+  stopDriving(); endDrag();
+  await runChoice($("object-remove"), { type: "world", action: "remove_object", name: entry.name,
+    version: placementVersion, generation: placementGeneration, world_sha256: sceneDesc.object_edit.world_sha256 }, {
+    done: async (data) => {
+      await waitForCreation(data, true); lastObjectEdit = data.undo_edit; lastAddition = null;
+      clearObjectSelection(); updateUndo(); renderDrive(); toast(t("prop_removed", { name: data.removed })); canvas.focus();
+    },
+  });
+}
+$("object-remove").addEventListener("click", removeSelectedObject);
+$("undo-edit").addEventListener("click", async () => {
+  if (busy || !lastObjectEdit) return;
+  stopDriving(); endDrag();
+  await runChoice($("undo-edit"), { type: "world", action: "undo_object_edit", ...lastObjectEdit }, {
+    done: async (data) => {
+      await waitForCreation(data, true); lastObjectEdit = null; updateUndo();
+      toast(t("prop_edit_undone", { name: data.object })); canvas.focus();
+    },
+  });
+});
 
 function objectInScene(name) {
   return sceneDesc?.bodies.some((b) => b.name === name)
@@ -2077,23 +2182,25 @@ async function placeEntity(item, pos) {
   creationGesture.invalidate();
   creator.busy(true);
   const payload = item.kind === "robot" ? { action: "add_robot", template: item.name }
-    : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw };
+    : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
+      : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw };
   await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
     frame: item.kind === "robot",
     done: async (data) => {
       if (creator.repeating() && !Number.isInteger(data.generation)) {
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
-      await waitForCreation(data, creator.repeating());
+      await waitForCreation(data, creator.repeating() || item.kind === "edit");
       if (placementSession !== creator.session()) return;
       lastAddition = data.undo || null;
+      lastObjectEdit = data.undo_edit || null;
       creationClickUntil = performance.now() + 500;
       if (creator.repeating()) {
         creationGesture.invalidate();
         placementVersion = data.version; placementGeneration = data.generation ?? stateGeneration;
         creator.next(); creationSurface = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
-      toast(t("robot_added", { name: data.robot || data.object }));
+      toast(t(item.kind === "edit" ? "prop_edited" : "robot_added", { name: data.robot || data.object }));
       canvas.focus();
     },
   });
@@ -2103,7 +2210,9 @@ async function placeEntity(item, pos) {
 }
 
 function updateUndo() {
-  $("undo-add").hidden = !lastAddition || creator.active() || !!sceneDesc?.lesson;
+  $("undo-add").hidden = !lastAddition || creator.active() || selectingObjects || !!sceneDesc?.lesson;
+  $("undo-edit").hidden = !lastObjectEdit || creator.active() || selectingObjects || !!sceneDesc?.lesson;
+  $("undo-edit").disabled = busy;
   $("undo-add").disabled = busy;
   $("undo-add").title = lastAddition?.name || "";
 }
@@ -2114,7 +2223,7 @@ $("undo-add").addEventListener("click", async () => {
   await runChoice($("undo-add"), { type: "world", action: "undo_add", token: lastAddition.token, version: lastAddition.version }, {
     done: async (data) => {
       await waitForCreation(data);
-      lastAddition = null; updateUndo();
+      lastAddition = lastObjectEdit = null; updateUndo();
       toast(t("addition_undone", { name: data.removed })); canvas.focus();
     },
   });
@@ -2495,6 +2604,7 @@ function loop() {
     updatePathWidths();
     spinRotors();
     refreshDragVisual();
+    updateObjectHighlight();
     lessonFrame();
     if (water) waterFrame(water, latestTime, camera, scene3);
     sensorsFrame();
@@ -2617,7 +2727,7 @@ initFlow({ inLesson: () => lessonActive(), storageGet, storageSet });
 initGamepad({
   send,
   toast,
-  robot: () => creator.active() ? null : robotByName(selected),
+  robot: () => creator.active() || selectingObjects ? null : robotByName(selected),
   screenToWorld,
   changed: renderDrive,
   onDrive: () => {

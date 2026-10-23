@@ -1626,3 +1626,7 @@ input[type="range"]::-moz-range-thumb {
 .demo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--plot-blue); }
 .demo-chip.rec .demo-dot { background: var(--bad); animation: flow-pulse 1.1s ease-in-out infinite; }
 @media (max-width: 640px) { .demo-chip { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; } }
+
+#edit-object-section { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; }
+#edit-object-list { margin-top: 8px; }
+#edit-object-list button { max-width: 100%; overflow-wrap: anywhere; }

@@ -132,6 +132,11 @@
       <p class="note lead" data-i18n="objects_lead">Place a ball, blocks or barriers, then drive and experiment. Undo add removes your latest addition.</p>
       <button class="create-toggle" id="build-add-robot" type="button" data-i18n="add_robot">Add robot</button>
       <div class="create-list" id="object-list"></div>
+      <section id="edit-object-section" hidden>
+        <h3 data-i18n="existing_props">Existing props</h3>
+        <button class="pill" id="edit-objects" type="button" data-i18n="select_prop">Select in scene</button>
+        <div class="chips" id="edit-object-list"></div>
+      </section>
       <p class="note" id="objects-note" hidden data-i18n="objects_need_world">Pick a map first to build with objects.</p>
       <button class="pill" id="build-pick-map" type="button" hidden data-i18n="pick_map">Choose a map</button>
     </section>
@@ -214,14 +219,21 @@
   <div class="placement-bar" id="placement-bar" role="status" hidden>
     <div><strong id="placement-title"></strong><p class="note" id="placement-hint" data-i18n="place_hint">Click an open surface. Enter places at the marker; Escape cancels.</p></div>
     <div class="placement-options" id="object-placement-controls" hidden>
-      <span id="prop-size-label" data-i18n="prop_size">Size</span>
-      <div class="size-choices" role="group" aria-labelledby="prop-size-label"><button class="pill" type="button" data-size="small" aria-pressed="false" data-i18n="prop_small">Small</button><button class="pill" type="button" data-size="normal" aria-pressed="true" data-i18n="prop_normal">Normal</button><button class="pill" type="button" data-size="large" aria-pressed="false" data-i18n="prop_large">Large</button></div>
+      <span class="prop-size-control" id="prop-size-label" data-i18n="prop_size">Size</span>
+      <div class="size-choices prop-size-control" role="group" aria-labelledby="prop-size-label"><button class="pill" type="button" data-size="small" aria-pressed="false" data-i18n="prop_small">Small</button><button class="pill" type="button" data-size="normal" aria-pressed="true" data-i18n="prop_normal">Normal</button><button class="pill" type="button" data-size="large" aria-pressed="false" data-i18n="prop_large">Large</button></div>
       <button class="pill" id="place-rotate" type="button">Rotate · 0°</button>
       <label class="check repeat-placement"><input type="checkbox" id="place-repeat"><span data-i18n="keep_placing">Keep placing</span></label>
     </div>
     <button class="pill" id="place-here" type="button" data-i18n="place_here">Place here</button>
     <button class="pill" id="place-cancel" type="button" data-i18n="cancel_place">Cancel</button>
   </div>
+  <div class="placement-bar" id="object-edit-bar" hidden>
+    <div><strong id="object-edit-title"></strong><p class="note" data-i18n="edit_prop_hint">Tap a prop or choose its name. Drag or pinch to look around.</p></div>
+    <button class="pill" id="object-move" type="button" data-i18n="move_prop">Move / rotate</button>
+    <button class="pill" id="object-remove" type="button" data-i18n="remove_prop">Remove</button>
+    <button class="pill" id="object-edit-done" type="button" data-i18n="done_placing">Done</button>
+  </div>
+  <button class="pill undo-add" id="undo-edit" type="button" hidden data-i18n="undo_object_edit">Undo edit</button>
   <button class="pill undo-add" id="undo-add" type="button" hidden data-i18n="undo_add">Undo add</button>
   <div class="banner" id="banner" role="status" hidden data-i18n="disconnected">Lost the connection to the simulator. Reconnecting.</div>
   <div class="toast" id="toast" role="alert"></div>

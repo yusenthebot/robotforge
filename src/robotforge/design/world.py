@@ -470,10 +470,12 @@ class CompiledWorld:
         model: mujoco.MjModel,
         notes: list[str],
         doctor: dict[str, dict[str, Any]] | None = None,
+        world_sha256: str | None = None,
     ):
         self.spec = spec
         self.model = model
         self.notes = notes
+        self.world_sha256 = world_sha256
         self.doctor = doctor or {}  # robot name -> import doctor report, for imported files
 
     def to_xml(self) -> str:
@@ -481,6 +483,9 @@ class CompiledWorld:
 
 
 def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
+    import hashlib
+
+    world_sha256 = hashlib.sha256(world.model_dump_json().encode("utf-8")).hexdigest()
     spec = mujoco.MjSpec()
     spec.modelname = world.name
     spec.compiler.degree = False
@@ -533,7 +538,7 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
     if world.water is not None:
         water_physics.add_surface(spec, world.water.physics(), model)
     _add_home_key(spec, model, homes)
-    return CompiledWorld(spec, _compile(spec), notes, doctor)
+    return CompiledWorld(spec, _compile(spec), notes, doctor, world_sha256)
 
 
 def spawn_height(entry: RobotEntry, base_dir: Path | None = None) -> float:
