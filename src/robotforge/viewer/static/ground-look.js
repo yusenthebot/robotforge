@@ -1,6 +1,7 @@
 // Small, deterministic surface tiles. Color and height/roughness are generated once per style,
 // on demand; each mesh owns its GPU textures so changing a world can release all of them.
 import * as THREE from "three";
+import { METRIC_BUMP } from "./look.js";
 
 const SIZE = 256;
 const PROFILES = {
@@ -124,10 +125,33 @@ export function groundMaterial(style, color, anisotropy) {
     tex.anisotropy = anisotropy;
     tex.needsUpdate = true;
   }
-  return new THREE.MeshStandardMaterial({
+  const mat = new THREE.MeshStandardMaterial({
     color, map, roughness: 1, roughnessMap: detail, bumpMap: detail,
     bumpScale: (PROFILES[style] || PROFILES.concrete).bump, metalness: 0,
   });
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>\n${METRIC_BUMP}`)
+      .replace("#include <bumpmap_pars_fragment>", `#include <bumpmap_pars_fragment>
+#ifdef USE_BUMPMAP
+vec2 rfTileSlope() {
+  // Differentiate the stored height over one source texel, then project its UV gradient into
+  // screen space. A one-screen-pixel forward difference changes the physical slope with DPR.
+  const float texel = 1.0 / ${SIZE.toFixed(1)};
+  vec2 uv = vBumpMapUv;
+  vec2 gradient = vec2(
+    texture2D(bumpMap, uv + vec2(texel, 0.0)).x - texture2D(bumpMap, uv - vec2(texel, 0.0)).x,
+    texture2D(bumpMap, uv + vec2(0.0, texel)).x - texture2D(bumpMap, uv - vec2(0.0, texel)).x
+  ) * (bumpScale / (2.0 * texel));
+  return vec2(dot(gradient, dFdx(uv)), dot(gradient, dFdy(uv)));
+}
+#endif`)
+      .replace("#include <normal_fragment_maps>", THREE.ShaderChunk.normal_fragment_maps.replace(
+        "perturbNormalArb( - vViewPosition, normal, dHdxy_fwd(), faceDirection )",
+        "rfMetricBump( - vViewPosition, normal, rfTileSlope(), faceDirection )"));
+  };
+  mat.customProgramCacheKey = () => "rf-ground-metric-v1";
+  return mat;
 }
 
 // Use the same tiles in the chooser, without extra network requests or GPU textures.

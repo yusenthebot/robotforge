@@ -128,6 +128,9 @@ A generator is built once with its defaults when it is registered, so a mistake 
 
 The viewer draws every `rf_*` surface as a physically based material (`MeshPhysicalMaterial` where there is a clear coat or sheen), lit by a generated studio environment map, with soft shadows and neutral tone mapping.
 The physically based materials, the environment map, the soft shadows and the tone mapping were in the viewer before the asset engine; the engine added the procedural grain shaders (brushed, speckle, rubber, knurl) and the `surfaces` table that carries a material to the viewer.
+Procedural grain and tiled ground use a shared surface gradient that preserves physical distance when drawing resolution changes.
+Grain height scales with feature pitch; ground height uses the existing metre-scale bump setting and a symmetric source-texel gradient.
+This affects shading only, with no extra texture or rendering pass; weave/cloth and the physics geometry remain unchanged.
 `tests/test_viewer_js.py` parses the viewer's scripts and `scripts/bench.py` holds its frame time to a budget.
 The bench draws two scenes: the warehouse with a Go2 (a few detailed meshes) and a scene of the engine's robots (`viewer.assets_fps`, `viewer.assets_frame_ms`: a centaur, a 6-joint arm, a humanoid, a dog and a rover).
 Drawn by the engine, those five robots take 358 draw calls and 127k triangles where the same robots drawn before took 234 calls and 104k triangles; both hold 60 fps.

@@ -150,6 +150,22 @@ const GRAIN_HEIGHT = {
     "vec3 grain = rfFilterSample(h, 0.5, max(fwidth(2.0 * ang), fwidth(2.0 * zz)) / 6.28318);",
 };
 
+// Height derivatives and position derivatives must keep the same units. Normalizing each position
+// derivative independently makes bump strength shrink as DPR rises. Rescale all three together to
+// avoid tiny determinants, preserving the actual surface gradient and the double-sided convention.
+export const METRIC_BUMP = `
+vec3 rfMetricBump(vec3 pos, vec3 n, vec2 dH, float faceDir) {
+  vec3 sx = dFdx(pos), sy = dFdy(pos);
+  float spacing = max(length(sx), length(sy));
+  if (spacing < 1e-20) return n;
+  sx /= spacing; sy /= spacing; dH /= spacing;
+  vec3 r1 = cross(sy, n), r2 = cross(n, sx);
+  float det = dot(sx, r1) * faceDir;
+  if (abs(det) < 1e-6) return n;
+  vec3 grad = sign(det) * (dH.x * r1 + dH.y * r2);
+  return normalize(abs(det) * n - grad);
+}`;
+
 function addGrain(mat, kind, scale = 1, strength = 1) {
   if (!GRAIN_PITCH[kind] || strength === 0) return;
   const pitch = (GRAIN_PITCH[kind] * scale).toFixed(6);
@@ -186,16 +202,9 @@ vec3 rfNoiseSample(vec3 q) {
 vec3 rfWaveSample(float phase) {
   return rfFilterSample(sin(phase), 0.0, fwidth(phase) / 6.28318);
 }
-vec3 rfBump(vec3 pos, vec3 n, vec2 dH, float faceDir) {
-  vec3 sx = normalize(dFdx(pos)), sy = normalize(dFdy(pos));
-  vec3 r1 = cross(sy, n), r2 = cross(n, sx);
-  float det = dot(sx, r1) * faceDir;
-  vec3 grad = sign(det) * (dH.x * r1 + dH.y * r2);
-  return normalize(abs(det) * n - grad);
-}
+${METRIC_BUMP}
 float grainH;
-vec2 grainSlope;
-float grainNormalFade;`
+vec2 grainSlope;`
       )
       .replace(
         "#include <color_fragment>",
@@ -206,8 +215,6 @@ float grainNormalFade;`
   ${GRAIN_HEIGHT[kind]}
   grainH = grain.x;
   grainSlope = grain.yz;
-  // Preserve the existing screen-space bump envelope; mean-tone filtering must not amplify normals.
-  grainNormalFade = clamp((0.55 - max(max(fwidth(q.x), fwidth(q.y)), fwidth(q.z))) / 0.3, 0.0, 1.0);
   // Keep the filtered mean tone at a distance instead of brightening back to the base color.
   diffuseColor.rgb *= 1.0 - ${shade} * (1.0 - grainH);
 }`
@@ -220,10 +227,11 @@ roughnessFactor = clamp(roughnessFactor + (0.5 - grainH) * ${(0.3 * strength).to
       .replace(
         "#include <normal_fragment_maps>",
         `#include <normal_fragment_maps>
-normal = rfBump(-vViewPosition, normal, grainSlope * ${bump} * grainNormalFade, faceDirection);`
+// Height is 8% of a feature pitch at unit bump, independent of drawing resolution.
+normal = rfMetricBump(-vViewPosition, normal, grainSlope * ${pitch} * ${bump} * 0.08, faceDirection);`
       );
   };
-  mat.customProgramCacheKey = () => `rf-grain-filtered-${kind}-${pitch}-${bump}-${shade}`;
+  mat.customProgramCacheKey = () => `rf-grain-metric-${kind}-${pitch}-${bump}-${shade}`;
 }
 
 // A 2x2 twill drawn from the mesh's own coordinates: no UVs and no texture, so it costs a few

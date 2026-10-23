@@ -1,0 +1,1165 @@
+{
+  "baseline_commit": "e293c2cb93302866f47bf007e4dbe8072f227d76",
+  "runtime_sha256": "3519db85aac71b55fdc983870e9ca57044339f07f0976b2b996b6ba672a4f605",
+  "evidence_root": "../robotforge-evidence/2026-10-24-surface-normals",
+  "verification": {
+    "tests": {
+      "browser-full": 91,
+      "slow-assets-sensors": 8,
+      "core": 300
+    },
+    "unique_cases": 399,
+    "whole_default_suite_repeated": false,
+    "wheel": {
+      "before_bytes": 3732057,
+      "after_bytes": 3732750,
+      "delta_bytes": 693,
+      "changed_runtime_members": [
+        "robotforge/viewer/static/ground-look.js",
+        "robotforge/viewer/static/look.js"
+      ],
+      "sha256": "f4958e34b01b1de3a858c00a4f0cd12fd3ff5d0a40a504451538bedb7b551319"
+    }
+  },
+  "stages": [
+    {
+      "name": "browser-full",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "-m",
+        "browser",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-surface-normals/verification-logs/browser-full.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 386.088401416986
+    },
+    {
+      "name": "slow-assets-sensors",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "-m",
+        "slow",
+        "tests/test_viewer_assets_browser.py",
+        "tests/test_viewer_sensors_browser.py",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-surface-normals/verification-logs/slow-assets-sensors.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 31.000847624993185
+    },
+    {
+      "name": "core",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "tests/test_assets.py",
+        "tests/test_visuals.py",
+        "tests/test_scene.py",
+        "tests/test_viewer_creation.py",
+        "tests/test_viewer_objects.py",
+        "tests/test_viewer_lighting.py",
+        "tests/test_viewer_js.py",
+        "tests/test_viewer_server.py",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-surface-normals/verification-logs/core.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 11.926781625021249
+    },
+    {
+      "name": "framework",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/framework_regression.py",
+        "--out",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-surface-normals/framework-final",
+        "--baseline",
+        "docs/bench/framework-regression-v1.json"
+      ],
+      "exit_code": 0,
+      "seconds": 1.634931541979313
+    },
+    {
+      "name": "budget",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/bench.py",
+        "--only",
+        "install",
+        "viewer",
+        "--save",
+        "--out",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-surface-normals/budget-final"
+      ],
+      "exit_code": 0,
+      "seconds": 25.482271832996048
+    },
+    {
+      "name": "smoke",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/smoke.py"
+      ],
+      "exit_code": 0,
+      "seconds": 3.8101615000050515
+    }
+  ],
+  "performance": {
+    "order": [
+      "A1",
+      "B1",
+      "A2",
+      "B2"
+    ],
+    "checks": {
+      "same_fixtures": true,
+      "same_harness": true,
+      "stable_source_each_run": true,
+      "stable_A_source": true,
+      "stable_B_source": true,
+      "all_diagnostic_hide_empty": true,
+      "diagnostics_A1_B1_only": true,
+      "gallery_same_scene": true,
+      "gallery_same_initial_state": true,
+      "gallery_physics_frozen": true,
+      "gallery_no_exceptions": true,
+      "gallery_visibility_logged": true,
+      "gallery_far_no_GL_errors": true,
+      "gallery_far_same_textures": true,
+      "gallery_far_same_geometries": true,
+      "gallery_far_same_calls": true,
+      "gallery_far_same_triangles": true,
+      "gallery_near_no_GL_errors": true,
+      "gallery_near_same_textures": true,
+      "gallery_near_same_geometries": true,
+      "gallery_near_same_calls": true,
+      "gallery_near_same_triangles": true,
+      "gallery_low_no_GL_errors": true,
+      "gallery_low_same_textures": true,
+      "gallery_low_same_geometries": true,
+      "gallery_low_same_calls": true,
+      "gallery_low_same_triangles": true,
+      "kitchen_same_scene": true,
+      "kitchen_same_initial_state": true,
+      "kitchen_physics_frozen": true,
+      "kitchen_no_exceptions": true,
+      "kitchen_visibility_logged": true,
+      "kitchen_far_no_GL_errors": true,
+      "kitchen_far_same_textures": true,
+      "kitchen_far_same_geometries": true,
+      "kitchen_far_same_calls": true,
+      "kitchen_far_same_triangles": true,
+      "kitchen_near_no_GL_errors": true,
+      "kitchen_near_same_textures": true,
+      "kitchen_near_same_geometries": true,
+      "kitchen_near_same_calls": true,
+      "kitchen_near_same_triangles": true,
+      "kitchen_low_no_GL_errors": true,
+      "kitchen_low_same_textures": true,
+      "kitchen_low_same_geometries": true,
+      "kitchen_low_same_calls": true,
+      "kitchen_low_same_triangles": true,
+      "park_same_scene": true,
+      "park_same_initial_state": true,
+      "park_physics_frozen": true,
+      "park_no_exceptions": true,
+      "park_visibility_logged": true,
+      "park_far_no_GL_errors": true,
+      "park_far_same_textures": true,
+      "park_far_same_geometries": true,
+      "park_far_same_calls": true,
+      "park_far_same_triangles": true,
+      "park_near_no_GL_errors": true,
+      "park_near_same_textures": true,
+      "park_near_same_geometries": true,
+      "park_near_same_calls": true,
+      "park_near_same_triangles": true,
+      "park_low_no_GL_errors": true,
+      "park_low_same_textures": true,
+      "park_low_same_geometries": true,
+      "park_low_same_calls": true,
+      "park_low_same_triangles": true,
+      "wood_props_same_scene": true,
+      "wood_props_same_initial_state": true,
+      "wood_props_physics_frozen": true,
+      "wood_props_no_exceptions": true,
+      "wood_props_visibility_logged": true,
+      "wood_props_near_no_GL_errors": true,
+      "wood_props_near_same_textures": true,
+      "wood_props_near_same_geometries": true,
+      "wood_props_near_same_calls": true,
+      "wood_props_near_same_triangles": true,
+      "wood_props_low_no_GL_errors": true,
+      "wood_props_low_same_textures": true,
+      "wood_props_low_same_geometries": true,
+      "wood_props_low_same_calls": true,
+      "wood_props_low_same_triangles": true,
+      "wood_props_detail_no_GL_errors": true,
+      "wood_props_detail_same_textures": true,
+      "wood_props_detail_same_geometries": true,
+      "wood_props_detail_same_calls": true,
+      "wood_props_detail_same_triangles": true
+    },
+    "navigation": {
+      "gallery": {
+        "fresh_profile": {
+          "first_frame_ms": {
+            "A1": 347.60000002384186,
+            "B1": 1123.300000011921,
+            "A2": 357.09999999403954,
+            "B2": 334.7000000178814
+          },
+          "median_A_ms": 352.3500000089407,
+          "median_B_ms": 729.0000000149012,
+          "HTTP_bytes": {
+            "A1": 30467481,
+            "B1": 30469091,
+            "A2": 30467481,
+            "B2": 30469091
+          },
+          "HTTP_resources": {
+            "A1": 28,
+            "B1": 28,
+            "A2": 28,
+            "B2": 28
+          },
+          "WebSocket_received_bytes": {
+            "A1": 423903,
+            "B1": 448433,
+            "A2": 428317,
+            "B2": 428317
+          }
+        },
+        "warm_navigation": {
+          "first_frame_ms": {
+            "A1": 200.59999999403954,
+            "B1": 204,
+            "A2": 179.2999999821186,
+            "B2": 210.90000000596046
+          },
+          "median_A_ms": 189.94999998807907,
+          "median_B_ms": 207.45000000298023,
+          "HTTP_bytes": {
+            "A1": 29220015,
+            "B1": 29220015,
+            "A2": 29220015,
+            "B2": 29220015
+          },
+          "HTTP_resources": {
+            "A1": 28,
+            "B1": 28,
+            "A2": 28,
+            "B2": 28
+          },
+          "WebSocket_received_bytes": {
+            "A1": 317820,
+            "B1": 314978,
+            "A2": 314978,
+            "B2": 314978
+          }
+        }
+      },
+      "kitchen": {
+        "fresh_profile": {
+          "first_frame_ms": {
+            "A1": 297.09999999403954,
+            "B1": 733.3999999761581,
+            "A2": 285,
+            "B2": 312.5
+          },
+          "median_A_ms": 291.04999999701977,
+          "median_B_ms": 522.9499999880791,
+          "HTTP_bytes": {
+            "A1": 4077608,
+            "B1": 4079218,
+            "A2": 4077608,
+            "B2": 4079218
+          },
+          "HTTP_resources": {
+            "A1": 28,
+            "B1": 28,
+            "A2": 28,
+            "B2": 28
+          },
+          "WebSocket_received_bytes": {
+            "A1": 309941,
+            "B1": 313289,
+            "A2": 310841,
+            "B2": 310841
+          }
+        },
+        "warm_navigation": {
+          "first_frame_ms": {
+            "A1": 198.90000000596046,
+            "B1": 184,
+            "A2": 186.69999998807907,
+            "B2": 178
+          },
+          "median_A_ms": 192.79999999701977,
+          "median_B_ms": 181.0,
+          "HTTP_bytes": {
+            "A1": 2830142,
+            "B1": 2830142,
+            "A2": 2830142,
+            "B2": 2830142
+          },
+          "HTTP_resources": {
+            "A1": 28,
+            "B1": 28,
+            "A2": 28,
+            "B2": 28
+          },
+          "WebSocket_received_bytes": {
+            "A1": 209192,
+            "B1": 210416,
+            "A2": 209723,
+            "B2": 209723
+          }
+        }
+      },
+      "park": {
+        "fresh_profile": {
+          "first_frame_ms": {
+            "A1": 331.09999999403954,
+            "B1": 502.80000001192093,
+            "A2": 353.5,
+            "B2": 325.5
+          },
+          "median_A_ms": 342.29999999701977,
+          "median_B_ms": 414.15000000596046,
+          "HTTP_bytes": {
+            "A1": 18678165,
+            "B1": 18679775,
+            "A2": 18678165,
+            "B2": 18679775
+          },
+          "HTTP_resources": {
+            "A1": 28,
+            "B1": 28,
+            "A2": 28,
+            "B2": 28
+          },
+          "WebSocket_received_bytes": {
+            "A1": 347042,
+            "B1": 347913,
+            "A2": 347042,
+            "B2": 345018
+          }
+        },
+        "warm_navigation": {
+          "first_frame_ms": {
+            "A1": 212,
+            "B1": 226.5,
+            "A2": 202.69999998807907,
+            "B2": 231.69999998807907
+          },
+          "median_A_ms": 207.34999999403954,
+          "median_B_ms": 229.09999999403954,
+          "HTTP_bytes": {
+            "A1": 17430699,
+            "B1": 17430699,
+            "A2": 17430699,
+            "B2": 17430699
+          },
+          "HTTP_resources": {
+            "A1": 28,
+            "B1": 28,
+            "A2": 28,
+            "B2": 28
+          },
+          "WebSocket_received_bytes": {
+            "A1": 242005,
+            "B1": 244473,
+            "A2": 242005,
+            "B2": 243888
+          }
+        }
+      },
+      "wood_props": {
+        "fresh_profile": {
+          "first_frame_ms": {
+            "A1": 201.69999998807907,
+            "B1": 222.5,
+            "A2": 186,
+            "B2": 201.09999999403954
+          },
+          "median_A_ms": 193.84999999403954,
+          "median_B_ms": 211.79999999701977,
+          "HTTP_bytes": {
+            "A1": 1445287,
+            "B1": 1446897,
+            "A2": 1445287,
+            "B2": 1446897
+          },
+          "HTTP_resources": {
+            "A1": 28,
+            "B1": 28,
+            "A2": 28,
+            "B2": 28
+          },
+          "WebSocket_received_bytes": {
+            "A1": 224559,
+            "B1": 224559,
+            "A2": 224559,
+            "B2": 224499
+          }
+        },
+        "warm_navigation": {
+          "first_frame_ms": {
+            "A1": 99.09999999403954,
+            "B1": 99.5,
+            "A2": 88.09999999403954,
+            "B2": 85.90000000596046
+          },
+          "median_A_ms": 93.59999999403954,
+          "median_B_ms": 92.70000000298023,
+          "HTTP_bytes": {
+            "A1": 197821,
+            "B1": 197821,
+            "A2": 197821,
+            "B2": 197821
+          },
+          "HTTP_resources": {
+            "A1": 28,
+            "B1": 28,
+            "A2": 28,
+            "B2": 28
+          },
+          "WebSocket_received_bytes": {
+            "A1": 125342,
+            "B1": 125342,
+            "A2": 125282,
+            "B2": 125342
+          }
+        }
+      }
+    },
+    "definitions": {
+      "repeat_profile": "Every scene/run uses a new Chrome profile, but the code has already been compiled on this machine; this is not a pristine machine cold-start test.",
+      "render": "40 synchronous render+1pixel readback samples per view per run; medians across runs and pooled nearest-rank p95 retained.",
+      "RSS": "ps Chrome process-tree sum, shared pages may be counted repeatedly; not GPU VRAM or unique resident memory.",
+      "navigation": "HTTP server is ready before navigation timing; not whole CLI-to-app latency.",
+      "first_use": "A1/B1 first observed fresh-profile events and all raw slow samples are retained alongside A2/B2. Prior machine/browser cache state is not reset; no pristine cold-machine claim."
+    }
+  },
+  "quality": {
+    "by_kind": {
+      "wood": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9986202686269885,
+          "resolution_normal_mae": 0.0006143468138664806,
+          "resolution_normal_rmse": 0.001141808090324048,
+          "complete_resolution_mae_8bit": 0.15806749131944445
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 0.9996618926239466,
+          "resolution_normal_mae": 0.00019091169618453327,
+          "resolution_normal_rmse": 0.00036385849853104446,
+          "complete_resolution_mae_8bit": 0.06328667534722222
+        }
+      },
+      "speckle": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9986049722531116,
+          "resolution_normal_mae": 0.001464320618348817,
+          "resolution_normal_rmse": 0.0023104846477508545,
+          "complete_resolution_mae_8bit": 0.2375217013888889
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 0.9996779033944181,
+          "resolution_normal_mae": 0.0005046408623456955,
+          "resolution_normal_rmse": 0.0008447276001485685,
+          "complete_resolution_mae_8bit": 0.08805338541666667
+        }
+      },
+      "bark": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9995955576926026,
+          "resolution_normal_mae": 0.0014393931293549638,
+          "resolution_normal_rmse": 0.0023443292593583465,
+          "complete_resolution_mae_8bit": 0.2899848090277778
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 0.9999254597063023,
+          "resolution_normal_mae": 0.0003427343569152678,
+          "resolution_normal_rmse": 0.0005784125629967699,
+          "complete_resolution_mae_8bit": 0.059271918402777776
+        }
+      },
+      "stone": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9984254141250384,
+          "resolution_normal_mae": 0.001097646231452624,
+          "resolution_normal_rmse": 0.0017207951362555225,
+          "complete_resolution_mae_8bit": 0.1862521701388889
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 0.9996202658588965,
+          "resolution_normal_mae": 0.0003269848821219057,
+          "resolution_normal_rmse": 0.0005536345803799728,
+          "complete_resolution_mae_8bit": 0.056396484375
+        }
+      },
+      "cloth": {
+        "before": {
+          "normal_energy_ratio_128_to_512": null,
+          "resolution_normal_mae": 0.0,
+          "resolution_normal_rmse": 0.0,
+          "complete_resolution_mae_8bit": 0.04261610243055555
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": null,
+          "resolution_normal_mae": 0.0,
+          "resolution_normal_rmse": 0.0,
+          "complete_resolution_mae_8bit": 0.04261610243055555
+        }
+      },
+      "knurl": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9982548396297983,
+          "resolution_normal_mae": 0.004122062896688779,
+          "resolution_normal_rmse": 0.00692267498622338,
+          "complete_resolution_mae_8bit": 0.6348741319444444
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 0.999832549349471,
+          "resolution_normal_mae": 0.0009492892034662267,
+          "resolution_normal_rmse": 0.001672075712122023,
+          "complete_resolution_mae_8bit": 0.1665581597222222
+        }
+      },
+      "rubber": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.996495250792561,
+          "resolution_normal_mae": 0.002808451031645139,
+          "resolution_normal_rmse": 0.004366106974581878,
+          "complete_resolution_mae_8bit": 0.4353841145833333
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 0.9992252055089339,
+          "resolution_normal_mae": 0.0013455177346865337,
+          "resolution_normal_rmse": 0.0022291974164545536,
+          "complete_resolution_mae_8bit": 0.20765516493055555
+        }
+      },
+      "brushed": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9968416532896804,
+          "resolution_normal_mae": 0.00030923161223957624,
+          "resolution_normal_rmse": 0.0005484476205310784,
+          "complete_resolution_mae_8bit": 0.08170572916666667
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 0.9992122182539558,
+          "resolution_normal_mae": 8.085963114960275e-05,
+          "resolution_normal_rmse": 0.00015923960017971694,
+          "complete_resolution_mae_8bit": 0.022813585069444444
+        }
+      },
+      "ground_wood": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.908776242971908,
+          "resolution_normal_mae": 1.8457958882815244e-06,
+          "resolution_normal_rmse": 3.147886521522499e-06,
+          "complete_resolution_mae_8bit": 0.0720486111111111
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 0.9989134459436972,
+          "resolution_normal_mae": 8.603894154172545e-06,
+          "resolution_normal_rmse": 1.3885450546998376e-05,
+          "complete_resolution_mae_8bit": 0.064453125
+        }
+      },
+      "ground_concrete": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9777327381914387,
+          "resolution_normal_mae": 3.029538826619197e-06,
+          "resolution_normal_rmse": 5.107113035289028e-06,
+          "complete_resolution_mae_8bit": 0.012586805555555556
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 1.0000677081967595,
+          "resolution_normal_mae": 1.2969156462834993e-05,
+          "resolution_normal_rmse": 2.162315892443682e-05,
+          "complete_resolution_mae_8bit": 0.013481987847222222
+        }
+      },
+      "ground_grass": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 4.000039810501647,
+          "resolution_normal_mae": 1.2314725305865673e-05,
+          "resolution_normal_rmse": 1.8198607601031352e-05,
+          "complete_resolution_mae_8bit": 0.08455403645833333
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 1.0033418187678214,
+          "resolution_normal_mae": 0.00021461544383782893,
+          "resolution_normal_rmse": 0.0004994555201847106,
+          "complete_resolution_mae_8bit": 0.13349066840277776
+        }
+      },
+      "ground_dirt": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9906537315677606,
+          "resolution_normal_mae": 1.1809008659232253e-05,
+          "resolution_normal_rmse": 1.8475936788793963e-05,
+          "complete_resolution_mae_8bit": 0.026041666666666664
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 1.000809047927979,
+          "resolution_normal_mae": 9.328754579958816e-05,
+          "resolution_normal_rmse": 0.00017879439110402018,
+          "complete_resolution_mae_8bit": 0.0634494357638889
+        }
+      },
+      "ground_sand": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9831764208852514,
+          "resolution_normal_mae": 3.294874583540756e-06,
+          "resolution_normal_rmse": 5.009676139403989e-06,
+          "complete_resolution_mae_8bit": 0.03445095486111111
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 1.0003200593727777,
+          "resolution_normal_mae": 2.2561709556612186e-05,
+          "resolution_normal_rmse": 3.5607437894213945e-05,
+          "complete_resolution_mae_8bit": 0.04248046875
+        }
+      },
+      "ground_rock": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.9194062969739814,
+          "resolution_normal_mae": 2.7025627484060046e-06,
+          "resolution_normal_rmse": 4.103424089407781e-06,
+          "complete_resolution_mae_8bit": 0.019992404513888888
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 1.0000607632958372,
+          "resolution_normal_mae": 2.7780500507409062e-05,
+          "resolution_normal_rmse": 4.222627952306842e-05,
+          "complete_resolution_mae_8bit": 0.024631076388888888
+        }
+      },
+      "ground_snow": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 3.8832612004274196,
+          "resolution_normal_mae": 1.4426200702170415e-06,
+          "resolution_normal_rmse": 2.1909155141959977e-06,
+          "complete_resolution_mae_8bit": 0.00013563368055555556
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": 1.0000872515906172,
+          "resolution_normal_mae": 1.820005854824558e-05,
+          "resolution_normal_rmse": 2.782510334024361e-05,
+          "complete_resolution_mae_8bit": 0.005235460069444444
+        }
+      },
+      "ground_tile": {
+        "before": {
+          "normal_energy_ratio_128_to_512": 1.0000023637531843,
+          "resolution_normal_mae": 6.318409403400448e-17,
+          "resolution_normal_rmse": 4.678558073262356e-16,
+          "complete_resolution_mae_8bit": 0.0018717447916666667
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": null,
+          "resolution_normal_mae": 5.012326202239829e-10,
+          "resolution_normal_rmse": 6.47371341718402e-09,
+          "complete_resolution_mae_8bit": 0.0018717447916666667
+        }
+      },
+      "ground_checker": {
+        "before": {
+          "normal_energy_ratio_128_to_512": null,
+          "resolution_normal_mae": 0.0,
+          "resolution_normal_rmse": 0.0,
+          "complete_resolution_mae_8bit": 0.0012749565972222222
+        },
+        "after": {
+          "normal_energy_ratio_128_to_512": null,
+          "resolution_normal_mae": 5.012326202239829e-10,
+          "resolution_normal_rmse": 6.47371341718402e-09,
+          "complete_resolution_mae_8bit": 0.0012749565972222222
+        }
+      }
+    },
+    "definitions": {
+      "normal_energy": "RMS length of view XY of post-bump signed normals in center half. Every local normal axis is viewed head-on, so unperturbed normal is view(0,0,1).",
+      "normal_reference": "512 signed normal field averaged in 4x4 blocks, compared with128 same source, world footprint, material settings and camera.",
+      "complete_reference": "512 complete shaded RGB BOX downsampled to128; center half RGB MAE in 8-bit RGB levels (0-255); values are not divided by255. Same source only; old pixels are not a correctness oracle.",
+      "diagnostic_geometry": "Synthetic planes use real served application materials. Ground UV meters/tile follows terrain.STYLES. Neutral tone mapping for complete images; normal return bypasses output tone mapping.",
+      "visibility": "Actual world screenshots/motion are separate from isolated shader diagnostics. Temporal improvement is not established by spatial consistency alone."
+    },
+    "strength_cohort": {
+      "threshold_rms_xy": 1e-08,
+      "definition": "Paired cases require nontrivial signed XY energy at both resolutions for both sources; cloth, checker and flat tile patches are excluded. Literal raw ratios remain preserved in cases.",
+      "cases": [
+        "wood_n0_s1",
+        "wood_n0_s2",
+        "wood_n1_s1",
+        "wood_n1_s2",
+        "wood_n2_s1",
+        "wood_n2_s2",
+        "speckle_n0_s1",
+        "speckle_n0_s2",
+        "speckle_n1_s1",
+        "speckle_n1_s2",
+        "speckle_n2_s1",
+        "speckle_n2_s2",
+        "bark_n0_s1",
+        "bark_n0_s2",
+        "bark_n1_s1",
+        "bark_n1_s2",
+        "bark_n2_s1",
+        "bark_n2_s2",
+        "stone_n0_s1",
+        "stone_n0_s2",
+        "stone_n1_s1",
+        "stone_n1_s2",
+        "stone_n2_s1",
+        "stone_n2_s2",
+        "knurl_n0_s1",
+        "knurl_n0_s2",
+        "knurl_n1_s1",
+        "knurl_n1_s2",
+        "knurl_n2_s1",
+        "knurl_n2_s2",
+        "rubber_n0_s1",
+        "rubber_n0_s2",
+        "rubber_n1_s1",
+        "rubber_n1_s2",
+        "rubber_n2_s1",
+        "rubber_n2_s2",
+        "brushed_n0_s1",
+        "brushed_n0_s2",
+        "brushed_n1_s1",
+        "brushed_n1_s2",
+        "brushed_n2_s1",
+        "brushed_n2_s2",
+        "ground_wood_n0_s1",
+        "ground_wood_n1_s1",
+        "ground_wood_n2_s1",
+        "ground_concrete_n0_s1",
+        "ground_concrete_n1_s1",
+        "ground_concrete_n2_s1",
+        "ground_grass_n0_s1",
+        "ground_grass_n1_s1",
+        "ground_grass_n2_s1",
+        "ground_dirt_n0_s1",
+        "ground_dirt_n1_s1",
+        "ground_dirt_n2_s1",
+        "ground_sand_n0_s1",
+        "ground_sand_n1_s1",
+        "ground_sand_n2_s1",
+        "ground_rock_n0_s1",
+        "ground_rock_n1_s1",
+        "ground_rock_n2_s1",
+        "ground_snow_n0_s1",
+        "ground_snow_n1_s1",
+        "ground_snow_n2_s1"
+      ],
+      "procedural_cases": 42,
+      "ground_cases": 21
+    },
+    "literal_checks": {
+      "same_panel_case_set": true,
+      "all_normal_values_finite": true,
+      "all_GL_errors_zero": true,
+      "same_panel_JS": true,
+      "no_panel_console_errors": true,
+      "cloth_and_checker_exact_controls": false,
+      "all_UI_clicks_opened_drawer": true
+    },
+    "literal_all_structural_checks_pass": false,
+    "accepted_checks": {
+      "same_panel_cases_and_code": true,
+      "finite_normals_no_GL_or_console_errors": true,
+      "cloth_complete_and_normal_byte_exact": true,
+      "checker_complete_PNG_byte_exact": true,
+      "checker_normal_component_delta_at_most_float32_epsilon": true,
+      "all_native_UI_clicks_expanded_drawer": true
+    },
+    "accepted_checks_pass": true,
+    "first_interaction": {
+      "A1": {
+        "gallery": {
+          "event_ms": 1120,
+          "two_raf_ms": 1150,
+          "elapsed_ms": 30,
+          "world_button_expanded": "true"
+        },
+        "kitchen": {
+          "event_ms": 1119.4000000059605,
+          "two_raf_ms": 1150.300000011921,
+          "elapsed_ms": 30.900000005960464,
+          "world_button_expanded": "true"
+        },
+        "park": {
+          "event_ms": 1130.3999999761581,
+          "two_raf_ms": 1161,
+          "elapsed_ms": 30.600000023841858,
+          "world_button_expanded": "true"
+        },
+        "wood_props": {
+          "event_ms": 1012.4000000059605,
+          "two_raf_ms": 1042.699999988079,
+          "elapsed_ms": 30.299999982118607,
+          "world_button_expanded": "true"
+        }
+      },
+      "B1": {
+        "gallery": {
+          "event_ms": 1123.199999988079,
+          "two_raf_ms": 1153.3999999761581,
+          "elapsed_ms": 30.19999998807907,
+          "world_button_expanded": "true"
+        },
+        "kitchen": {
+          "event_ms": 1108,
+          "two_raf_ms": 1139.699999988079,
+          "elapsed_ms": 31.69999998807907,
+          "world_button_expanded": "true"
+        },
+        "park": {
+          "event_ms": 1143,
+          "two_raf_ms": 1175.5,
+          "elapsed_ms": 32.5,
+          "world_button_expanded": "true"
+        },
+        "wood_props": {
+          "event_ms": 1011.2000000178814,
+          "two_raf_ms": 1042.4000000059605,
+          "elapsed_ms": 31.19999998807907,
+          "world_button_expanded": "true"
+        }
+      },
+      "A2": {
+        "gallery": {
+          "event_ms": 1097.699999988079,
+          "two_raf_ms": 1128.699999988079,
+          "elapsed_ms": 31,
+          "world_button_expanded": "true"
+        },
+        "kitchen": {
+          "event_ms": 1113.0999999940395,
+          "two_raf_ms": 1143.5,
+          "elapsed_ms": 30.400000005960464,
+          "world_button_expanded": "true"
+        },
+        "park": {
+          "event_ms": 1129.199999988079,
+          "two_raf_ms": 1159.5999999940395,
+          "elapsed_ms": 30.400000005960464,
+          "world_button_expanded": "true"
+        },
+        "wood_props": {
+          "event_ms": 1002.5,
+          "two_raf_ms": 1032.7999999821186,
+          "elapsed_ms": 30.299999982118607,
+          "world_button_expanded": "true"
+        }
+      },
+      "B2": {
+        "gallery": {
+          "event_ms": 1129.699999988079,
+          "two_raf_ms": 1160.300000011921,
+          "elapsed_ms": 30.600000023841858,
+          "world_button_expanded": "true"
+        },
+        "kitchen": {
+          "event_ms": 1103.800000011921,
+          "two_raf_ms": 1133.800000011921,
+          "elapsed_ms": 30,
+          "world_button_expanded": "true"
+        },
+        "park": {
+          "event_ms": 1152.5,
+          "two_raf_ms": 1183.199999988079,
+          "elapsed_ms": 30.69999998807907,
+          "world_button_expanded": "true"
+        },
+        "wood_props": {
+          "event_ms": 999.5,
+          "two_raf_ms": 1030.9000000059605,
+          "elapsed_ms": 31.400000005960464,
+          "world_button_expanded": "true"
+        }
+      }
+    },
+    "first_interaction_definition": "First native drawer interaction after the same-tab warm navigation; pointerdown handler to two requestAnimationFrame callbacks; expanded state observed. Does not measure GPU presentation or pristine fresh interaction."
+  },
+  "budget": {
+    "partial": true,
+    "checks": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3645.2637,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.1612,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.1
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5121,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.328
+        },
+        "fps": {
+          "value": 60.1329,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.2,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.2000000178813934,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1569,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 3.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 132.3,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 557.6
+        },
+        "idle_cpu_pct": {
+          "value": 5.6,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    }
+  },
+  "videos": {
+    "before": {
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "duration": "14.233333",
+            "nb_read_frames": "427"
+          }
+        ]
+      },
+      "decode_exit_code": 0,
+      "decode_stderr": "",
+      "bytes": 2916824,
+      "sha256": "e9d88af3c7eac963e8e6fb07e465ff250ac062081c27df4983b88a826942fb1a",
+      "source_run": "A2",
+      "world_order": [
+        "gallery",
+        "kitchen",
+        "park",
+        "wood_props"
+      ]
+    },
+    "after": {
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "duration": "14.233333",
+            "nb_read_frames": "427"
+          }
+        ]
+      },
+      "decode_exit_code": 0,
+      "decode_stderr": "",
+      "bytes": 2913572,
+      "sha256": "c5323b348b33a1b8a320e1f9fe370ca2af6cc8699e1d4a49665a8ecb044d40c2",
+      "source_run": "B2",
+      "world_order": [
+        "gallery",
+        "kitchen",
+        "park",
+        "wood_props"
+      ]
+    }
+  },
+  "raw_index": {
+    "files": 4653,
+    "bytes": 1125306260,
+    "sha256": "d168cc5c0c3ad216c81a1045c5fc5fcc409c9b1f92430d88c9d9c710ef8a93db"
+  },
+  "record": {
+    "id": "f82e3f76-a885-473b-a3f7-0f75e8695e40",
+    "status": "completed",
+    "path": "verification-store/f82e3f76-a885-473b-a3f7-0f75e8695e40/experiment.json",
+    "sha256": "6e2e27f22123616dde08ccdb81de2147b214d930c897b850f53b1c91faba39f3",
+    "verified_artifacts": 51
+  }
+}
