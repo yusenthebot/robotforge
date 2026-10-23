@@ -757,3 +757,18 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
   Candidate-source.patch applies cleanly to baseline 86305fb; raw frames stay externally indexed and videos/source/tests/results are copied immutably.
 - Next: improve navigation and free editing clarity, including the four-tab panel that currently wraps Modes onto a second row, plus targeted wood temporal stability.
   The broad visual/playability goal remains active; individual action success rates, releases and paid Actions remain deferred.
+
+## Round 54 — shared material filtering (2026-10-23)
+
+- 本轮按整体视觉与轻量体验推进，没有调整举铁、开抽屉或其他动作成功率。
+- 共享 look.js 按每层噪声和条纹相位的实际像素覆盖范围过滤木纹、拉丝、微粒、橡胶、树皮、石材和滚花；远处保留平均材质色调，法线沿用旧的衰减范围。
+- 初版过度柔化近处噪声；第二版虽改善平均色调，却放大滚花凹凸；第三版修复法线强度并保留全部较差样本和经哈希验证的源文件。
+- 283 项针对性测试、23 项真实 Chrome 材质/搭建/道具/光照回归、七项不变框架基线、真实 CLI/viewer/MCP 60 工具冒烟、wheel/Ruff/21 项 JS 语法检查通过；本轮没有重跑完整默认测试。
+- 全部 11 项既有安装/查看器预算通过：3642 KB 包、163 MB 安装、42 个包、0.54 秒 CLI 首帧、约 60 FPS、3/5 ms 标准/资产渲染、132 MB 服务端峰值、6.00% 空闲 CPU（达到既有限制）。没有放宽预算。
+- 安装包增加 479 B；首次 HTTP 增加 1161 B，仍为 28 次请求。四轮 A1/B1/A2/B2 对照的世界、场景、初始/最终物理和资源数量一致，73 项证据检查通过。
+- 七种变化材质的完整着色器过渡区固定参考和去均值误差均下降，近处木纹所有法向/尺度/平移样本逐字节相同。橡胶近处有轻微细节变化；木纹完整时间残差和滚花 diffuse 时间/去均值结果仍有小幅退化，没有宣称全面消除闪动。
+- 首次使用新代码相对于本机已用过的基线，展示场景 411→1792 ms、厨房 377→1232 ms；重复加载有升有降，原始慢样本独立保留，未用暖缓存结果替代。着色器编译是可能原因，尚未单独归因。
+- 真正的前后 Chrome 相机实录覆盖展示、厨房、公园和木桌，仿真暂停；对照期间仅在两侧统一隐藏空机器人提示以观察桌面，并记录该外部 CSS 处理。
+- 证据、失败样本与复现脚本保存在 ../robotforge-evidence/2026-10-23-material-filtering/；详见 docs/bench/2026-10-23-material-filtering.md/.json。
+- 整体目标保持进行中；后续优先检查首次着色器加载、剩余木纹/滚花时间稳定性和自由搭建导航。
+- 本轮统一验证记录 5d4a6188-7f2c-47d1-99fc-5fc8a3de00a9 已完成，80 个不可变产物校验通过；14,383 个原始文件由主进程再次逐项校验。原始帧在 Git 外保存。
