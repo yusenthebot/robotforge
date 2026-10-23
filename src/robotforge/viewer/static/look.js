@@ -138,15 +138,16 @@ export function surfaceMaterial(materialName, color, opacity, surfaces) {
 const GRAIN_PITCH = { brushed: 0.00045, speckle: 0.0012, rubber: 0.0007, knurl: 0.0016, wood: 0.012, bark: 0.018, stone: 0.025 }; // m, one feature
 const GRAIN_BUMP = { brushed: 0.16, speckle: 0.5, rubber: 0.9, knurl: 1.4, wood: 0.18, bark: 0.65, stone: 0.45 }; // normal tilt at strength 1
 const GRAIN_HEIGHT = {
-  brushed: "float h = rfNoise(vec3(q.x, q.y, q.z * 0.03)) * 0.7 + rfNoise(vec3(q.x * 2.3, q.y * 2.3, q.z * 0.07)) * 0.3;",
-  speckle: "float h = rfNoise(q) * 0.65 + rfNoise(q * 2.7) * 0.35;",
-  rubber: "float h = rfNoise(q) * 0.5 + rfNoise(q * 2.1) * 0.3 + rfNoise(q * 4.4) * 0.2;",
-  wood: "float h = 0.5 + 0.3 * sin(q.y * 6.28318 + 2.0 * rfNoise(vec3(q.x * 0.12, q.y * 0.5, q.z * 0.3))) + 0.15 * rfNoise(q);",
-  bark: "float h = rfNoise(vec3(q.xy, q.z * 0.08)) * 0.7 + rfNoise(q * 2.0) * 0.3;",
-  stone: "float h = rfNoise(q) * 0.8 + rfNoise(q * 3.0) * 0.2;",
+  brushed: "vec3 grain = rfNoiseSample(vec3(q.x, q.y, q.z * 0.03)) * 0.7 + rfNoiseSample(vec3(q.x * 2.3, q.y * 2.3, q.z * 0.07)) * 0.3;",
+  speckle: "vec3 grain = rfNoiseSample(q) * 0.65 + rfNoiseSample(q * 2.7) * 0.35;",
+  rubber: "vec3 grain = rfNoiseSample(q) * 0.5 + rfNoiseSample(q * 2.1) * 0.3 + rfNoiseSample(q * 4.4) * 0.2;",
+  wood: "vec3 grain = vec3(0.5, 0.0, 0.0) + 0.3 * rfWaveSample(q.y * 6.28318 + 2.0 * rfNoise(vec3(q.x * 0.12, q.y * 0.5, q.z * 0.3))) + 0.15 * rfNoiseSample(q);",
+  bark: "vec3 grain = rfNoiseSample(vec3(q.xy, q.z * 0.08)) * 0.7 + rfNoiseSample(q * 2.0) * 0.3;",
+  stone: "vec3 grain = rfNoiseSample(q) * 0.8 + rfNoiseSample(q * 3.0) * 0.2;",
   knurl:
     "float ang = atan(vGrainPos.y, vGrainPos.x) * length(vGrainPos.xy) / pitch;" +
-    "float zz = vGrainPos.z / pitch; float h = 0.5 + 0.5 * sin(ang + zz) * sin(ang - zz);",
+    "float zz = vGrainPos.z / pitch; float h = 0.5 + 0.5 * sin(ang + zz) * sin(ang - zz);" +
+    "vec3 grain = rfFilterSample(h, 0.5, max(fwidth(2.0 * ang), fwidth(2.0 * zz)) / 6.28318);",
 };
 
 function addGrain(mat, kind, scale = 1, strength = 1) {
@@ -171,6 +172,20 @@ float rfNoise(vec3 x) {
   return mix(mix(mix(rfHash(i), rfHash(i + vec3(1, 0, 0)), f.x), mix(rfHash(i + vec3(0, 1, 0)), rfHash(i + vec3(1, 1, 0)), f.x), f.y),
              mix(mix(rfHash(i + vec3(0, 0, 1)), rfHash(i + vec3(1, 0, 1)), f.x), mix(rfHash(i + vec3(0, 1, 1)), rfHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
+// Each octave has its own footprint. Carry the unfiltered height's first derivatives separately:
+// differentiating a height that already contains fwidth would ask for undefined second derivatives.
+vec3 rfFilterSample(float h, float mean, float footprint) {
+  float fade = 1.0 - smoothstep(0.2, 0.5, footprint);
+  return vec3(mix(mean, h, fade), vec2(dFdx(h), dFdy(h)) * fade);
+}
+vec3 rfNoiseSample(vec3 q) {
+  vec3 width = fwidth(q);
+  // Value-noise features span about two lattice cells; sine phases below measure full cycles.
+  return rfFilterSample(rfNoise(q), 0.5, 0.5 * max(max(width.x, width.y), width.z));
+}
+vec3 rfWaveSample(float phase) {
+  return rfFilterSample(sin(phase), 0.0, fwidth(phase) / 6.28318);
+}
 vec3 rfBump(vec3 pos, vec3 n, vec2 dH, float faceDir) {
   vec3 sx = normalize(dFdx(pos)), sy = normalize(dFdy(pos));
   vec3 r1 = cross(sy, n), r2 = cross(n, sx);
@@ -179,7 +194,8 @@ vec3 rfBump(vec3 pos, vec3 n, vec2 dH, float faceDir) {
   return normalize(abs(det) * n - grad);
 }
 float grainH;
-float grainFade;`
+vec2 grainSlope;
+float grainNormalFade;`
       )
       .replace(
         "#include <color_fragment>",
@@ -188,23 +204,26 @@ float grainFade;`
   const float pitch = ${pitch};
   vec3 q = vGrainPos / pitch;
   ${GRAIN_HEIGHT[kind]}
-  grainFade = clamp((0.55 - max(max(fwidth(q.x), fwidth(q.y)), fwidth(q.z))) / 0.3, 0.0, 1.0);
-  grainH = h;
-  diffuseColor.rgb *= 1.0 - ${shade} * grainFade * (1.0 - h);
+  grainH = grain.x;
+  grainSlope = grain.yz;
+  // Preserve the existing screen-space bump envelope; mean-tone filtering must not amplify normals.
+  grainNormalFade = clamp((0.55 - max(max(fwidth(q.x), fwidth(q.y)), fwidth(q.z))) / 0.3, 0.0, 1.0);
+  // Keep the filtered mean tone at a distance instead of brightening back to the base color.
+  diffuseColor.rgb *= 1.0 - ${shade} * (1.0 - grainH);
 }`
       )
       .replace(
         "#include <roughnessmap_fragment>",
         `#include <roughnessmap_fragment>
-roughnessFactor = clamp(roughnessFactor + (0.5 - grainH) * ${(0.3 * strength).toFixed(4)} * grainFade, 0.04, 1.0);`
+roughnessFactor = clamp(roughnessFactor + (0.5 - grainH) * ${(0.3 * strength).toFixed(4)}, 0.04, 1.0);`
       )
       .replace(
         "#include <normal_fragment_maps>",
         `#include <normal_fragment_maps>
-normal = rfBump(-vViewPosition, normal, vec2(dFdx(grainH), dFdy(grainH)) * ${bump} * grainFade, faceDirection);`
+normal = rfBump(-vViewPosition, normal, grainSlope * ${bump} * grainNormalFade, faceDirection);`
       );
   };
-  mat.customProgramCacheKey = () => `rf-grain-${kind}-${pitch}-${bump}-${shade}`;
+  mat.customProgramCacheKey = () => `rf-grain-filtered-${kind}-${pitch}-${bump}-${shade}`;
 }
 
 // A 2x2 twill drawn from the mesh's own coordinates: no UVs and no texture, so it costs a few
