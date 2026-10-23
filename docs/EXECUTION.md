@@ -1,6 +1,6 @@
 # Shared execution kernel
 
-The migrated paths cover MCP `move`, `ScriptRunner` (including plugin behaviors), MCP `run_controller`, MCP `pose` and MCP `gripper`.
+The migrated paths cover MCP `move`, `ScriptRunner` (including plugin behaviors), MCP `run_controller`, MCP `pose`, MCP `gripper`, MCP `move_arm`, MCP `pick_and_place` and MCP `operate`.
 Their public tool names, parameters and existing result fields are unchanged.
 This is an internal execution contract; it does not declare the MCP interface or world format stable.
 Robot control, motion planning and task success checks remain in their existing modules.
@@ -18,6 +18,7 @@ flowchart TD
     S[Script RPC] --> E
     R[MCP run_controller] --> E
     B[MCP pose and gripper] --> E
+    A[MCP arm planning and multi-phase behavior] --> E
     E --> P[SimSession.step]
     P --> C[Existing controllers and step hooks]
     P --> V[Viewer pose stream]
@@ -74,7 +75,7 @@ It prevents the old worker from silently attaching controls after the next run s
 The generic `run_until` adapters have not all migrated to this driver.
 Legacy controller commands use admission tokens while retaining their existing viewer-driven clocks.
 New owned runs refuse to start while admitted work is outstanding, including work whose requesting client has cancelled.
-The remaining legacy paths include simulate, direct controls, arm planning, pick/place, operate, demonstration replay, mapping exploration and plugin controllers.
+The remaining legacy paths include simulate, direct controls, demonstration replay, mapping exploration and plugin controllers.
 Plugin behaviors use `ScriptRunner` directly so they do not acquire a conflicting legacy token.
 Viewer teleoperation and manual stepping refuse competing changes; queued viewer navigation acquires admission inside its actual worker.
 Reset and world editing remain explicit invalidation paths.
@@ -113,7 +114,8 @@ Invalid or unrelated stop targets do not interrupt it.
 
 Scripts retain one cumulative lease and their bool/None results for pose/gripper calls.
 Captured-controller identity checks now reject replacement before testing completion, and a read-only RPC cannot adopt that replacement for later cleanup.
-Viewer arm jogging, demonstration replay, `move_arm` and multi-phase manipulation retain their existing entry paths.
+Viewer arm jogging and demonstration replay retain their existing entry paths.
+The following increment migrates `move_arm` and multi-phase manipulation as described below.
 The seven-case committed framework baseline remains unchanged; ten additional old/new MCP captures cover six poses, gripper open/close/queue and a gripper on a moving carrier.
 Boundary tests and actual installed MCP/Chrome evidence are in [the pose/gripper report](bench/2026-10-22-pose-gripper.md).
 
@@ -143,3 +145,42 @@ Preparation and measurement wall exhaustion both use stopped records; cancellati
 Storage errors during final recording are logged and exposed without replacing an original cancellation; a successfully applied command returns its normal result with an explicit execution recording error.
 Budget tests check both push phases, and real viewer checks require exact physical step and final-array equality.
 The [framework baseline](FRAMEWORK_REGRESSION.md) compares the new path with an independently captured old-core run.
+
+## Arm planning and multi-phase execution
+
+MCP `move_arm`, `pick_and_place` and `operate` use `RecordedExecution` plus an `ArmExecution` family ledger.
+Their 60 complete MCP tool definitions remain unchanged; the execution record reference is additive.
+Scripts keep their existing one-run user budget and return types, while arm planning now uses tracked worker threads.
+A single script family ledger permits later explicit commands without mistaking them for foreign replacements.
+
+The existing factories still own motion queues, catches, handovers, errands and visits.
+The ledger follows their arm, receiver, carrier, navigation and hidden orchestration controllers through later transitions.
+A transition belongs to the execution only when issued by its synchronous command or an already owned controller actor.
+An unrelated replacement invalidates the run; a per-controller step check prevents a removed orchestrator in the old update snapshot from attaching another phase.
+Controller order, rates and control calculations are unchanged.
+
+Carrier stability waiting stays before `move_arm` and `pick_and_place` planning, and is charged to the same run.
+`operate` retains its original factory-specific behavior and gains no extra initial carrier wait.
+Movement still appends to an existing arm queue.
+All original phase caps remain: carrier 3/6 s, arm movement 20 s, ordinary pick/hold 40 s, pour 100 s, handover 90 s, errand 180 s, catch/approach family limits, direct operation 90 s and visit 150 s.
+Pick/handover settling remains 0.5 s and operation settling 0.3 s.
+Settling preserves the old nested 100 ms outer/20 ms inner elapsed-time stopping rule, including its occasional extra physics batch; strict whole-run simulation/step budgets still clip it.
+
+MCP simulation budgets sum the applicable original phase caps.
+The whole wall allowance sums those phases' legacy allowances: headless `FAST_WALL_LIMIT` per phase, or watched `3 * sum(caps) + 5 * phase_count`.
+The deadline is anchored to initial admission, including snapshot preparation, metadata and planning; binding the actual family never starts a fresh deadline.
+Final settling cannot renew an exhausted wall allowance.
+Legacy result `sim_seconds` still excludes carrier waiting, whereas the common record includes every actual step.
+Record metrics retain phase names, nominal caps, actual steps/time/reasons, completion and terminal physics artifacts.
+
+Normal completion and observation limits leave controllers attached, except for the existing errand/visit timeout-stop behavior.
+Cancellation drains real planner workers, disarms delayed relay/catch callbacks, ends owned navigation and stops only still-owned endpoints.
+Repeated script cancellation also shields child/process cleanup until native planning exits.
+Foreign arm/base/navigation replacements are preserved.
+Before reset or model replacement discards old IDs, owned errands restore temporary contact, grip and stance settings against the old model.
+The final report reads under the same session lock as identity validation.
+Live planners retain their fully locked preparation contract, so pose reads may wait for a blocking planner; native work remains cooperatively cancellable.
+
+A refused mounted-arm plan now removes its newly attached empty arm controller instead of leaving it idle.
+The refusal text, 670 carrier-settlement steps, final physics and stopped base are unchanged in the captured comparison; it remains a planning refusal.
+The [arm execution report](bench/2026-10-23-arm-execution.md) records that intentional cleanup change separately from 13 exact completed cases and actual Chrome evidence.

@@ -1,0 +1,1591 @@
+{
+  "date": "2026-10-23",
+  "platform": "macOS-26.3.2-arm64-arm-64bit",
+  "python": "3.12.13",
+  "tested_commit": "c2250f964f6a0b172e3046d8d1bcf0a092f9a04a",
+  "source": {
+    "active_source_sha256": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d",
+    "git_commit": "6ac862e8bc41f01645ba9ca12d7690e66a5abb0a",
+    "git_dirty": true,
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "package": "robotforge",
+    "package_version": "0.0.1",
+    "platform": "macOS-26.3.2-arm64-arm-64bit",
+    "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+    "plugins": [],
+    "python": "3.12.13"
+  },
+  "committed_source": {
+    "package": "robotforge",
+    "package_version": "0.0.1",
+    "python": "3.12.13",
+    "platform": "macOS-26.3.2-arm64-arm-64bit",
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "git_commit": "c2250f964f6a0b172e3046d8d1bcf0a092f9a04a",
+    "git_dirty": false,
+    "active_source_sha256": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d",
+    "plugins": [],
+    "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+  },
+  "capture_timing": "Checks ran before commit; the identical source/test/script/dependency inventory was verified after committing.",
+  "source_inventory_sha256": "ffd400cf1cdecfcf910901d39ee72ddb197149ab7a393b9957a7f7240421ef3e",
+  "source_files": 568,
+  "source_unchanged_during_verification": true,
+  "dependencies": {
+    "numpy": "2.5.4",
+    "mujoco": "3.15.0",
+    "mcp": "2.3.0",
+    "pydantic": "2.14.1"
+  },
+  "default_suite": {
+    "tests": 3412,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 127,
+    "passed": 3285,
+    "selected": 3412,
+    "shard_counts": [
+      1706,
+      1706
+    ],
+    "exit_codes": [
+      0,
+      0
+    ],
+    "wall_s": 830.2
+  },
+  "focused_tests": 117,
+  "new_tests": 37,
+  "build": "passed",
+  "ruff": "passed",
+  "installed_cli_smoke": "passed",
+  "baseline": {
+    "suite": "framework-regression-v1",
+    "manifest_sha256": "e6c82b5c364b47273a8c45ee85441f37b50e1676ecd7cff5bbf2f72d4f88852b",
+    "unchanged": true,
+    "cases": 7
+  },
+  "candidate": {
+    "source": {
+      "active_source_sha256": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d",
+      "git_commit": "6ac862e8bc41f01645ba9ca12d7690e66a5abb0a",
+      "git_dirty": true,
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+      "plugins": [],
+      "python": "3.12.13"
+    },
+    "comparison": {
+      "issues": [],
+      "mode": "compare",
+      "source_changed": {
+        "active_source_sha256": {
+          "baseline": "258196f0c8df72d146af35b410c79bb0ec72e6fef6112e237572cee9fff0e7af",
+          "candidate": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d"
+        },
+        "git_commit": {
+          "baseline": "aae92839f5a8c91f4e143d4c90e893fa808309a2",
+          "candidate": "6ac862e8bc41f01645ba9ca12d7690e66a5abb0a"
+        }
+      },
+      "status": "pass"
+    }
+  },
+  "entry_compatibility": {
+    "all_60_definitions_identical": true,
+    "exact_completed_cases": [
+      "move_fixed",
+      "move_queued",
+      "pick_plain",
+      "pick_hold",
+      "pick_pour",
+      "pick_handover",
+      "pick_catch",
+      "pick_approach",
+      "pick_fetch",
+      "operate_drawer",
+      "operate_force_stall",
+      "operate_valve",
+      "operate_visit"
+    ],
+    "all_other_fields_identical": true,
+    "differences": {
+      "move_carrier": {
+        "controllers": {
+          "before": {
+            "rover": "DiffDrive",
+            "rover/arm": "ArmMotion"
+          },
+          "after": {
+            "rover": "DiffDrive"
+          }
+        }
+      }
+    },
+    "intentional_difference": "The refused mounted-arm plan now removes its newly attached empty ArmMotion; no physics or carrier change. This remains a refusal, not successful mounted-arm validation.",
+    "verified_artifacts": 112,
+    "harness_sha256": "c3fa77d383ee7af4ecd6343e30fa1c62dc92fa20ff49953688ffff8f9e0b4659",
+    "previous_core": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "6ac862e8bc41f01645ba9ca12d7690e66a5abb0a",
+      "git_dirty": false,
+      "active_source_sha256": "e73ed7e7e65482a115e312475356dd331aaf05723aac083d4e241bc66b7fcd74",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "current_core": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "6ac862e8bc41f01645ba9ca12d7690e66a5abb0a",
+      "git_dirty": true,
+      "active_source_sha256": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "cases": {
+      "move_fixed": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/fce952b5-f631-476b-bc08-05e57580c127/experiment.json",
+        "tool": "move_arm",
+        "arguments": {
+          "robot": "arm",
+          "position": [
+            0.2,
+            0.15,
+            0.2
+          ],
+          "gripper": "open"
+        },
+        "initial_arrays": {
+          "qpos": "d6deb4c93c9d571fba4262d1a67c6883a01b9496e7ad476b9c3cb8ec10d66384",
+          "qvel": "7c97e504f5246e794069921c2c59092a2aef723a7b8e733814a2fc37875518aa",
+          "ctrl": "88de420f4d0f2c7e5db7c424a4e9ae1001bfa5d5032e4cf0498a185879eab021"
+        },
+        "initial_steps": 0,
+        "public": {
+          "tool_position": [
+            0.204,
+            0.153,
+            0.183
+          ],
+          "sim_seconds": 1
+        },
+        "is_error": false,
+        "total_steps": 500,
+        "steps": 500,
+        "arrays": {
+          "qpos": "ec08445b6b73dc8793df0a34bf89ac140e5ddda9fb61c1e41f12b828d92a06a8",
+          "qvel": "734fc1b00a283896fe3a3fe08e7d618d96ea22e9bda5ef1be1397ea6791d93d8",
+          "ctrl": "23abe8406ec00c4e251ae73c23574404abf794795d39e266268ca5a11437b04f"
+        },
+        "controllers": {
+          "arm": "ArmMotion"
+        },
+        "wall_seconds": 0.2722537910012761
+      },
+      "move_queued": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/5661e19e-2c53-4426-9369-c8c97a58795d/experiment.json",
+        "tool": "move_arm",
+        "arguments": {
+          "robot": "arm",
+          "position": [
+            0.2,
+            0.15,
+            0.2
+          ],
+          "gripper": "open"
+        },
+        "initial_arrays": {
+          "qpos": "d6deb4c93c9d571fba4262d1a67c6883a01b9496e7ad476b9c3cb8ec10d66384",
+          "qvel": "7c97e504f5246e794069921c2c59092a2aef723a7b8e733814a2fc37875518aa",
+          "ctrl": "88de420f4d0f2c7e5db7c424a4e9ae1001bfa5d5032e4cf0498a185879eab021"
+        },
+        "initial_steps": 0,
+        "public": {
+          "tool_position": [
+            0.205,
+            0.153,
+            0.182
+          ],
+          "sim_seconds": 2.82
+        },
+        "is_error": false,
+        "total_steps": 1410,
+        "steps": 1410,
+        "arrays": {
+          "qpos": "41e699a318b379e5643094eaf71071a0d741575e2d142c571ca62bf023aebb0b",
+          "qvel": "be1802f26cb524c316f358f017af081444397c07aecb7f10521ff21afabf7e4c",
+          "ctrl": "6380ea90622871bd8e1a8b3c0d5e11ad972018d3f63fe3bab3112ea071fa757e"
+        },
+        "controllers": {
+          "arm": "ArmMotion"
+        },
+        "wall_seconds": 0.3005808339948999
+      },
+      "move_carrier": {
+        "status": "error",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/764723ef-8309-47b8-8b50-53e5473f5cf6/experiment.json",
+        "tool": "move_arm",
+        "arguments": {
+          "robot": "rover",
+          "position": [
+            0.382,
+            -0.0,
+            0.4
+          ],
+          "gripper": "open"
+        },
+        "initial_arrays": {
+          "qpos": "b6dc396ce08010cc71dff876814f7f711531546b1c8c0f0fba66d3610ddae2c0",
+          "qvel": "04d18c967a841ff74b95163e20ab61417bb417048a0dfffefeec4288b1096982",
+          "ctrl": "24c98aece92e99f638d3bd8e2eae385b8b9b22372c0dd4261f1d4b28aeba583f"
+        },
+        "initial_steps": 250,
+        "error": "ToolError: rover/arm cannot reach [0.382, -0.0, 0.4] with its gripper pointing down, though it is within the arm's 0.24 m reach at that height; try a point a little nearer, or nearer the height of its shoulder",
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/mcp_server.py\", line 1614, in _tool_errors\n    yield\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/mcp_server.py\", line 1137, in move_arm\n    arm = await family.plan(playground.behaviors.move_arm, robot, position, gripper)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/behaviors/execution.py\", line 91, in plan\n    value = await self.run.call_thread(attach)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/sim/execution.py\", line 261, in call_thread\n    return await self._thread(guarded)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/sim/execution.py\", line 291, in _thread\n    return await asyncio.shield(worker)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/threads.py\", line 25, in to_thread\n    return await loop.run_in_executor(None, func_call)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py\", line 59, in run\n    result = self.fn(*self.args, **self.kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/sim/execution.py\", line 259, in guarded\n    return fn(*args)\n           ^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/behaviors/execution.py\", line 87, in attach\n    value = invoke(*args)\n            ^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/behaviors/manager.py\", line 179, in command\n    return method(self, *args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/behaviors/manager.py\", line 1654, in move_arm\n    raise BehaviorError(self._out_of_reach(arm, target))\nrobotforge.behaviors.manager.BehaviorError: rover/arm cannot reach [0.382, -0.0, 0.4] with its gripper pointing down, though it is within the arm's 0.24 m reach at that height; try a point a little nearer, or nearer the height of its shoulder\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/Users/yusenthebot/dev/robotforge/.venv/lib/python3.12/site-packages/mcp/server/mcpserver/tools/base.py\", line 179, in run\n    result = await self.fn_metadata.call_fn(self.fn, self.is_async, validated, pass_directly)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/.venv/lib/python3.12/site-packages/mcp/server/mcpserver/utilities/func_metadata.py\", line 163, in call_fn\n    return await fn(**kwargs)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/experiments/execution.py\", line 150, in translated\n    return await execute(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/experiments/execution.py\", line 90, in execute\n    output = await invoke(*args, **kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/mcp_server.py\", line 1133, in move_arm\n    with _tool_errors(preserve_execution=True):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/mcp_server.py\", line 1620, in _tool_errors\n    raise ToolError(str(exc)) from exc\nmcp.server.mcpserver.exceptions.ToolError: rover/arm cannot reach [0.382, -0.0, 0.4] with its gripper pointing down, though it is within the arm's 0.24 m reach at that height; try a point a little nearer, or nearer the height of its shoulder\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/mcp_server.py\", line 299, in call_tool\n    return await super().call_tool(name, arguments, context)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/.venv/lib/python3.12/site-packages/mcp/server/mcpserver/server.py\", line 548, in call_tool\n    return await self._tool_manager.call_tool(name, arguments, context, convert_result=True)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/.venv/lib/python3.12/site-packages/mcp/server/mcpserver/tools/tool_manager.py\", line 87, in call_tool\n    return await tool.run(arguments, context, convert_result=convert_result)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/.venv/lib/python3.12/site-packages/mcp/server/mcpserver/tools/base.py\", line 210, in run\n    raise ToolError(f\"Error executing tool {self.name}: {exc}\") from exc\nmcp.server.mcpserver.exceptions.ToolError: Error executing tool move_arm: rover/arm cannot reach [0.382, -0.0, 0.4] with its gripper pointing down, though it is within the arm's 0.24 m reach at that height; try a point a little nearer, or nearer the height of its shoulder\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/entry_compatibility.py\", line 234, in capture\n    response = await server.call_tool(tool, args)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/yusenthebot/dev/robotforge/src/robotforge/mcp_server.py\", line 305, in call_tool\n    raise ToolError(tool_input.error_text(name, tool.parameters, exc)) from exc\nmcp.server.mcpserver.exceptions.ToolError: rover/arm cannot reach [0.382, -0.0, 0.4] with its gripper pointing down, though it is within the arm's 0.24 m reach at that height; try a point a little nearer, or nearer the height of its shoulder\n",
+        "total_steps": 920,
+        "steps": 670,
+        "arrays": {
+          "qpos": "9da4d88f48e2df9e19db24b43d2c2cd2e8a65a12a0ea6d47006303f87f7c93b5",
+          "qvel": "e451c27b111a4d476bdc050878a351d449c127c0c80d1584f98c56ee7508739a",
+          "ctrl": "0b167471f2e4785596c904aba231eab9fb78e0856a199717e16bfdb1fab6cd45"
+        },
+        "carrier_motion": [
+          0.0004056589559644338,
+          9.40759236739528e-10
+        ],
+        "carrier_status": {
+          "behavior": "drive",
+          "robot": "rover",
+          "speed": 0.0,
+          "turn": 0.0,
+          "max_speed": 0.7
+        },
+        "controllers": {
+          "rover": "DiffDrive"
+        },
+        "wall_seconds": 0.3460927499982063
+      },
+      "pick_plain": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/5996e8a6-6e2e-4c82-b3e5-f601f8024965/experiment.json",
+        "tool": "pick_and_place",
+        "arguments": {
+          "robot": "arm",
+          "object": "cube",
+          "target": [
+            0.2,
+            -0.2
+          ]
+        },
+        "initial_arrays": {
+          "qpos": "a02c99a0a20b0e427a38e7afffd8ccfa3fb78b1cff3f595b925ff0255d8be177",
+          "qvel": "cabd3a8dc29543825223f1e76c6933913e26ce381854b74333408be0c85c9ce7",
+          "ctrl": "88de420f4d0f2c7e5db7c424a4e9ae1001bfa5d5032e4cf0498a185879eab021"
+        },
+        "initial_steps": 250,
+        "public": {
+          "success": true,
+          "object_position": [
+            0.201,
+            -0.198,
+            0.02
+          ],
+          "object": "cube",
+          "target": [
+            0.2,
+            -0.2
+          ],
+          "sim_seconds": 7.14
+        },
+        "is_error": false,
+        "total_steps": 3820,
+        "steps": 3570,
+        "arrays": {
+          "qpos": "ee239c07991d0ef814067fcb11038c5c9c8f74794f494bdb4f61f402d0dcdf42",
+          "qvel": "03e3ac805ee5a93a1eb6bd2e602c6cc5cdcb0a6714a89f668599764222de7a21",
+          "ctrl": "535bde034080b39f2efe1315277d6118a756d9ef194a589325b9ec0a7c40edb4"
+        },
+        "controllers": {
+          "arm": "ArmMotion"
+        },
+        "wall_seconds": 0.426140416006092
+      },
+      "pick_hold": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/ea406747-4070-4e2b-bad2-941d34ba6a0d/experiment.json",
+        "tool": "pick_and_place",
+        "arguments": {
+          "robot": "arm",
+          "object": "hammer",
+          "target": "hold"
+        },
+        "initial_arrays": {
+          "qpos": "66eb24ecf6900b0d8015145f608d7531198db3af3ed550c006958e2b250051db",
+          "qvel": "2896c3a99c45d6a2d7f09d2db248925d0622f43aec468838b22a887b1a3b6608",
+          "ctrl": "69272d49a81111e9169b480ef70128f7a10c0c3d8fc8361813e3e62739f4216c"
+        },
+        "initial_steps": 250,
+        "public": {
+          "success": true,
+          "held": true,
+          "lifted_cm": 15.9,
+          "object": "hammer",
+          "target": "hold",
+          "grasp": {
+            "kind": "shaft",
+            "at": [
+              0.434,
+              -0.2,
+              0.409
+            ],
+            "note": "across the shaft, 7 cm behind the head"
+          },
+          "sim_seconds": 6.46
+        },
+        "is_error": false,
+        "total_steps": 3480,
+        "steps": 3230,
+        "arrays": {
+          "qpos": "23b214b2585ab2e61f7741d093028d2cab1436886a4e2d878d0342adb0176310",
+          "qvel": "b3bc1f274eb757d0494272b4c6938848dde4eb19053fb7b6c98d6a4cead5f0a1",
+          "ctrl": "67fc890efd2efbf75b679f25cc0643471bed1fff24a9b8cdb31b26d9e8aa36d6"
+        },
+        "controllers": {
+          "arm": "ArmMotion"
+        },
+        "wall_seconds": 0.5297410829953151
+      },
+      "pick_pour": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/1f01227e-5650-4745-81fe-4dca0fd8a3e7/experiment.json",
+        "tool": "pick_and_place",
+        "arguments": {
+          "robot": "arm",
+          "object": "cup",
+          "target": "bowl",
+          "pour": true
+        },
+        "initial_arrays": {
+          "qpos": "aba44d3b8810ba635c1c41f0d60eaa99cb38b7561b61c571a1254d38396a8cfb",
+          "qvel": "2cbeff035b2546c70a2591f00693148a7a4d95eee4b7d8aae9d8b21224bbc5a6",
+          "ctrl": "69272d49a81111e9169b480ef70128f7a10c0c3d8fc8361813e3e62739f4216c"
+        },
+        "initial_steps": 300,
+        "public": {
+          "success": true,
+          "balls_in_target": 6,
+          "balls": 6,
+          "poured_toward_deg": 88.2,
+          "object": "cup",
+          "target": "bowl",
+          "sim_seconds": 35.44
+        },
+        "is_error": false,
+        "total_steps": 18020,
+        "steps": 17720,
+        "arrays": {
+          "qpos": "6622a7fbaf25d5c1b06ff00aba8fd83a059b1a826f05d54114312ba2d2c48513",
+          "qvel": "bc8ca0aa16113a0b559d712994e8e2348075fe7601ad272b724671f5c75e5d36",
+          "ctrl": "e56e781a2c3be587aca3c331bca3423bfb5c11953abe582fb4f152eb0fd68222"
+        },
+        "controllers": {
+          "arm": "ArmMotion"
+        },
+        "wall_seconds": 3.46097116699093
+      },
+      "pick_handover": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/5bea14b9-ff55-470b-abc5-01ca68f9505f/experiment.json",
+        "tool": "pick_and_place",
+        "arguments": {
+          "robot": "left",
+          "object": "cube",
+          "target": "pad",
+          "hand_to": "right"
+        },
+        "initial_arrays": {
+          "qpos": "4bdb04ab66292355f5931330d24efc921d127d8e522cdb0a3a412c79fd03888b",
+          "qvel": "99682e90850ee69367a55964c232aebcc204af9e1e22312d3392752a965d080c",
+          "ctrl": "1f5ef66a1853b3be0c449eeac584da4cc9a55c03aebc47141fa5111c18406ffd"
+        },
+        "initial_steps": 500,
+        "public": {
+          "success": true,
+          "object_position": [
+            0.388,
+            0.248,
+            0.035
+          ],
+          "object": "cube",
+          "target": "pad",
+          "handed_over": {
+            "from": "left",
+            "to": "right",
+            "at": [
+              0,
+              0
+            ]
+          },
+          "sim_seconds": 28.22
+        },
+        "is_error": false,
+        "total_steps": 14610,
+        "steps": 14110,
+        "arrays": {
+          "qpos": "5ed7be91d180762d5a5a00ec816889ab2420ddb5f628bf48f083f598edee7eec",
+          "qvel": "02ac71f70c4ed70f2625ef43f57e063f6103360c863d9d703b04626a374b651b",
+          "ctrl": "96478d851fa1ee0f7c05406abe6ff3767a508f5188908dbe03de77e2b8f2ad5f"
+        },
+        "controllers": {
+          "left": "ArmMotion",
+          "right": "ArmMotion"
+        },
+        "wall_seconds": 0.8697600000014063
+      },
+      "pick_catch": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/1444dd80-9d25-4e54-bb45-62a68cff40f3/experiment.json",
+        "tool": "pick_and_place",
+        "arguments": {
+          "robot": "arm",
+          "object": "box_3",
+          "target": "red_bin"
+        },
+        "initial_arrays": {
+          "qpos": "d799a7ddf2fd35b92357f7c4fd607f0dfdfca73682d91d276ae56411ee468ddb",
+          "qvel": "ce7726047c3096417fe6e55c3a66f8809cfdd494faee7b9e5dcde4f8ed17fbf2",
+          "ctrl": "beac6c49b19489fc0efb9e910ed9b0ad5df133beb2f1f4156d77369ffa52b362"
+        },
+        "initial_steps": 500,
+        "public": {
+          "success": true,
+          "object_position": [
+            0.587,
+            -0.239,
+            0.53
+          ],
+          "object": "box_3",
+          "target": "red_bin",
+          "caught": true,
+          "caught_at": [
+            0.194,
+            0,
+            0.625
+          ],
+          "sim_seconds": 14.18
+        },
+        "is_error": false,
+        "total_steps": 7590,
+        "steps": 7090,
+        "arrays": {
+          "qpos": "a1ac63e7623dd5c9ccc27ddfe59298e9e4d05107e81ed4733aba3a68daa79de3",
+          "qvel": "a1f46f100a598bcd1b1da86de1283ae338712ff1f2dba52981285cf21a78b37b",
+          "ctrl": "28f573a205e380b36c17e8693dcdc38f99ee327f8c5573fbdb92a3c187055e10"
+        },
+        "controllers": {
+          "__mechanisms__": "Watcher",
+          "arm": "ArmMotion"
+        },
+        "wall_seconds": 1.6367874999996275
+      },
+      "pick_approach": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/1507a9d2-5290-4ae1-b58e-c428cfb38bb2/experiment.json",
+        "tool": "pick_and_place",
+        "arguments": {
+          "robot": "mm/arm",
+          "object": "box_6",
+          "target": "workbench"
+        },
+        "initial_arrays": {
+          "qpos": "ba3bf2378c6822e0d3bdd7b45e9614379f1163e29dcf967e2528fb31d3a07fee",
+          "qvel": "b9696f33bcd0f2ed57b3d9b591adf3baa100bc2e8f7bdaef18c7ea10782dabb8",
+          "ctrl": "2d09e07ab856af504395c5506aa319bdfd7a26f9d201821a3a90f471812ba83f"
+        },
+        "initial_steps": 500,
+        "public": {
+          "success": true,
+          "object_position": [
+            1.07,
+            0.884,
+            0.775
+          ],
+          "object": "box_6",
+          "target": "workbench",
+          "caught": true,
+          "caught_at": [
+            -0.054,
+            0,
+            0.625
+          ],
+          "went": [
+            {
+              "to": "workbench",
+              "arrived": true,
+              "path_m": 0.39,
+              "distance_m": 0.33,
+              "time_s": 4.3
+            }
+          ],
+          "driven_m": 0.33,
+          "put_down_at": [
+            1.07,
+            0.884,
+            0.775
+          ],
+          "hand_tilt_deg": {
+            "put": 0
+          },
+          "errand_s": 14.25,
+          "stood_at": [
+            0.101,
+            0.556,
+            -1.6
+          ],
+          "sim_seconds": 31.98
+        },
+        "is_error": false,
+        "total_steps": 16490,
+        "steps": 15990,
+        "arrays": {
+          "qpos": "086e926d952a44b32d38df284229209572dcff8fc657d1d96b4ed3c56c01d474",
+          "qvel": "8a2c4137af7fc09731f8d72f0db25a4e37c1681bdbe1911639e12a0a737d5447",
+          "ctrl": "69643a3a81325c66e83d0f9562e6c2771718011af316472d3390082650ea36d1"
+        },
+        "controllers": {
+          "__mechanisms__": "Watcher",
+          "mm/arm": "ArmMotion",
+          "mm": "DiffDrive",
+          "__catch_then__mm/arm": "Then"
+        },
+        "wall_seconds": 11.320093542002724
+      },
+      "pick_fetch": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/6281f018-a970-4582-a7fd-0cb07ef19b5a/experiment.json",
+        "tool": "pick_and_place",
+        "arguments": {
+          "robot": "picker",
+          "object": "cube",
+          "target": "goal"
+        },
+        "initial_arrays": {
+          "qpos": "c09fbd7097de9749ba22bed8624bc08169eec25b558a04bbd3dfcce3dd2b23e5",
+          "qvel": "fa3f513586761e641ef335158d15232092f923d7cc270b739a0e3ccdbb29c7f7",
+          "ctrl": "09b9ed0abef9feaff19bab37c99f890ad7d616d1327cc620db4583f1ca3c6166"
+        },
+        "initial_steps": 250,
+        "public": {
+          "success": true,
+          "object_position": [
+            1.601,
+            -0.468,
+            0.47
+          ],
+          "object": "cube",
+          "target": "goal",
+          "went": [
+            {
+              "to": "cube",
+              "arrived": true,
+              "path_m": 3.04,
+              "distance_m": 3,
+              "time_s": 12.45
+            },
+            {
+              "to": "goal",
+              "arrived": true,
+              "path_m": 4.29,
+              "distance_m": 4.27,
+              "time_s": 15.9
+            }
+          ],
+          "driven_m": 7.27,
+          "picked_up_at": [
+            0,
+            1.45,
+            0.47
+          ],
+          "put_down_at": [
+            1.601,
+            -0.468,
+            0.47
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 58.55,
+          "sim_seconds": 59.06
+        },
+        "is_error": false,
+        "total_steps": 29780,
+        "steps": 29530,
+        "arrays": {
+          "qpos": "95d294e5d19bc8b04a68b2361288a98b00f19c2b97be359a40a1765a5e87f438",
+          "qvel": "c2513edf87ebc455453fc5c13760eb122155f893bc8c45050a501425bf0e1799",
+          "ctrl": "133af0d902bb5158d0d651623f83cd5d29d5f259c36c526c164b67492dce2ffe"
+        },
+        "controllers": {
+          "picker/arm": "ArmMotion",
+          "picker": "DiffDrive"
+        },
+        "wall_seconds": 7.171428707995801
+      },
+      "operate_drawer": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/8158f23f-9661-4e41-826e-cfa0dd5a00d4/experiment.json",
+        "tool": "operate",
+        "arguments": {
+          "robot": "arm",
+          "target": "chest",
+          "action": "open",
+          "amount": 0.2
+        },
+        "initial_arrays": {
+          "qpos": "88724a9d591e9491d7f458c29d8f00291eb12821e0c29ab936d28dd86eaa8f5e",
+          "qvel": "13435aa284e76405155217495bd809641f5a1ad814c8b773e36c8ce8beba2fe8",
+          "ctrl": "88de420f4d0f2c7e5db7c424a4e9ae1001bfa5d5032e4cf0498a185879eab021"
+        },
+        "initial_steps": 0,
+        "public": {
+          "robot": "arm",
+          "target": "chest",
+          "action": "open",
+          "unit": "m",
+          "asked": 0.2,
+          "moved": 0.198,
+          "state": {
+            "type": "drawer",
+            "open_m": 0.198,
+            "of_m": 0.238,
+            "open": true
+          },
+          "success": true,
+          "sim_seconds": 10.42
+        },
+        "is_error": false,
+        "total_steps": 5210,
+        "steps": 5210,
+        "arrays": {
+          "qpos": "9272bd041c35ef0bd23d43669dec39d6875e604515c084579b873c8b0cf74c3d",
+          "qvel": "7f290d49e8f6a379f9074a52c63e1cc45ef59e63f5000d7d848b2e1edadf86d5",
+          "ctrl": "ee144a6a6aecf9ee70e9924f776b1f84b72d65093e9fe203573fdda1a5540ac2"
+        },
+        "controllers": {
+          "arm": "Operation"
+        },
+        "wall_seconds": 0.40523324999958277
+      },
+      "operate_force_stall": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/cf846feb-95db-47d1-b18e-42eec5b60acf/experiment.json",
+        "tool": "operate",
+        "arguments": {
+          "robot": "arm",
+          "target": "chest",
+          "action": "open",
+          "amount": 0.2,
+          "force": 25.0
+        },
+        "initial_arrays": {
+          "qpos": "c1cdb2c4a1dcf570166f2cdfe11377a96d4e50a2a0b303b839cf05c7268fb33b",
+          "qvel": "6d9f42f8cc89e0b115e9584548eceb4abf7a87b81521bb1bf21c7c32bbf61c2b",
+          "ctrl": "69272d49a81111e9169b480ef70128f7a10c0c3d8fc8361813e3e62739f4216c"
+        },
+        "initial_steps": 0,
+        "public": {
+          "robot": "arm",
+          "target": "chest",
+          "action": "open",
+          "unit": "m",
+          "asked": 0.2,
+          "notes": [
+            "the hand pushed at its limit of 25 N and the handle still held back: it takes more than that (give a larger force), or the hand slipped off it"
+          ],
+          "moved": 0.041,
+          "state": {
+            "type": "drawer",
+            "open_m": 0.041,
+            "of_m": 0.238,
+            "open": true
+          },
+          "success": false,
+          "force": {
+            "limit_n": 25,
+            "pushed_n": 25,
+            "felt_n": 30.2,
+            "stalled": true
+          },
+          "sim_seconds": 11.06
+        },
+        "is_error": false,
+        "total_steps": 5530,
+        "steps": 5530,
+        "arrays": {
+          "qpos": "11f3b9310fae14e35e65c1ce05444b298128b42d4833dda3962176937d6b38dd",
+          "qvel": "570218dd70b24a4a4f452216379b876084331297452defa6ee3d5088343cc5ac",
+          "ctrl": "62319d68f5e781af1957478cda64ce2f27d462b3d560ca4d620e9792057d452e"
+        },
+        "controllers": {
+          "arm": "Operation"
+        },
+        "wall_seconds": 0.8512062079971656
+      },
+      "operate_valve": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/29e00120-a758-485f-8168-1398d4987a2b/experiment.json",
+        "tool": "operate",
+        "arguments": {
+          "robot": "arm",
+          "target": "tap",
+          "action": "open",
+          "amount": 180
+        },
+        "initial_arrays": {
+          "qpos": "88724a9d591e9491d7f458c29d8f00291eb12821e0c29ab936d28dd86eaa8f5e",
+          "qvel": "13435aa284e76405155217495bd809641f5a1ad814c8b773e36c8ce8beba2fe8",
+          "ctrl": "88de420f4d0f2c7e5db7c424a4e9ae1001bfa5d5032e4cf0498a185879eab021"
+        },
+        "initial_steps": 0,
+        "public": {
+          "robot": "arm",
+          "target": "tap",
+          "action": "open",
+          "unit": "deg",
+          "asked": 180,
+          "moved": 178.6,
+          "state": {
+            "type": "valve",
+            "turns": 0.5,
+            "opening": 0.25
+          },
+          "success": true,
+          "sim_seconds": 29.48
+        },
+        "is_error": false,
+        "total_steps": 14740,
+        "steps": 14740,
+        "arrays": {
+          "qpos": "b4972a0c937220d2a4844923ce224e66274ba85d9b0fc999ae995a6621e9b25d",
+          "qvel": "1d2c130bbb5433a603d4fe5c7903fb04a7e75c64f88e584fd4e408a7dd72c34e",
+          "ctrl": "fe97ce33fd59e69b53ce4452a5da3aba3c6cdf3e4efd307061c03cacb31a3b5a"
+        },
+        "controllers": {
+          "arm": "Operation"
+        },
+        "wall_seconds": 0.5334586670069257
+      },
+      "operate_visit": {
+        "status": "completed",
+        "record": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/after-final/records/defbc9ad-2bb7-4884-bd7e-f70be70e2253/experiment.json",
+        "tool": "operate",
+        "arguments": {
+          "robot": "picker",
+          "target": "chest",
+          "action": "open",
+          "amount": 0.15
+        },
+        "initial_arrays": {
+          "qpos": "5810a13a33c89cd4b1fa5410554de8d8b7adf646808ab5cfcd202a6dcca36cf3",
+          "qvel": "bbc116e7d491c27b1d634bf029ea0daa3afa1aeb63a3f16135847b0ce37a8944",
+          "ctrl": "09b9ed0abef9feaff19bab37c99f890ad7d616d1327cc620db4583f1ca3c6166"
+        },
+        "initial_steps": 250,
+        "public": {
+          "robot": "picker/arm",
+          "target": "chest",
+          "action": "open",
+          "unit": "m",
+          "asked": 0.15,
+          "moved": 0.146,
+          "state": {
+            "type": "drawer",
+            "open_m": 0.146,
+            "of_m": 0.238,
+            "open": true
+          },
+          "success": true,
+          "went": [
+            {
+              "to": "chest",
+              "arrived": true,
+              "path_m": 1.4,
+              "distance_m": 1.31,
+              "time_s": 4.2
+            }
+          ],
+          "stood_at": [
+            1.323,
+            0.155,
+            46.6
+          ],
+          "visit_s": 21.6,
+          "sim_seconds": 21.94
+        },
+        "is_error": false,
+        "total_steps": 11220,
+        "steps": 10970,
+        "arrays": {
+          "qpos": "10122f0848b567d4cb8eb3b013371b186c3da97a467a2de374661a9e644842f0",
+          "qvel": "2ad2ec52bd081a0e6a4adbf346776d4c80173775bdb2ddad08fd7f4b81f7d4ca",
+          "ctrl": "09bb9561e3284c7eea60d7fc15ea2923b6dbdfc4f0f2affaaba8f57bba744c9c"
+        },
+        "controllers": {
+          "picker": "DiffDrive",
+          "picker/arm": "ArmMotion"
+        },
+        "wall_seconds": 4.0217195419972995
+      }
+    },
+    "assets": "existing offline test fixtures, including Panda collision stand-in"
+  },
+  "real": {
+    "variants": {
+      "move_fixed": {
+        "headless": {
+          "execution": {
+            "id": "3b4c4ee3-8aad-4f9b-b9bd-bc2850cb73b9",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/move_fixed/experiments/3b4c4ee3-8aad-4f9b-b9bd-bc2850cb73b9/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "72345012998a0fe4d026fb53dd3ec5991f4a393258c9cf74301b20badde81418",
+          "steps": 500,
+          "sim_seconds": 1.0000000000000004,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "ec08445b6b73dc8793df0a34bf89ac140e5ddda9fb61c1e41f12b828d92a06a8",
+            "qvel": "734fc1b00a283896fe3a3fe08e7d618d96ea22e9bda5ef1be1397ea6791d93d8",
+            "ctrl": "23abe8406ec00c4e251ae73c23574404abf794795d39e266268ca5a11437b04f"
+          },
+          "public": {
+            "tool_position": [
+              0.204,
+              0.153,
+              0.183
+            ],
+            "sim_seconds": 1
+          },
+          "phases": [
+            {
+              "limit_seconds": 20.0,
+              "name": "motion",
+              "reason": "completed",
+              "sim_seconds": 1.0000000000000004,
+              "steps": 500,
+              "wall_seconds": 0.01163891699980013
+            }
+          ]
+        },
+        "playing": {
+          "execution": {
+            "id": "c5ecc174-0bcc-4a2a-8493-8f2da8e4a082",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/move_fixed/experiments/c5ecc174-0bcc-4a2a-8493-8f2da8e4a082/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "72345012998a0fe4d026fb53dd3ec5991f4a393258c9cf74301b20badde81418",
+          "steps": 500,
+          "sim_seconds": 1.0000000000000004,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "ec08445b6b73dc8793df0a34bf89ac140e5ddda9fb61c1e41f12b828d92a06a8",
+            "qvel": "734fc1b00a283896fe3a3fe08e7d618d96ea22e9bda5ef1be1397ea6791d93d8",
+            "ctrl": "23abe8406ec00c4e251ae73c23574404abf794795d39e266268ca5a11437b04f"
+          },
+          "public": {
+            "tool_position": [
+              0.204,
+              0.153,
+              0.183
+            ],
+            "sim_seconds": 1
+          },
+          "phases": [
+            {
+              "limit_seconds": 20.0,
+              "name": "motion",
+              "reason": "completed",
+              "sim_seconds": 1.0000000000000004,
+              "steps": 500,
+              "wall_seconds": 1.0571524999977555
+            }
+          ]
+        },
+        "paused": {
+          "execution": {
+            "id": "c5db1815-92b4-482b-8fbe-4c98d350b04f",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/move_fixed/experiments/c5db1815-92b4-482b-8fbe-4c98d350b04f/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "72345012998a0fe4d026fb53dd3ec5991f4a393258c9cf74301b20badde81418",
+          "steps": 500,
+          "sim_seconds": 1.0000000000000004,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "ec08445b6b73dc8793df0a34bf89ac140e5ddda9fb61c1e41f12b828d92a06a8",
+            "qvel": "734fc1b00a283896fe3a3fe08e7d618d96ea22e9bda5ef1be1397ea6791d93d8",
+            "ctrl": "23abe8406ec00c4e251ae73c23574404abf794795d39e266268ca5a11437b04f"
+          },
+          "public": {
+            "tool_position": [
+              0.204,
+              0.153,
+              0.183
+            ],
+            "sim_seconds": 1
+          },
+          "phases": [
+            {
+              "limit_seconds": 20.0,
+              "name": "motion",
+              "reason": "completed",
+              "sim_seconds": 1.0000000000000004,
+              "steps": 500,
+              "wall_seconds": 0.012867832992924377
+            }
+          ]
+        },
+        "disconnect": {
+          "execution": {
+            "id": "7ff00385-6c29-4fed-9e29-fb2ed8ee1de3",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/move_fixed/experiments/7ff00385-6c29-4fed-9e29-fb2ed8ee1de3/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "72345012998a0fe4d026fb53dd3ec5991f4a393258c9cf74301b20badde81418",
+          "steps": 500,
+          "sim_seconds": 1.0000000000000004,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "ec08445b6b73dc8793df0a34bf89ac140e5ddda9fb61c1e41f12b828d92a06a8",
+            "qvel": "734fc1b00a283896fe3a3fe08e7d618d96ea22e9bda5ef1be1397ea6791d93d8",
+            "ctrl": "23abe8406ec00c4e251ae73c23574404abf794795d39e266268ca5a11437b04f"
+          },
+          "public": {
+            "tool_position": [
+              0.204,
+              0.153,
+              0.183
+            ],
+            "sim_seconds": 1
+          },
+          "phases": [
+            {
+              "limit_seconds": 20.0,
+              "name": "motion",
+              "reason": "completed",
+              "sim_seconds": 1.0000000000000004,
+              "steps": 500,
+              "wall_seconds": 1.0634160839981632
+            }
+          ]
+        }
+      },
+      "pick_handover": {
+        "headless": {
+          "execution": {
+            "id": "543a757f-0fa7-476a-93fa-526851ce1528",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/pick_handover/experiments/543a757f-0fa7-476a-93fa-526851ce1528/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "ad70e8108ef48d79697dff42895864fb1cb2bc25fb6c2d0d7fe6dd1c529b2fc1",
+          "steps": 13270,
+          "sim_seconds": 26.539999999999523,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "349723162d416377b11996166eb23c9feb5cf870ada4ca59b75de640b77a0172",
+            "qvel": "92f7fd8d16f9e49ce3945d9f1e775b30eb0050d49eeb1f809683151dbea74b4b",
+            "ctrl": "202daea553125b133e3f0f5cc0c1e54ef30a27af45c1cc6359bbb48fcfda9de9"
+          },
+          "public": {
+            "success": true,
+            "object_position": [
+              0.385,
+              0.244,
+              0.035
+            ],
+            "object": "cube",
+            "target": "pad",
+            "handed_over": {
+              "from": "left",
+              "to": "right",
+              "at": [
+                0,
+                0
+              ]
+            },
+            "sim_seconds": 26.54
+          },
+          "phases": [
+            {
+              "limit_seconds": 90.0,
+              "name": "handover",
+              "reason": "completed",
+              "sim_seconds": 26.019999999999534,
+              "steps": 13010,
+              "wall_seconds": 0.5817953750083689
+            },
+            {
+              "limit_seconds": 0.5,
+              "name": "settle",
+              "reason": "completed",
+              "sim_seconds": 0.5199999999999889,
+              "steps": 260,
+              "wall_seconds": 0.004073874995810911
+            }
+          ]
+        },
+        "playing": {
+          "execution": {
+            "id": "6c16457e-072e-4c86-b209-77ca74345a85",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/pick_handover/experiments/6c16457e-072e-4c86-b209-77ca74345a85/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "ad70e8108ef48d79697dff42895864fb1cb2bc25fb6c2d0d7fe6dd1c529b2fc1",
+          "steps": 13270,
+          "sim_seconds": 26.539999999999523,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "349723162d416377b11996166eb23c9feb5cf870ada4ca59b75de640b77a0172",
+            "qvel": "92f7fd8d16f9e49ce3945d9f1e775b30eb0050d49eeb1f809683151dbea74b4b",
+            "ctrl": "202daea553125b133e3f0f5cc0c1e54ef30a27af45c1cc6359bbb48fcfda9de9"
+          },
+          "public": {
+            "success": true,
+            "object_position": [
+              0.385,
+              0.244,
+              0.035
+            ],
+            "object": "cube",
+            "target": "pad",
+            "handed_over": {
+              "from": "left",
+              "to": "right",
+              "at": [
+                0,
+                0
+              ]
+            },
+            "sim_seconds": 26.54
+          },
+          "phases": [
+            {
+              "limit_seconds": 90.0,
+              "name": "handover",
+              "reason": "completed",
+              "sim_seconds": 26.019999999999534,
+              "steps": 13010,
+              "wall_seconds": 27.596720375004224
+            },
+            {
+              "limit_seconds": 0.5,
+              "name": "settle",
+              "reason": "completed",
+              "sim_seconds": 0.5199999999999889,
+              "steps": 260,
+              "wall_seconds": 0.5518509999965318
+            }
+          ]
+        },
+        "paused": {
+          "execution": {
+            "id": "ad5e77d3-25b3-4832-8dd1-c1d6f1678508",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/pick_handover/experiments/ad5e77d3-25b3-4832-8dd1-c1d6f1678508/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "ad70e8108ef48d79697dff42895864fb1cb2bc25fb6c2d0d7fe6dd1c529b2fc1",
+          "steps": 13270,
+          "sim_seconds": 26.539999999999523,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "349723162d416377b11996166eb23c9feb5cf870ada4ca59b75de640b77a0172",
+            "qvel": "92f7fd8d16f9e49ce3945d9f1e775b30eb0050d49eeb1f809683151dbea74b4b",
+            "ctrl": "202daea553125b133e3f0f5cc0c1e54ef30a27af45c1cc6359bbb48fcfda9de9"
+          },
+          "public": {
+            "success": true,
+            "object_position": [
+              0.385,
+              0.244,
+              0.035
+            ],
+            "object": "cube",
+            "target": "pad",
+            "handed_over": {
+              "from": "left",
+              "to": "right",
+              "at": [
+                0,
+                0
+              ]
+            },
+            "sim_seconds": 26.54
+          },
+          "phases": [
+            {
+              "limit_seconds": 90.0,
+              "name": "handover",
+              "reason": "completed",
+              "sim_seconds": 26.019999999999534,
+              "steps": 13010,
+              "wall_seconds": 0.6903854580014013
+            },
+            {
+              "limit_seconds": 0.5,
+              "name": "settle",
+              "reason": "completed",
+              "sim_seconds": 0.5199999999999889,
+              "steps": 260,
+              "wall_seconds": 0.004543542003375478
+            }
+          ]
+        },
+        "disconnect": {
+          "execution": {
+            "id": "6a764774-7cb3-4cd8-859d-0af8fbb3eee8",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/pick_handover/experiments/6a764774-7cb3-4cd8-859d-0af8fbb3eee8/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "ad70e8108ef48d79697dff42895864fb1cb2bc25fb6c2d0d7fe6dd1c529b2fc1",
+          "steps": 13270,
+          "sim_seconds": 26.539999999999523,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "349723162d416377b11996166eb23c9feb5cf870ada4ca59b75de640b77a0172",
+            "qvel": "92f7fd8d16f9e49ce3945d9f1e775b30eb0050d49eeb1f809683151dbea74b4b",
+            "ctrl": "202daea553125b133e3f0f5cc0c1e54ef30a27af45c1cc6359bbb48fcfda9de9"
+          },
+          "public": {
+            "success": true,
+            "object_position": [
+              0.385,
+              0.244,
+              0.035
+            ],
+            "object": "cube",
+            "target": "pad",
+            "handed_over": {
+              "from": "left",
+              "to": "right",
+              "at": [
+                0,
+                0
+              ]
+            },
+            "sim_seconds": 26.54
+          },
+          "phases": [
+            {
+              "limit_seconds": 90.0,
+              "name": "handover",
+              "reason": "completed",
+              "sim_seconds": 26.019999999999534,
+              "steps": 13010,
+              "wall_seconds": 27.599293999999645
+            },
+            {
+              "limit_seconds": 0.5,
+              "name": "settle",
+              "reason": "completed",
+              "sim_seconds": 0.5199999999999889,
+              "steps": 260,
+              "wall_seconds": 0.549167208999279
+            }
+          ]
+        }
+      },
+      "operate_visit": {
+        "headless": {
+          "execution": {
+            "id": "c303117f-2b69-4cf6-9091-960ae71dc940",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/operate_visit/experiments/c303117f-2b69-4cf6-9091-960ae71dc940/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "b3ec79ee368fcc7bec7f15a72de5c28724cd9e17677408e984fcbd448e476426",
+          "steps": 10970,
+          "sim_seconds": 21.93999999999962,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "10122f0848b567d4cb8eb3b013371b186c3da97a467a2de374661a9e644842f0",
+            "qvel": "2ad2ec52bd081a0e6a4adbf346776d4c80173775bdb2ddad08fd7f4b81f7d4ca",
+            "ctrl": "09bb9561e3284c7eea60d7fc15ea2923b6dbdfc4f0f2affaaba8f57bba744c9c"
+          },
+          "public": {
+            "robot": "picker/arm",
+            "target": "chest",
+            "action": "open",
+            "unit": "m",
+            "asked": 0.15,
+            "moved": 0.146,
+            "state": {
+              "type": "drawer",
+              "open_m": 0.146,
+              "of_m": 0.238,
+              "open": true
+            },
+            "success": true,
+            "went": [
+              {
+                "to": "chest",
+                "arrived": true,
+                "path_m": 1.4,
+                "distance_m": 1.31,
+                "time_s": 4.2
+              }
+            ],
+            "stood_at": [
+              1.323,
+              0.155,
+              46.6
+            ],
+            "visit_s": 21.6,
+            "sim_seconds": 21.94
+          },
+          "phases": [
+            {
+              "limit_seconds": 150.0,
+              "name": "visit",
+              "reason": "completed",
+              "sim_seconds": 21.619999999999628,
+              "steps": 10810,
+              "wall_seconds": 1.0954105829878245
+            },
+            {
+              "limit_seconds": 0.3,
+              "name": "settle",
+              "reason": "completed",
+              "sim_seconds": 0.3199999999999932,
+              "steps": 160,
+              "wall_seconds": 0.0031496669980697334
+            }
+          ]
+        },
+        "playing": {
+          "execution": {
+            "id": "c79d1c5e-5a5b-4e2a-b60d-49ea27d4a687",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/operate_visit/experiments/c79d1c5e-5a5b-4e2a-b60d-49ea27d4a687/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "b3ec79ee368fcc7bec7f15a72de5c28724cd9e17677408e984fcbd448e476426",
+          "steps": 10970,
+          "sim_seconds": 21.93999999999962,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "10122f0848b567d4cb8eb3b013371b186c3da97a467a2de374661a9e644842f0",
+            "qvel": "2ad2ec52bd081a0e6a4adbf346776d4c80173775bdb2ddad08fd7f4b81f7d4ca",
+            "ctrl": "09bb9561e3284c7eea60d7fc15ea2923b6dbdfc4f0f2affaaba8f57bba744c9c"
+          },
+          "public": {
+            "robot": "picker/arm",
+            "target": "chest",
+            "action": "open",
+            "unit": "m",
+            "asked": 0.15,
+            "moved": 0.146,
+            "state": {
+              "type": "drawer",
+              "open_m": 0.146,
+              "of_m": 0.238,
+              "open": true
+            },
+            "success": true,
+            "went": [
+              {
+                "to": "chest",
+                "arrived": true,
+                "path_m": 1.4,
+                "distance_m": 1.31,
+                "time_s": 4.2
+              }
+            ],
+            "stood_at": [
+              1.323,
+              0.155,
+              46.6
+            ],
+            "visit_s": 21.6,
+            "sim_seconds": 21.94
+          },
+          "phases": [
+            {
+              "limit_seconds": 150.0,
+              "name": "visit",
+              "reason": "completed",
+              "sim_seconds": 21.619999999999628,
+              "steps": 10810,
+              "wall_seconds": 23.109268000000156
+            },
+            {
+              "limit_seconds": 0.3,
+              "name": "settle",
+              "reason": "completed",
+              "sim_seconds": 0.3199999999999932,
+              "steps": 160,
+              "wall_seconds": 0.3455652499978896
+            }
+          ]
+        },
+        "paused": {
+          "execution": {
+            "id": "032bb8d5-af7e-45c9-b5c3-7d3db6dcf4c5",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/operate_visit/experiments/032bb8d5-af7e-45c9-b5c3-7d3db6dcf4c5/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "b3ec79ee368fcc7bec7f15a72de5c28724cd9e17677408e984fcbd448e476426",
+          "steps": 10970,
+          "sim_seconds": 21.93999999999962,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "10122f0848b567d4cb8eb3b013371b186c3da97a467a2de374661a9e644842f0",
+            "qvel": "2ad2ec52bd081a0e6a4adbf346776d4c80173775bdb2ddad08fd7f4b81f7d4ca",
+            "ctrl": "09bb9561e3284c7eea60d7fc15ea2923b6dbdfc4f0f2affaaba8f57bba744c9c"
+          },
+          "public": {
+            "robot": "picker/arm",
+            "target": "chest",
+            "action": "open",
+            "unit": "m",
+            "asked": 0.15,
+            "moved": 0.146,
+            "state": {
+              "type": "drawer",
+              "open_m": 0.146,
+              "of_m": 0.238,
+              "open": true
+            },
+            "success": true,
+            "went": [
+              {
+                "to": "chest",
+                "arrived": true,
+                "path_m": 1.4,
+                "distance_m": 1.31,
+                "time_s": 4.2
+              }
+            ],
+            "stood_at": [
+              1.323,
+              0.155,
+              46.6
+            ],
+            "visit_s": 21.6,
+            "sim_seconds": 21.94
+          },
+          "phases": [
+            {
+              "limit_seconds": 150.0,
+              "name": "visit",
+              "reason": "completed",
+              "sim_seconds": 21.619999999999628,
+              "steps": 10810,
+              "wall_seconds": 1.4113425410032505
+            },
+            {
+              "limit_seconds": 0.3,
+              "name": "settle",
+              "reason": "completed",
+              "sim_seconds": 0.3199999999999932,
+              "steps": 160,
+              "wall_seconds": 0.0034124579979106784
+            }
+          ]
+        },
+        "disconnect": {
+          "execution": {
+            "id": "bcf6df91-099c-4b43-9168-34adc501b8c6",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/operate_visit/experiments/bcf6df91-099c-4b43-9168-34adc501b8c6/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "b3ec79ee368fcc7bec7f15a72de5c28724cd9e17677408e984fcbd448e476426",
+          "steps": 10970,
+          "sim_seconds": 21.93999999999962,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "10122f0848b567d4cb8eb3b013371b186c3da97a467a2de374661a9e644842f0",
+            "qvel": "2ad2ec52bd081a0e6a4adbf346776d4c80173775bdb2ddad08fd7f4b81f7d4ca",
+            "ctrl": "09bb9561e3284c7eea60d7fc15ea2923b6dbdfc4f0f2affaaba8f57bba744c9c"
+          },
+          "public": {
+            "robot": "picker/arm",
+            "target": "chest",
+            "action": "open",
+            "unit": "m",
+            "asked": 0.15,
+            "moved": 0.146,
+            "state": {
+              "type": "drawer",
+              "open_m": 0.146,
+              "of_m": 0.238,
+              "open": true
+            },
+            "success": true,
+            "went": [
+              {
+                "to": "chest",
+                "arrived": true,
+                "path_m": 1.4,
+                "distance_m": 1.31,
+                "time_s": 4.2
+              }
+            ],
+            "stood_at": [
+              1.323,
+              0.155,
+              46.6
+            ],
+            "visit_s": 21.6,
+            "sim_seconds": 21.94
+          },
+          "phases": [
+            {
+              "limit_seconds": 150.0,
+              "name": "visit",
+              "reason": "completed",
+              "sim_seconds": 21.619999999999628,
+              "steps": 10810,
+              "wall_seconds": 23.197714499998256
+            },
+            {
+              "limit_seconds": 0.3,
+              "name": "settle",
+              "reason": "completed",
+              "sim_seconds": 0.3199999999999932,
+              "steps": 160,
+              "wall_seconds": 0.3365329170046607
+            }
+          ]
+        }
+      }
+    },
+    "panda_assets": "complete cached MuJoCo Menagerie; official process has no fixture override",
+    "unchanged_mcp_tools": 60,
+    "pick_handover_stop": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/pick_handover/experiments/55529d1f-ea6e-4a60-a5cc-50187417c512/experiment.json",
+      "status": "cancelled",
+      "reason": "cancelled"
+    },
+    "operate_visit_reset": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/home/worlds/operate_visit/experiments/b5f8dd87-89ce-4eed-a59d-0723bfdd5bca/experiment.json",
+      "status": "failed",
+      "reason": "invalidated"
+    },
+    "script": {
+      "script": "arm_compatibility.py",
+      "exit_code": 0,
+      "ok": true,
+      "output": "{\"move_arm_type\": \"list\", \"length\": 3}\n",
+      "sim_seconds": 3.38,
+      "wall_seconds": 0.11,
+      "shown_live": false
+    },
+    "browser_errors": [],
+    "video": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-arm-execution/live/arm-multiphase-validation.mp4",
+      "frames": 3211,
+      "seconds": 141.70949912071228
+    }
+  },
+  "panda_model": {
+    "compiled_meshes": 136,
+    "source": "complete locally cached MuJoCo Menagerie",
+    "panda_xml_sha256": "96ad67da03710f17f798c9478fd9e9efdf24a3bf8359f05e456dd9fb158ea273"
+  },
+  "browser_gamepad": {
+    "passed": 8,
+    "seconds": 35.744
+  },
+  "behavior": {
+    "baseline": "6ac862e8bc41f01645ba9ca12d7690e66a5abb0a",
+    "identical": true,
+    "scenarios": 14,
+    "markers": 280
+  },
+  "video": {
+    "duration_seconds": 141.8,
+    "sha256": "6e8d48a01857dcb8fa38a34745b4a5d67e818b4c815ae319bff94df851d024ce",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "avg_frame_rate": "30/1"
+        }
+      ],
+      "format": {
+        "duration": "141.800000",
+        "size": "8794183"
+      }
+    },
+    "full_decode": "passed",
+    "representative_frame_inspection": "passed",
+    "source": "actual Chrome screencast, complete cached Panda model"
+  },
+  "review": "independent Python review approved after ownership, deadline, settlement, error-translation and repeated-cancellation fixes",
+  "audit": {
+    "reviewed_python_files": [
+      "src/robotforge/behaviors/mcp_tools.py",
+      "src/robotforge/experiments/execution.py",
+      "src/robotforge/mcp_server.py",
+      "src/robotforge/script_runner.py",
+      "src/robotforge/sim/execution.py",
+      "src/robotforge/sim/session.py",
+      "src/robotforge/behaviors/execution.py",
+      "tests/test_arm_execution.py",
+      "tests/test_execution_actor.py"
+    ],
+    "credential_pattern_findings": [],
+    "runtime_print_calls": [],
+    "docstring_example_print": "existing run_script documentation example, not a runtime call",
+    "independent_python_review": "approved",
+    "unavailable_tools": [
+      "mypy",
+      "pyright",
+      "bandit",
+      "pip-audit"
+    ]
+  },
+  "unavailable_tools": {
+    "mypy": false,
+    "pyright": false,
+    "bandit": false,
+    "pip-audit": false
+  },
+  "compatibility": [
+    "all 60 complete MCP tool definitions unchanged; execution reference additive",
+    "queue, initial carrier stillness and all original simulation phase caps retained",
+    "MCP total wall allowance sums legacy phase allowances from original admission, including preparation",
+    "legacy settle elapsed rounding retained, strict whole-run sim/step limits preserved",
+    "script user budget and public return types retained",
+    "intentional cleanup of newly attached empty arm after refused plan; refusal/physics/base unchanged"
+  ],
+  "scope": "execution framework migration only; no task success/reward/controller tuning",
+  "limits": [
+    "macOS arm64 actual verification only; native Windows not rerun",
+    "optional RL backends and missing type/security tools unverified",
+    "native/plugin work remains cooperative and live planning uses its existing session lock",
+    "snapshots do not serialize arbitrary Python controller closures or RNG runtime state",
+    "offline fixture and complete Panda models are separate evidence variants, not cross-compared",
+    "no new dependencies, release, deployment or paid Actions"
+  ],
+  "raw_evidence": "../robotforge-evidence/2026-10-23-arm-execution/"
+}
