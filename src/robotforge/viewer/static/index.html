@@ -119,6 +119,23 @@
     </div>
     <section class="tab-body" id="world-body-maps" role="tabpanel" aria-labelledby="world-tab-maps" data-body="maps">
       <p class="note lead" data-i18n="maps_lead">Pick a place for your robots. They come along.</p>
+      <div class="layout-tools">
+        <h2 class="section-title"><span data-i18n="saved_layouts">Saved layouts</span><button class="pill" type="button" id="layout-refresh" data-i18n="layout_refresh">Refresh</button></h2>
+        <p class="note" data-i18n="layout_lead">Save this world's design before exploring another map. Motion and simulation time are not saved.</p>
+        <form id="layout-save-form" class="layout-save">
+          <label for="layout-name" data-i18n="layout_name">Layout name</label>
+          <input id="layout-name" type="text" required maxlength="64" autocomplete="off" data-i18n-label="layout_name">
+          <button class="pill" id="layout-save" type="submit" data-i18n="layout_save">Save current</button>
+        </form>
+        <p class="note" id="layout-status" role="status" aria-live="polite"></p>
+        <div id="layout-list"></div>
+        <div id="layout-confirm" class="layout-confirm" hidden>
+          <p class="note" id="layout-confirm-text"></p>
+          <button class="pill" type="button" id="layout-apply"></button>
+          <button class="pill" type="button" id="layout-cancel" data-i18n="cancel_place">Cancel</button>
+        </div>
+      </div>
+      <h2 class="section-title spaced" data-i18n="layout_maps">Explore a map</h2>
       <div class="choices" id="map-list"></div>
     </section>
     <section class="tab-body" id="world-body-terrain" role="tabpanel" aria-labelledby="world-tab-terrain" data-body="terrain" hidden>

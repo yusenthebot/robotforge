@@ -126,8 +126,10 @@ class Playground:
     _play_edit: Edit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
     _play_world_descriptor: str | None = field(default=None, repr=False)
+    _layout_reset_hooks: tuple[Any, ...] = field(default=(), init=False, repr=False)
 
     def __post_init__(self) -> None:
+        initial_hooks = len(self.session.reset_hooks)
         if self.store is not None:
             import hashlib
 
@@ -149,6 +151,7 @@ class Playground:
         # belts keep running and button presses are counted, through resets
         mechanisms.attach(self.session, self._mechanism_shapes)
         self.session.reset_hooks.append(self._task_starts.clear)  # a reset starts every task's attempt again
+        self._layout_reset_hooks = tuple(self.session.reset_hooks[initial_hooks:])
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -238,6 +241,8 @@ class Playground:
 
         def world_request(msg: dict[str, Any]) -> dict[str, Any]:
             action = msg.get("action")
+            if action in {"layout_list", "layout_save", "layout_restore", "layout_remove"}:
+                return self.layouts_for_play(msg)
             if action == "add_robot":
                 return self.add_robot_for_play(msg)
             if action in {"edit_object", "remove_object", "undo_object_edit"}:
@@ -435,6 +440,13 @@ class Playground:
         opened = self._load_world(compiled)
         opened["notes"].extend(plugin_notes(store.dir))  # said once, as the world opens, not with every edit after
         return opened
+
+    @_one_edit_at_a_time
+    def layouts_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Save/restore authored layouts in the current world's original asset directory."""
+        from robotforge.viewer.layouts import handle
+
+        return handle(self, message)
 
     @_one_edit_at_a_time
     def add_robot_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
