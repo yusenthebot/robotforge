@@ -1,0 +1,2448 @@
+{
+  "baseline_commit": "6ab0a346f1779241c36034c61bb108ff5a7c889f",
+  "runtime_sha256": "a1d2c2ef95b4fe09e1c1b3abb0963fc1ebe841ae553d9d9be530f1abf1c4443e",
+  "evidence_root": "../robotforge-evidence/2026-10-24-touch-build-camera",
+  "verification": {
+    "tests": {
+      "browser-full": 101,
+      "slow-assets-sensors": 8,
+      "core": 300
+    },
+    "unique_cases": 409,
+    "whole_default_suite_repeated": false,
+    "framework_cases": 7,
+    "budget_checks": 11,
+    "static": {
+      "runtime_sha256": "a1d2c2ef95b4fe09e1c1b3abb0963fc1ebe841ae553d9d9be530f1abf1c4443e",
+      "baseline_wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-touch-build-camera/wheel-baseline/robotforge-0.0.1-py3-none-any.whl",
+      "baseline_wheel_sha256": "f4958e34b01b1de3a858c00a4f0cd12fd3ff5d0a40a504451538bedb7b551319",
+      "wheel": {
+        "before_bytes": 3732750,
+        "after_bytes": 3734009,
+        "delta_bytes": 1259,
+        "changed_runtime_members": [
+          "viewer/static/app.js",
+          "viewer/static/creation.js",
+          "viewer/static/i18n.js"
+        ],
+        "sha256": "4089b4bb99a0ae5c1f73acf85ae7b7f1a8191657692c38680330960208a5725a"
+      },
+      "wheel_package_bytes_match_sources": true,
+      "commands": [
+        {
+          "name": "ruff-check",
+          "command": [
+            "uv",
+            "run",
+            "--frozen",
+            "ruff",
+            "check",
+            "."
+          ],
+          "exit_code": 0
+        },
+        {
+          "name": "ruff-format",
+          "command": [
+            "uv",
+            "run",
+            "--frozen",
+            "ruff",
+            "format",
+            "--check",
+            "."
+          ],
+          "exit_code": 0
+        },
+        {
+          "name": "diff-check",
+          "command": [
+            "git",
+            "diff",
+            "--check"
+          ],
+          "exit_code": 0
+        }
+      ],
+      "optional_unavailable": [
+        "mypy",
+        "pyright",
+        "bandit",
+        "pip-audit"
+      ],
+      "pattern_audit": {
+        "secret": [],
+        "debug": []
+      }
+    }
+  },
+  "stages": [
+    {
+      "name": "browser-full",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "-m",
+        "browser",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-touch-build-camera/verification-logs/browser-full.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 405.55491983299726
+    },
+    {
+      "name": "slow-assets-sensors",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "-m",
+        "slow",
+        "tests/test_viewer_assets_browser.py",
+        "tests/test_viewer_sensors_browser.py",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-touch-build-camera/verification-logs/slow-assets-sensors.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 30.106011290976312
+    },
+    {
+      "name": "core",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "tests/test_assets.py",
+        "tests/test_visuals.py",
+        "tests/test_scene.py",
+        "tests/test_viewer_creation.py",
+        "tests/test_viewer_objects.py",
+        "tests/test_viewer_lighting.py",
+        "tests/test_viewer_js.py",
+        "tests/test_viewer_server.py",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-touch-build-camera/verification-logs/core.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 11.839777957997285
+    },
+    {
+      "name": "framework",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/framework_regression.py",
+        "--out",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-touch-build-camera/framework-final",
+        "--baseline",
+        "docs/bench/framework-regression-v1.json"
+      ],
+      "exit_code": 0,
+      "seconds": 1.5916856249968987
+    },
+    {
+      "name": "budget",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/bench.py",
+        "--only",
+        "install",
+        "viewer",
+        "--save",
+        "--out",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-touch-build-camera/budget-final"
+      ],
+      "exit_code": 0,
+      "seconds": 25.46366341598332
+    },
+    {
+      "name": "smoke",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/smoke.py"
+      ],
+      "exit_code": 0,
+      "seconds": 3.417439540993655
+    },
+    {
+      "name": "installed-smoke",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-touch-build-camera/install_smoke.py"
+      ],
+      "exit_code": 0,
+      "seconds": 20.37336979198153
+    }
+  ],
+  "evidence": {
+    "status": "final actual evidence complete; all heavy processes terminal",
+    "definition": "Fresh final A1/B1/A2/B2 serial runs, not conclusions copied from preceding c50 run. A=baseline archive6ab0a34; B=final a1d candidate. Two repetitions are descriptive, not a statistical performance certification. Load means two RAFs after scene exists and positive session time; server already running. Frame samples are synchronous renderer plus1pixel GPU readback, not complete app frame CPU time. All slow samples retained.",
+    "source_sha256": {
+      "A1": "3519db85aac71b55fdc983870e9ca57044339f07f0976b2b996b6ba672a4f605",
+      "B1": "a1d2c2ef95b4fe09e1c1b3abb0963fc1ebe841ae553d9d9be530f1abf1c4443e",
+      "A2": "3519db85aac71b55fdc983870e9ca57044339f07f0976b2b996b6ba672a4f605",
+      "B2": "a1d2c2ef95b4fe09e1c1b3abb0963fc1ebe841ae553d9d9be530f1abf1c4443e"
+    },
+    "source_unchanged": true,
+    "fixed_viewport": [
+      1280,
+      800
+    ],
+    "fixed_dpr": 1,
+    "scenes": {
+      "gallery": {
+        "physics_exact_all_runs": true,
+        "initial_state_identical": true,
+        "scene_sha256_identical": true,
+        "png_sha256_identical_by_view": {
+          "far": true,
+          "near": true,
+          "low": true
+        },
+        "all_console_runtime_gl_errors_absent": true,
+        "statistics": {
+          "baseline": {
+            "fresh_first_frame_ms": 325.0,
+            "warm_first_frame_ms": 197.04999999701977,
+            "first_action_two_raf_ms": 31.049999997019768,
+            "frame_median_ms_240_samples": 3.800000011920929,
+            "frame_p95_ms_240_samples": 5.100000023841858,
+            "raf_fps_median": 59.999999999999986,
+            "chrome_tree_rss_mib": 1992.7109375,
+            "fresh_http_count": [
+              28,
+              28
+            ],
+            "warm_http_count": [
+              28,
+              28
+            ],
+            "fresh_http_encoded_bytes": [
+              30469091,
+              30469091
+            ],
+            "warm_http_encoded_bytes": [
+              29220015,
+              29220015
+            ]
+          },
+          "candidate": {
+            "fresh_first_frame_ms": 314.1499999910593,
+            "warm_first_frame_ms": 188.5,
+            "first_action_two_raf_ms": 32.29999999701977,
+            "frame_median_ms_240_samples": 4.0,
+            "frame_p95_ms_240_samples": 5.100000023841858,
+            "raf_fps_median": 60.0,
+            "chrome_tree_rss_mib": 1991.6640625,
+            "fresh_http_count": [
+              28,
+              28
+            ],
+            "warm_http_count": [
+              28,
+              28
+            ],
+            "fresh_http_encoded_bytes": [
+              30473121,
+              30473121
+            ],
+            "warm_http_encoded_bytes": [
+              29220015,
+              29220015
+            ]
+          }
+        },
+        "raw": {
+          "baseline": [
+            {
+              "fresh_first_frame_ms": 305,
+              "warm_first_frame_ms": 204.19999998807907,
+              "first_action_ms": 30.400000005960464,
+              "chrome_tree_rss_kib": 2042720,
+              "per_camera": {
+                "far": {
+                  "median_ms": 1.8499999940395355,
+                  "p95_ms": 4.299999982118607,
+                  "calls": 241,
+                  "triangles": 605528,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 4.5999999940395355,
+                  "p95_ms": 5.4000000059604645,
+                  "calls": 241,
+                  "triangles": 605528,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 3.3499999940395355,
+                  "p95_ms": 4.0999999940395355,
+                  "calls": 215,
+                  "triangles": 587077,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            },
+            {
+              "fresh_first_frame_ms": 345,
+              "warm_first_frame_ms": 189.90000000596046,
+              "first_action_ms": 31.69999998807907,
+              "chrome_tree_rss_kib": 2038352,
+              "per_camera": {
+                "far": {
+                  "median_ms": 3.9000000059604645,
+                  "p95_ms": 4.5,
+                  "calls": 241,
+                  "triangles": 605528,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 4.649999991059303,
+                  "p95_ms": 5.5,
+                  "calls": 241,
+                  "triangles": 605528,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 4.299999997019768,
+                  "p95_ms": 5.0999999940395355,
+                  "calls": 215,
+                  "triangles": 587077,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            }
+          ],
+          "candidate": [
+            {
+              "fresh_first_frame_ms": 301.59999999403954,
+              "warm_first_frame_ms": 183.40000000596046,
+              "first_action_ms": 31.69999998807907,
+              "chrome_tree_rss_kib": 2036256,
+              "per_camera": {
+                "far": {
+                  "median_ms": 2.5,
+                  "p95_ms": 4.4000000059604645,
+                  "calls": 241,
+                  "triangles": 605528,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 4.799999982118607,
+                  "p95_ms": 5.4000000059604645,
+                  "calls": 241,
+                  "triangles": 605528,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 4.200000017881393,
+                  "p95_ms": 4.800000011920929,
+                  "calls": 215,
+                  "triangles": 587077,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            },
+            {
+              "fresh_first_frame_ms": 326.69999998807907,
+              "warm_first_frame_ms": 193.59999999403954,
+              "first_action_ms": 32.900000005960464,
+              "chrome_tree_rss_kib": 2042672,
+              "per_camera": {
+                "far": {
+                  "median_ms": 3.7999999970197678,
+                  "p95_ms": 4.4000000059604645,
+                  "calls": 241,
+                  "triangles": 605528,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 4,
+                  "p95_ms": 5.299999982118607,
+                  "calls": 241,
+                  "triangles": 605528,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 4.199999988079071,
+                  "p95_ms": 5,
+                  "calls": 215,
+                  "triangles": 587077,
+                  "textures": 5,
+                  "geometries": 225,
+                  "programs": 12,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            }
+          ]
+        },
+        "render_resources_unchanged_by_view": {
+          "far": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          },
+          "near": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          },
+          "low": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          }
+        },
+        "fresh_transfer_candidate_delta_bytes": [
+          4030,
+          4030
+        ],
+        "warm_transfer_candidate_delta_bytes": [
+          0,
+          0
+        ]
+      },
+      "kitchen": {
+        "physics_exact_all_runs": true,
+        "initial_state_identical": true,
+        "scene_sha256_identical": true,
+        "png_sha256_identical_by_view": {
+          "far": true,
+          "near": true,
+          "low": true
+        },
+        "all_console_runtime_gl_errors_absent": true,
+        "statistics": {
+          "baseline": {
+            "fresh_first_frame_ms": 294.65000000596046,
+            "warm_first_frame_ms": 190.84999999403954,
+            "first_action_two_raf_ms": 30.400000005960464,
+            "frame_median_ms_240_samples": 2.300000011920929,
+            "frame_p95_ms_240_samples": 3,
+            "raf_fps_median": 60.0,
+            "chrome_tree_rss_mib": 1858.65625,
+            "fresh_http_count": [
+              28,
+              28
+            ],
+            "warm_http_count": [
+              28,
+              28
+            ],
+            "fresh_http_encoded_bytes": [
+              4079218,
+              4079218
+            ],
+            "warm_http_encoded_bytes": [
+              2830142,
+              2830142
+            ]
+          },
+          "candidate": {
+            "fresh_first_frame_ms": 318.1499999910593,
+            "warm_first_frame_ms": 186.45000000298023,
+            "first_action_two_raf_ms": 30.25,
+            "frame_median_ms_240_samples": 2.300000011920929,
+            "frame_p95_ms_240_samples": 3.0999999940395355,
+            "raf_fps_median": 60.003934684241585,
+            "chrome_tree_rss_mib": 1859.34375,
+            "fresh_http_count": [
+              28,
+              28
+            ],
+            "warm_http_count": [
+              28,
+              28
+            ],
+            "fresh_http_encoded_bytes": [
+              4083248,
+              4083248
+            ],
+            "warm_http_encoded_bytes": [
+              2830142,
+              2830142
+            ]
+          }
+        },
+        "raw": {
+          "baseline": [
+            {
+              "fresh_first_frame_ms": 311.60000002384186,
+              "warm_first_frame_ms": 201.80000001192093,
+              "first_action_ms": 31.400000005960464,
+              "chrome_tree_rss_kib": 1908576,
+              "per_camera": {
+                "far": {
+                  "median_ms": 2.3499999940395355,
+                  "p95_ms": 2.800000011920929,
+                  "calls": 120,
+                  "triangles": 39272,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 2.5999999940395355,
+                  "p95_ms": 3.100000023841858,
+                  "calls": 120,
+                  "triangles": 39272,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 2.5,
+                  "p95_ms": 3.2000000178813934,
+                  "calls": 119,
+                  "triangles": 38648,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            },
+            {
+              "fresh_first_frame_ms": 277.69999998807907,
+              "warm_first_frame_ms": 179.89999997615814,
+              "first_action_ms": 29.400000005960464,
+              "chrome_tree_rss_kib": 1897952,
+              "per_camera": {
+                "far": {
+                  "median_ms": 2.300000011920929,
+                  "p95_ms": 3,
+                  "calls": 120,
+                  "triangles": 39272,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 2.199999988079071,
+                  "p95_ms": 2.800000011920929,
+                  "calls": 120,
+                  "triangles": 39272,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 2.300000011920929,
+                  "p95_ms": 3.0999999940395355,
+                  "calls": 119,
+                  "triangles": 38648,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            }
+          ],
+          "candidate": [
+            {
+              "fresh_first_frame_ms": 325.09999999403954,
+              "warm_first_frame_ms": 196,
+              "first_action_ms": 29.799999982118607,
+              "chrome_tree_rss_kib": 1906848,
+              "per_camera": {
+                "far": {
+                  "median_ms": 2.2999999970197678,
+                  "p95_ms": 2.899999976158142,
+                  "calls": 120,
+                  "triangles": 39272,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 2.25,
+                  "p95_ms": 3.0999999940395355,
+                  "calls": 120,
+                  "triangles": 39272,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 2.25,
+                  "p95_ms": 3.300000011920929,
+                  "calls": 119,
+                  "triangles": 38648,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            },
+            {
+              "fresh_first_frame_ms": 311.19999998807907,
+              "warm_first_frame_ms": 176.90000000596046,
+              "first_action_ms": 30.700000017881393,
+              "chrome_tree_rss_kib": 1901088,
+              "per_camera": {
+                "far": {
+                  "median_ms": 2.4000000059604645,
+                  "p95_ms": 2.800000011920929,
+                  "calls": 120,
+                  "triangles": 39272,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 2.199999988079071,
+                  "p95_ms": 3.199999988079071,
+                  "calls": 120,
+                  "triangles": 39272,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 2.300000011920929,
+                  "p95_ms": 2.9000000059604645,
+                  "calls": 119,
+                  "triangles": 38648,
+                  "textures": 5,
+                  "geometries": 122,
+                  "programs": 14,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            }
+          ]
+        },
+        "render_resources_unchanged_by_view": {
+          "far": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          },
+          "near": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          },
+          "low": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          }
+        },
+        "fresh_transfer_candidate_delta_bytes": [
+          4030,
+          4030
+        ],
+        "warm_transfer_candidate_delta_bytes": [
+          0,
+          0
+        ]
+      },
+      "park": {
+        "physics_exact_all_runs": true,
+        "initial_state_identical": true,
+        "scene_sha256_identical": true,
+        "png_sha256_identical_by_view": {
+          "far": true,
+          "near": true,
+          "low": true
+        },
+        "all_console_runtime_gl_errors_absent": true,
+        "statistics": {
+          "baseline": {
+            "fresh_first_frame_ms": 358.44999998807907,
+            "warm_first_frame_ms": 219.09999999403954,
+            "first_action_two_raf_ms": 31.5,
+            "frame_median_ms_240_samples": 2.9000000059604645,
+            "frame_p95_ms_240_samples": 4.300000011920929,
+            "raf_fps_median": 60.0,
+            "chrome_tree_rss_mib": 1958.8671875,
+            "fresh_http_count": [
+              28,
+              28
+            ],
+            "warm_http_count": [
+              28,
+              28
+            ],
+            "fresh_http_encoded_bytes": [
+              18679775,
+              18679775
+            ],
+            "warm_http_encoded_bytes": [
+              17430699,
+              17430699
+            ]
+          },
+          "candidate": {
+            "fresh_first_frame_ms": 354.00000001490116,
+            "warm_first_frame_ms": 229.0,
+            "first_action_two_raf_ms": 31.049999997019768,
+            "frame_median_ms_240_samples": 2.800000011920929,
+            "frame_p95_ms_240_samples": 4.5999999940395355,
+            "raf_fps_median": 60.00196734212079,
+            "chrome_tree_rss_mib": 1943.71875,
+            "fresh_http_count": [
+              28,
+              28
+            ],
+            "warm_http_count": [
+              28,
+              28
+            ],
+            "fresh_http_encoded_bytes": [
+              18683805,
+              18683805
+            ],
+            "warm_http_encoded_bytes": [
+              17430699,
+              17430699
+            ]
+          }
+        },
+        "raw": {
+          "baseline": [
+            {
+              "fresh_first_frame_ms": 344.2999999821186,
+              "warm_first_frame_ms": 236.09999999403954,
+              "first_action_ms": 31.5,
+              "chrome_tree_rss_kib": 2006800,
+              "per_camera": {
+                "far": {
+                  "median_ms": 1.2500000149011612,
+                  "p95_ms": 3.5,
+                  "calls": 127,
+                  "triangles": 457576,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 3.699999988079071,
+                  "p95_ms": 4.699999988079071,
+                  "calls": 104,
+                  "triangles": 441736,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 3,
+                  "p95_ms": 3.5999999940395355,
+                  "calls": 94,
+                  "triangles": 440564,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            },
+            {
+              "fresh_first_frame_ms": 372.59999999403954,
+              "warm_first_frame_ms": 202.09999999403954,
+              "first_action_ms": 31.5,
+              "chrome_tree_rss_kib": 2004960,
+              "per_camera": {
+                "far": {
+                  "median_ms": 1.5999999940395355,
+                  "p95_ms": 3.5,
+                  "calls": 127,
+                  "triangles": 457576,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 3.699999988079071,
+                  "p95_ms": 4.9000000059604645,
+                  "calls": 104,
+                  "triangles": 441736,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 2.9000000059604645,
+                  "p95_ms": 3.4000000059604645,
+                  "calls": 94,
+                  "triangles": 440564,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            }
+          ],
+          "candidate": [
+            {
+              "fresh_first_frame_ms": 349.90000000596046,
+              "warm_first_frame_ms": 230.40000000596046,
+              "first_action_ms": 31.5,
+              "chrome_tree_rss_kib": 1980416,
+              "per_camera": {
+                "far": {
+                  "median_ms": 1.8500000089406967,
+                  "p95_ms": 3.100000023841858,
+                  "calls": 127,
+                  "triangles": 457576,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 3.5,
+                  "p95_ms": 5.100000023841858,
+                  "calls": 104,
+                  "triangles": 441736,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 2.399999976158142,
+                  "p95_ms": 3.5999999940395355,
+                  "calls": 94,
+                  "triangles": 440564,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            },
+            {
+              "fresh_first_frame_ms": 358.10000002384186,
+              "warm_first_frame_ms": 227.59999999403954,
+              "first_action_ms": 30.599999994039536,
+              "chrome_tree_rss_kib": 2000320,
+              "per_camera": {
+                "far": {
+                  "median_ms": 1.300000011920929,
+                  "p95_ms": 3.0999999940395355,
+                  "calls": 127,
+                  "triangles": 457576,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "near": {
+                  "median_ms": 3.5499999970197678,
+                  "p95_ms": 5.100000023841858,
+                  "calls": 104,
+                  "triangles": 441736,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                },
+                "low": {
+                  "median_ms": 3,
+                  "p95_ms": 3.5,
+                  "calls": 94,
+                  "triangles": 440564,
+                  "textures": 7,
+                  "geometries": 113,
+                  "programs": 15,
+                  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"
+                }
+              }
+            }
+          ]
+        },
+        "render_resources_unchanged_by_view": {
+          "far": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          },
+          "near": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          },
+          "low": {
+            "calls": true,
+            "triangles": true,
+            "textures": true,
+            "geometries": true,
+            "programs": true
+          }
+        },
+        "fresh_transfer_candidate_delta_bytes": [
+          4030,
+          4030
+        ],
+        "warm_transfer_candidate_delta_bytes": [
+          0,
+          0
+        ]
+      }
+    },
+    "phone": {
+      "baseline": {
+        "manifest": "phone-before-v2/manifest.json",
+        "video": "phone-before-v2/phone.mp4",
+        "decoded_contact": "phone-before-v2/decoded-contact.png",
+        "harness_sha256": "0b9a8376f31ea72a8788fadd842586bf5ba658826ebcd4e28c00bdc376aeaa8b",
+        "source_sha256": "3519db85aac71b55fdc983870e9ca57044339f07f0976b2b996b6ba672a4f605",
+        "source_unchanged": true,
+        "initial_world_sha256": "61e04e5659dbb9c179e857543497c784b3a2d7ea0e9f7a19390c07ad4ebf8171",
+        "initial_physics_sha256": "2d03cd573f377774c22cfd318aa7c342ed951aa5303ffb73ff9be15a0ec423e8",
+        "initial_scene_sha256": "43e5d9aaaeb06109fd88ce3521d32a9dec467203c9327782db00ac632148ab0d",
+        "events": [
+          {
+            "seconds": 0.0010754590039141476,
+            "name": "initial_frame",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                4.0000000000000036,
+                -7.9999999999999325,
+                5.999999999999928
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": false,
+              "repeat": false,
+              "size": "normal",
+              "rotate": "Rotate \u00b7 0\u00b0"
+            }
+          },
+          {
+            "seconds": 1.4069096670136787,
+            "name": "large_yaw90_repeat_selected",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                4.000000000000006,
+                -7.999999999999654,
+                5.999999999999717
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 1.4898454590002075,
+            "name": "drag_before",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                4.000000000000006,
+                -7.9999999999996385,
+                5.999999999999706
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 1.5756522500014398,
+            "name": "drag_touch_start",
+            "object_count": 1,
+            "observation": {
+              "camera": [
+                4.000000000000007,
+                -7.999999999999619,
+                5.99999999999969
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": true,
+                "pending": 1
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 1.8534715420100838,
+            "name": "drag_outward",
+            "object_count": 1,
+            "observation": {
+              "camera": [
+                4.000000000000008,
+                -7.999999999999568,
+                5.999999999999653
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 3,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 2.602984541998012,
+            "name": "drag_after",
+            "object_count": 1,
+            "observation": {
+              "camera": [
+                4.000000000000011,
+                -7.999999999999402,
+                5.999999999999538
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 3,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 2.6725326669984497,
+            "name": "pinch_before",
+            "object_count": 1,
+            "observation": {
+              "camera": [
+                4.00000000000001,
+                -7.999999999999386,
+                5.999999999999529
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 3,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 3.0364460420096293,
+            "name": "pinch_second_finger_lifted",
+            "object_count": 2,
+            "observation": {
+              "camera": [
+                4.000000000000013,
+                -7.999999999999326,
+                5.999999999999478
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 4,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 3.1206635840062518,
+            "name": "remaining_finger_moved",
+            "object_count": 2,
+            "observation": {
+              "camera": [
+                4.000000000000014,
+                -7.999999999999314,
+                5.999999999999463
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 4,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 3.7824064590095077,
+            "name": "pinch_after",
+            "object_count": 2,
+            "observation": {
+              "camera": [
+                4.000000000000011,
+                -7.9999999999991696,
+                5.999999999999359
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 4,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 3.866854666994186,
+            "name": "intentional_tap_1_before",
+            "object_count": 2,
+            "observation": {
+              "camera": [
+                4.00000000000001,
+                -7.999999999999151,
+                5.999999999999349
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 4,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            },
+            "screen": [
+              195,
+              409.0000000000002
+            ],
+            "world_point": [
+              0,
+              0,
+              0
+            ],
+            "hit_element": "view"
+          },
+          {
+            "seconds": 4.637160000012955,
+            "name": "intentional_tap_1_ack",
+            "object_count": 3,
+            "observation": {
+              "camera": [
+                4.0000000000000036,
+                -7.999999999998986,
+                5.999999999999234
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 5,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            },
+            "screen": [
+              195,
+              409.0000000000002
+            ],
+            "world_point": [
+              0,
+              0,
+              0
+            ],
+            "created_names": [
+              "pin_3"
+            ]
+          },
+          {
+            "seconds": 4.639317334018415,
+            "name": "intentional_tap_2_before",
+            "object_count": 3,
+            "observation": {
+              "camera": [
+                4.0000000000000036,
+                -7.999999999998986,
+                5.999999999999234
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 5,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            },
+            "screen": [
+              282.62824256194585,
+              433.4082342046046
+            ],
+            "world_point": [
+              1,
+              0,
+              0
+            ],
+            "hit_element": "view"
+          },
+          {
+            "seconds": 5.422179250017507,
+            "name": "intentional_tap_2_ack",
+            "object_count": 4,
+            "observation": {
+              "camera": [
+                3.999999999999999,
+                -7.999999999998821,
+                5.999999999999109
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 6,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            },
+            "screen": [
+              282.62824256194585,
+              433.4082342046046
+            ],
+            "world_point": [
+              1,
+              0,
+              0
+            ],
+            "created_names": [
+              "pin_4"
+            ]
+          },
+          {
+            "seconds": 5.686117083998397,
+            "name": "done",
+            "object_count": 4,
+            "observation": {
+              "camera": [
+                4.000000000000003,
+                -7.999999999998771,
+                5.999999999999065
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 6,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": false,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 6.594567292020656,
+            "name": "undo_latest",
+            "object_count": 3,
+            "observation": {
+              "camera": [
+                4.000000000000004,
+                -7.999999999998604,
+                5.999999999998923
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 7,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": false,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          }
+        ],
+        "world_wire_requests": [
+          {
+            "type": "world",
+            "action": "add_object",
+            "preset": "pin",
+            "size": "large",
+            "yaw": 90,
+            "pos": [
+              -1.1402,
+              1.6009,
+              0
+            ],
+            "version": 2,
+            "generation": 1,
+            "id": 1
+          },
+          {
+            "type": "world",
+            "action": "add_object",
+            "preset": "pin",
+            "size": "large",
+            "yaw": 90,
+            "pos": [
+              -1.3461,
+              1.2221,
+              0
+            ],
+            "version": 3,
+            "generation": 2,
+            "id": 2
+          },
+          {
+            "type": "world",
+            "action": "add_object",
+            "preset": "pin",
+            "size": "large",
+            "yaw": 90,
+            "pos": [
+              0,
+              0,
+              0
+            ],
+            "version": 4,
+            "generation": 3,
+            "id": 3
+          },
+          {
+            "type": "world",
+            "action": "add_object",
+            "preset": "pin",
+            "size": "large",
+            "yaw": 90,
+            "pos": [
+              1,
+              0,
+              0
+            ],
+            "version": 5,
+            "generation": 4,
+            "id": 4
+          },
+          {
+            "type": "world",
+            "action": "undo_add",
+            "token": "840b92c40a874c6ca0ab3d244d51b6da",
+            "version": 6,
+            "id": 5
+          }
+        ],
+        "world_action_counts": {
+          "add_object": 4,
+          "undo_add": 1
+        },
+        "partial_lift_events": [
+          {
+            "type": "touchend",
+            "time": 3555,
+            "trusted": true,
+            "changedTouches": [
+              {
+                "id": 2,
+                "x": 280,
+                "y": 340
+              }
+            ],
+            "touches": [
+              {
+                "id": 1,
+                "x": 110,
+                "y": 320
+              }
+            ]
+          }
+        ],
+        "all_native_events_trusted": true,
+        "media_qa": {
+          "raw_frame_count": 461,
+          "raw_span_seconds": 7.696730852127075,
+          "duration_capped": false,
+          "video_sha256": "4d5a2eee9634f25ebebd655cb3b94575ff149f011a67250914b1d306797ab7cd",
+          "video_bytes": 253227,
+          "decode_exit_code": 0
+        },
+        "duration_seconds": "7.800000",
+        "final_objects": [
+          {
+            "name": "pin",
+            "shape": "cylinder",
+            "size": [
+              0.15000000000000002,
+              0.36
+            ],
+            "pos": [
+              -1.1402,
+              1.6009
+            ],
+            "yaw": 90.0,
+            "color": "blue",
+            "mass": 0.50625,
+            "fixed": false,
+            "material": "plastic"
+          },
+          {
+            "name": "pin_2",
+            "shape": "cylinder",
+            "size": [
+              0.15000000000000002,
+              0.36
+            ],
+            "pos": [
+              -1.3461,
+              1.2221
+            ],
+            "yaw": 90.0,
+            "color": "blue",
+            "mass": 0.50625,
+            "fixed": false,
+            "material": "plastic"
+          },
+          {
+            "name": "pin_3",
+            "shape": "cylinder",
+            "size": [
+              0.15000000000000002,
+              0.36
+            ],
+            "pos": [
+              0.0,
+              0.0
+            ],
+            "yaw": 90.0,
+            "color": "blue",
+            "mass": 0.50625,
+            "fixed": false,
+            "material": "plastic"
+          }
+        ],
+        "runtime_exceptions": [],
+        "console_errors": []
+      },
+      "final_candidate": {
+        "manifest": "phone-after-v3/manifest.json",
+        "video": "phone-after-v3/phone.mp4",
+        "decoded_contact": "phone-after-v3/decoded-contact.png",
+        "harness_sha256": "0b9a8376f31ea72a8788fadd842586bf5ba658826ebcd4e28c00bdc376aeaa8b",
+        "source_sha256": "a1d2c2ef95b4fe09e1c1b3abb0963fc1ebe841ae553d9d9be530f1abf1c4443e",
+        "source_unchanged": true,
+        "initial_world_sha256": "61e04e5659dbb9c179e857543497c784b3a2d7ea0e9f7a19390c07ad4ebf8171",
+        "initial_physics_sha256": "2d03cd573f377774c22cfd318aa7c342ed951aa5303ffb73ff9be15a0ec423e8",
+        "initial_scene_sha256": "43e5d9aaaeb06109fd88ce3521d32a9dec467203c9327782db00ac632148ab0d",
+        "events": [
+          {
+            "seconds": 0.0009006249892991036,
+            "name": "initial_frame",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                4.0000000000000036,
+                -7.9999999999999325,
+                5.999999999999928
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": false,
+              "repeat": false,
+              "size": "normal",
+              "rotate": "Rotate \u00b7 0\u00b0"
+            }
+          },
+          {
+            "seconds": 1.4403911249828525,
+            "name": "large_yaw90_repeat_selected",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                4.000000000000005,
+                -7.999999999999646,
+                5.999999999999712
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 1.5324678329925518,
+            "name": "drag_before",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                4.000000000000006,
+                -7.99999999999963,
+                5.999999999999698
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 1.6228131669922732,
+            "name": "drag_touch_start",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                4.000000000000005,
+                -7.999999999999612,
+                5.999999999999687
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 1.8883510830055457,
+            "name": "drag_outward",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                1.0037240969291565,
+                -8.124462699644853,
+                6.998974480544398
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 2.636216582992347,
+            "name": "drag_after",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                3.987710805324328,
+                -8.002934446111027,
+                6.004265382570491
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 2.735566041985294,
+            "name": "pinch_before",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                3.9942930246552497,
+                -8.001365317105133,
+                6.001981030909903
+              ],
+              "target": [
+                0,
+                0,
+                0
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 3.0891982080065645,
+            "name": "pinch_second_finger_lifted",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                2.540944426201167,
+                -5.149503170850785,
+                3.8641451086359284
+              ],
+              "target": [
+                -0.029369175021885928,
+                -0.00844183073557445,
+                0.008316644012282163
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 3.1723992500046734,
+            "name": "remaining_finger_moved",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                2.0580212398200306,
+                -5.105233322431551,
+                4.200268821789498
+              ],
+              "target": [
+                -0.03159539301162443,
+                -0.009081731428592156,
+                0.008947055404518962
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 3.836422499996843,
+            "name": "pinch_after",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                1.3711601409939949,
+                -4.92774315804549,
+                4.672485342468769
+              ],
+              "target": [
+                -0.03351408766631301,
+                -0.009633238084671609,
+                0.009490383584470307
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 3.9498692500055768,
+            "name": "intentional_tap_1_before",
+            "object_count": 0,
+            "observation": {
+              "camera": [
+                1.3687944753211096,
+                -4.926877874839857,
+                4.6741115932763115
+              ],
+              "target": [
+                -0.033520954541516566,
+                -0.009635211888774295,
+                0.009492328118373694
+              ],
+              "version": 2,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            },
+            "screen": [
+              200.12919604337057,
+              410.0240858017724
+            ],
+            "world_point": [
+              0,
+              0,
+              0
+            ],
+            "hit_element": "view"
+          },
+          {
+            "seconds": 4.7793703750066925,
+            "name": "intentional_tap_1_ack",
+            "object_count": 1,
+            "observation": {
+              "camera": [
+                1.3671627059856317,
+                -4.926279933902278,
+                4.675233368851748
+              ],
+              "target": [
+                -0.03352569241876735,
+                -0.009636573736962669,
+                0.0094936697712611
+              ],
+              "version": 3,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            },
+            "screen": [
+              200.12919604337057,
+              410.0240858017724
+            ],
+            "world_point": [
+              0,
+              0,
+              0
+            ],
+            "created_names": [
+              "pin"
+            ]
+          },
+          {
+            "seconds": 4.7844068330014125,
+            "name": "intentional_tap_2_before",
+            "object_count": 1,
+            "observation": {
+              "camera": [
+                1.3671627059856317,
+                -4.926279933902278,
+                4.675233368851748
+              ],
+              "target": [
+                -0.03352569241876735,
+                -0.009636573736962669,
+                0.0094936697712611
+              ],
+              "version": 3,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            },
+            "screen": [
+              345.97286170737266,
+              438.0327821764037
+            ],
+            "world_point": [
+              1,
+              0,
+              0
+            ],
+            "hit_element": "view"
+          },
+          {
+            "seconds": 5.6122061669884715,
+            "name": "intentional_tap_2_ack",
+            "object_count": 2,
+            "observation": {
+              "camera": [
+                1.3671599723315562,
+                -4.92627893144063,
+                4.675235248151783
+              ],
+              "target": [
+                -0.033525700356882814,
+                -0.00963657601868244,
+                0.009493672019144484
+              ],
+              "version": 4,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": true,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            },
+            "screen": [
+              345.97286170737266,
+              438.0327821764037
+            ],
+            "world_point": [
+              1,
+              0,
+              0
+            ],
+            "created_names": [
+              "pin_2"
+            ]
+          },
+          {
+            "seconds": 5.906175832991721,
+            "name": "done",
+            "object_count": 2,
+            "observation": {
+              "camera": [
+                1.3671599682659152,
+                -4.926278929949681,
+                4.675235250946754
+              ],
+              "target": [
+                -0.03352570036868882,
+                -0.009636576022075941,
+                0.009493672022487657
+              ],
+              "version": 4,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": false,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          },
+          {
+            "seconds": 6.812347917002626,
+            "name": "undo_latest",
+            "object_count": 1,
+            "observation": {
+              "camera": [
+                1.367159967744209,
+                -4.926278929758266,
+                4.675235251305318
+              ],
+              "target": [
+                -0.03352570037020381,
+                -0.009636576022511386,
+                0.009493672022916663
+              ],
+              "version": 5,
+              "busy": {
+                "busy": false,
+                "pending": 0
+              },
+              "placementVisible": false,
+              "repeat": true,
+              "size": "large",
+              "rotate": "Rotate \u00b7 90\u00b0"
+            }
+          }
+        ],
+        "world_wire_requests": [
+          {
+            "type": "world",
+            "action": "add_object",
+            "preset": "pin",
+            "size": "large",
+            "yaw": 90,
+            "pos": [
+              0,
+              0,
+              0
+            ],
+            "version": 2,
+            "generation": 1,
+            "id": 1
+          },
+          {
+            "type": "world",
+            "action": "add_object",
+            "preset": "pin",
+            "size": "large",
+            "yaw": 90,
+            "pos": [
+              1,
+              0,
+              0
+            ],
+            "version": 3,
+            "generation": 2,
+            "id": 2
+          },
+          {
+            "type": "world",
+            "action": "undo_add",
+            "token": "c0cdf1aca0f14937aca2659f3aecb935",
+            "version": 4,
+            "id": 3
+          }
+        ],
+        "world_action_counts": {
+          "add_object": 2,
+          "undo_add": 1
+        },
+        "partial_lift_events": [
+          {
+            "type": "touchend",
+            "time": 3610.2999999821186,
+            "trusted": true,
+            "changedTouches": [
+              {
+                "id": 2,
+                "x": 280,
+                "y": 340
+              }
+            ],
+            "touches": [
+              {
+                "id": 1,
+                "x": 110,
+                "y": 320
+              }
+            ]
+          }
+        ],
+        "all_native_events_trusted": true,
+        "media_qa": {
+          "raw_frame_count": 471,
+          "raw_span_seconds": 7.915576934814453,
+          "duration_capped": false,
+          "video_sha256": "1df1e83280c44f4d2edab84d2f8070be7d06cdb08714190318836717d756e9e6",
+          "video_bytes": 535159,
+          "decode_exit_code": 0
+        },
+        "duration_seconds": "8.033333",
+        "final_objects": [
+          {
+            "name": "pin",
+            "shape": "cylinder",
+            "size": [
+              0.15000000000000002,
+              0.36
+            ],
+            "pos": [
+              0.0,
+              0.0
+            ],
+            "yaw": 90.0,
+            "color": "blue",
+            "mass": 0.50625,
+            "fixed": false,
+            "material": "plastic"
+          }
+        ],
+        "runtime_exceptions": [],
+        "console_errors": []
+      }
+    },
+    "phone_protocol_match": {
+      "same_harness": true,
+      "same_initial_world_physics_scene": true,
+      "definition": "Identical initial camera[4,-8,6]->[0,0,0]. Same drag/pinch CDP screen points and ended-ID2/remaining-ID1 stream. Deliberate targets are same world points[0,0,0]/[1,0,0]; screen coordinates intentionally project through each actual camera. Natural wall timing/damping may vary slightly; no forced camera reset after framing."
+    },
+    "visibility_qa": {
+      "criterion": "Within canvas crop x0:390 y110:520, count B>R+25 and B>G+5. Excludes top toast/nav and bottom controls. Real PNG/raw JPEG pixels; no UI alteration.",
+      "first_pin_source_frame": {
+        "file": "f00285.jpg",
+        "timestamp": 1792778239.002857,
+        "sha256": "aa1a6f7f97c8ad8ef4b8c17ffe7f6305d9491c4430e9b6a645acce19cca6f91f"
+      },
+      "images": {
+        "08-first-pin-from-raw.png": {
+          "blue_pixel_count": 1172,
+          "rgb_std": [
+            31.491171241774367,
+            20.317087482421535,
+            15.22395377227072
+          ],
+          "non_gray_pixels": 147334
+        },
+        "05-two-intentional-taps.png": {
+          "blue_pixel_count": 2382,
+          "rgb_std": [
+            13.591349662485078,
+            5.168123643229945,
+            16.229463085801243
+          ],
+          "non_gray_pixels": 159872
+        },
+        "06-done.png": {
+          "blue_pixel_count": 2382,
+          "rgb_std": [
+            13.599454630796583,
+            5.148417476875689,
+            16.215905145076157
+          ],
+          "non_gray_pixels": 159872
+        },
+        "07-undo.png": {
+          "blue_pixel_count": 1151,
+          "rgb_std": [
+            31.64766572261401,
+            20.44368339488215,
+            15.283346078662428
+          ],
+          "non_gray_pixels": 147047
+        }
+      }
+    },
+    "visual_inspection": "Actual first-pin PNG, Undo PNG and decoded MP4 contact were inspected. Final firstpin/Done/Undo retain woodfloor and expected blue pins; empty-world Add robot overlay absent once pins exist. Initial camera was not moved closer.",
+    "preserved_attempts": {
+      "phone-before-v1": "Successful earlier baseline with superseded world tap targets[0,-1.5,.01]/[1,-1.5,.01]; retained.",
+      "phone-after-v1": "Harness target projected under placement panel after pinch, first deliberate tap timed out. Log, raw frames, manifest and harness snapshot retained.",
+      "phone-after-v2": "Preceding candidate c50 passed gesture/worldcounts but actual visual QA found firstpin/Undo content100%fog and intrusive NoRobots overlay. Root fixed both; v2 retained as evidence of product defect, not final approval.",
+      "fixed-A1/B1/A2/B2": "Preceding c50 comparison retained. Final claims use independent fixed-final-A1/B1/A2/B2 runs."
+    },
+    "root_test_attempts": {
+      "touch-fog-v6.log": {
+        "sha256": "f67ab10ad4e4c53121b6a5fe4da9c10ddee905b978d3788d2723d7bfacbe28a9",
+        "bytes": 1,
+        "observed": "F only; terminated before traceback. Root reported missing NO_PROXY caused local service timeout then TERM. Not counted as product regression."
+      },
+      "touch-fog-v7.log": {
+        "sha256": "93b22e9a620b5759c4de45adac9c63119559f520dcc7dc60732b75b2e60abeb1",
+        "bytes": 99,
+        "observed": "7 passed in29.26s."
+      },
+      "fog-v1.log": {
+        "sha256": "ebf911665f12bc166ef71a9ed5fbee6422275b45eafcb3d6e953b4f6821e7b2d",
+        "bytes": 3784,
+        "observed": "1failed2passed7.55s; blue_at0 in small-prop fixture. Root identified fixture color/setup error and corrected it. Retained, not silently discarded."
+      },
+      "touch-fog-v8.log": {
+        "sha256": "8939d4633111b4bf880e22a340e6cba11750d6e919ad00ceb3b50bd747049aa2",
+        "bytes": 100,
+        "observed": "10 passed in35.07s; actual touch + fog regression assertions."
+      }
+    }
+  },
+  "budget": {
+    "partial": true,
+    "checks": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3646.4932,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.165,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.1
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5009,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.318
+        },
+        "fps": {
+          "value": 60.1269,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.3,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.300000011920929,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.079,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 5.0,
+          "unit": "ms",
+          "better": "lower",
+          "median": 5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 132.3,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 557.9
+        },
+        "idle_cpu_pct": {
+          "value": 5.8,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    }
+  },
+  "raw_index": {
+    "files": 4035,
+    "bytes": 252907235,
+    "sha256": "cb9c80dfa2ac1cfaf1688fff8de179a6ebcb389784e8af02cc153b821b46a611"
+  },
+  "record": {
+    "id": "89a93948-e255-44df-8010-40354db3b58f",
+    "status": "completed",
+    "path": "verification-store/89a93948-e255-44df-8010-40354db3b58f/experiment.json",
+    "sha256": "b96bb6362835595e75c6d5c26a5e5f0b32c3225dd48a9a1f27fbc9b9d86d9bc3",
+    "verified_artifacts": 68
+  }
+}

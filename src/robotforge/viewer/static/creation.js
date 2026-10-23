@@ -13,6 +13,39 @@ const paths = {
   table: "M6 15l26-7 13 8-27 8z M8 18v19m10-13v19m24-24v17 M32 10v17",
 };
 
+// Observe pointers without taking them away from OrbitControls. Once a gesture becomes a drag,
+// multi-touch or canceled, lifting one finger must never turn the remaining finger into a tap.
+export function createPlacementGesture() {
+  const pointers = new Set();
+  let candidate = null, epoch = 0;
+  const modified = (e) => e.ctrlKey || e.shiftKey || e.altKey || e.metaKey;
+  const moved = (e) => candidate && Math.hypot(e.clientX - candidate.x, e.clientY - candidate.y) > 8;
+  return {
+    active: () => pointers.size > 0,
+    epoch: () => epoch,
+    invalidate() { candidate = null; epoch++; },
+    reset() { pointers.clear(); candidate = null; epoch++; },
+    down(e, context) {
+      epoch++;
+      if (pointers.has(e.pointerId)) { candidate = null; return; }
+      pointers.add(e.pointerId);
+      candidate = pointers.size === 1 && context && e.isPrimary && e.button === 0 && e.buttons === 1 && !modified(e)
+        ? { id: e.pointerId, x: e.clientX, y: e.clientY, context } : null;
+    },
+    move(e) {
+      if (pointers.has(e.pointerId) && (moved(e) || modified(e) || e.buttons !== 1)) candidate = null;
+    },
+    up(e, canceled = false) {
+      if (!pointers.has(e.pointerId)) return null;
+      const result = !canceled && e.button === 0 && pointers.size === 1 && candidate?.id === e.pointerId
+        && !moved(e) && !modified(e) ? candidate.context : null;
+      pointers.delete(e.pointerId);
+      candidate = null;
+      return result;
+    },
+  };
+}
+
 export function initCreation({ start, submit, cancel, change }) {
   const $ = (id) => document.getElementById(id);
   let item = null, point = null, sending = false, size = "normal", yaw = 0, session = 0;

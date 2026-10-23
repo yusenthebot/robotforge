@@ -16,7 +16,7 @@ import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook 
 import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 import { canMove, moveAxes, moveSpeed } from "./padmap.js";
-import { initCreation } from "./creation.js";
+import { createPlacementGesture, initCreation } from "./creation.js";
 import { createPlacementPreview } from "./placement-preview.js";
 
 const $ = (id) => document.getElementById(id);
@@ -28,6 +28,7 @@ translatePage();
 
 const canvas = $("view");
 const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel: cancelCreation, change: updateCreationPreview });
+const creationGesture = createPlacementGesture();
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -552,9 +553,23 @@ function contentSphere() {
   return box.getBoundingSphere(new THREE.Sphere());
 }
 
+let aboveFog = null;
+let fogRadius = 0.2;
+
+function updateFogRange() {
+  if (!aboveFog) return;
+  // Editing can shrink the scene without moving the user's camera. Keep its target clear.
+  // Water temporarily replaces scene3.fog; only adjust the stored above-water fog.
+  const near = Math.max(fogRadius * 7.5, camera.position.distanceTo(controls.target) + fogRadius * 2);
+  aboveFog.near = near;
+  aboveFog.far = Math.max(fogRadius * 27, near + fogRadius * 19.5);
+}
+
 function fitFog(sphere) {
-  const r = Math.max(sphere.radius, 0.2) * 1.5;
-  scene3.fog = new THREE.Fog(theme.fog, r * 5, r * 18);
+  fogRadius = Math.max(sphere.radius, 0.2);
+  aboveFog = new THREE.Fog(theme.fog);
+  scene3.fog = aboveFog;
+  updateFogRange();
 }
 
 // Distance at which a sphere of radius r fills the view.
@@ -912,15 +927,14 @@ function pickBody(e) {
 canvas.addEventListener(
   "pointerdown",
   (e) => {
-    if (e.button !== 0) return;
-    if (performance.now() < creationClickUntil) { e.stopImmediatePropagation(); e.preventDefault(); return; }
+    creationGesture.down(e, creator.active() && !busy && performance.now() >= creationClickUntil
+      ? { session: creator.session(), version: sceneDesc?.version, generation: stateGeneration } : null);
     if (creator.active()) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      creationPoint(e);
-      creator.place();
-      return;
+      clearCreationPoint();
+      return; // OrbitControls owns camera motion; only a qualified release will place.
     }
+    if (e.button !== 0) return;
+    if (performance.now() < creationClickUntil) return;
     const hit = pickBody(e);
     if (!hit) return;
     controls.enabled = false; // must happen before OrbitControls sees this event
@@ -943,7 +957,11 @@ canvas.addEventListener(
 );
 
 canvas.addEventListener("pointermove", (e) => {
-  if (creator.active()) { creationPoint(e); return; }
+  creationGesture.move(e);
+  if (creator.active()) {
+    if (!creationGesture.active() && e.pointerType !== "touch") creationPoint(e);
+    return;
+  }
   if (!drag) {
     canvas.classList.toggle("hover-body", !!pickBody(e));
     return;
@@ -967,6 +985,32 @@ function endDrag(e) {
 }
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
+
+function finishCreationGesture(e) {
+  const context = creationGesture.up(e, e.type === "pointercancel");
+  if (!context) return;
+  const epoch = creationGesture.epoch();
+  const rect = canvas.getBoundingClientRect();
+  if (e.clientX < rect.left || e.clientX >= rect.right || e.clientY < rect.top || e.clientY >= rect.bottom) return;
+  const point = { clientX: e.clientX, clientY: e.clientY };
+  // OrbitControls installs its release listener dynamically. Let it drain before a scene edit,
+  // and recheck ownership in case the session changed during this pointer event.
+  setTimeout(() => {
+    if (creationGesture.active() || creationGesture.epoch() !== epoch || !creator.active() || busy || creator.session() !== context.session
+        || sceneDesc?.version !== context.version || stateGeneration !== context.generation
+        || performance.now() < creationClickUntil) return;
+    creationPoint(point); creator.place();
+  }, 0);
+}
+window.addEventListener("pointerup", finishCreationGesture, { capture: true });
+window.addEventListener("pointercancel", finishCreationGesture, { capture: true });
+canvas.addEventListener("lostpointercapture", () => {
+  if (creationGesture.active()) creationGesture.invalidate();
+});
+window.addEventListener("blur", () => {
+  creationGesture.reset();
+  if (creator.active()) clearCreationPoint();
+});
 
 // Double-click the ground: the selected robot finds its way there round whatever is in the way (move with a
 // destination) and shows its path. A robot or a loose object under the pointer is for dragging, not a place;
@@ -1487,6 +1531,7 @@ function screenToWorld(fwd, left) {
 
 // The camera turned while a key is held: the held key now points another way.
 controls.addEventListener("change", () => {
+  updateFogRange();
   if (pressed.size && lessonDriveSpec()?.robot === false) sendDrive();
 });
 
@@ -1934,7 +1979,9 @@ creationMarker.visible = false;
 scene3.add(creationMarker);
 
 function updateEmpty() {
-  $("empty").hidden = !(sceneDesc?.world && robots.length === 0) || creator.active()
+  const hasContent = water || flexMeshes.length || sceneDesc?.geoms.some((g) =>
+    g.type !== "plane" && g.group < sceneDesc.visibleGroupLimit && g.rgba[3] > 0);
+  $("empty").hidden = !(sceneDesc?.world && robots.length === 0 && !hasContent) || creator.active()
     || !$("loading").hidden || !$("world-panel").hidden || !$("drawer").hidden || lessonActive();
 }
 
@@ -1942,10 +1989,11 @@ $("empty-add").addEventListener("click", () => { setDrawer(true); creator.open()
 
 function beginCreation() {
   stopDriving(); endDrag();
+  creationGesture.invalidate();
   placementVersion = sceneDesc.version;
   placementGeneration = stateGeneration;
   setDrawer(false); setWorldPanel(false); setHelp(false);
-  controls.enabled = true; // placement intercepts left clicks; wheel zoom and right-drag remain available.
+  controls.enabled = true;
   canvas.classList.add("placing"); canvas.focus();
   creationPoint({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
   updateEmpty();
@@ -1955,6 +2003,7 @@ function beginCreation() {
 function cancelCreation(force = false) {
   if (busy && !force) return;
   if (force) creationSelection?.reject(new Error(t("create_scene_changed")));
+  creationGesture.invalidate();
   creator.clear(); creationMarker.visible = false;
   creationSurface = null; placementPreview.clear();
   canvas.classList.remove("placing"); controls.enabled = true;
@@ -1962,10 +2011,14 @@ function cancelCreation(force = false) {
   updateUndo();
 }
 
+function clearCreationPoint() {
+  creator.point(null); creationSurface = null; creationMarker.visible = false;
+  updateCreationPreview();
+}
+
 function creationPoint(e) {
   if (!sceneReadyToDraw() || renderedVersion !== sceneDesc.version) {
-    creator.point(null); creationSurface = null; creationMarker.visible = false;
-    updateCreationPreview(); return;
+    clearCreationPoint(); return;
   }
   setPointer(e);
   const hit = worldRoot && raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
@@ -2017,9 +2070,10 @@ function waitForCreation(data, rendered = false) {
 }
 
 async function placeEntity(item, pos) {
-  if (busy || !item || !pos) return;
+  if (busy || creationGesture.active() || !item || !pos) return;
   if (creator.repeating() && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
   const placementSession = creator.session();
+  creationGesture.invalidate();
   creator.busy(true);
   const payload = item.kind === "robot" ? { action: "add_robot", template: item.name }
     : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw };
@@ -2034,6 +2088,7 @@ async function placeEntity(item, pos) {
       lastAddition = data.undo || null;
       creationClickUntil = performance.now() + 500;
       if (creator.repeating()) {
+        creationGesture.invalidate();
         placementVersion = data.version; placementGeneration = data.generation ?? stateGeneration;
         creator.next(); creationSurface = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
