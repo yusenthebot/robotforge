@@ -268,3 +268,15 @@ def test_addition_catalog_and_actual_websocket_undo(pg):  # noqa: F811
             else:
                 pytest.fail("missing reply")
     assert not pg.store.load().objects
+
+
+def test_prop_generation_rejects_zero_time_reset_and_returns_own_commit_generation(pg):  # noqa: F811
+    generation, version = pg.session.generation, pg.session.version
+    pg.session.reset()
+    before = pg.store.file.read_bytes()
+    with pytest.raises(PlaygroundError, match="scene changed"):
+        add(pg, generation=generation)
+    assert pg.session.version == version and pg.store.file.read_bytes() == before
+    reply = add(pg, generation=pg.session.generation)
+    assert reply["generation"] == pg.session.generation
+    assert "generation" not in add(pg, pos=[2.0, 0.0])

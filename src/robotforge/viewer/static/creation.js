@@ -15,7 +15,10 @@ const paths = {
 
 export function initCreation({ start, submit, cancel, change }) {
   const $ = (id) => document.getElementById(id);
-  let item = null, point = null, sending = false, size = "normal", yaw = 0;
+  let item = null, point = null, sending = false, size = "normal", yaw = 0, session = 0;
+  const repeat = $("place-repeat");
+  const syncRepeat = () => { $("place-cancel").textContent = t(repeat.checked ? "done_placing" : "cancel_place"); };
+  repeat.addEventListener("change", syncRepeat);
   const scales = { small: 0.75, normal: 1, large: 1.5 };
   const send = () => {
     if (point && !sending && item) submit({ ...item, scale: size, yaw }, point);
@@ -53,7 +56,9 @@ export function initCreation({ start, submit, cancel, change }) {
     desc.textContent = tOr(`${key}_${entry.name}_desc`, entry.summary || "");
     copy.append(title, desc); button.append(icon, copy);
     button.addEventListener("click", () => {
-      item = { ...entry, kind }; point = null; sending = false; size = "normal"; yaw = 0;
+      item = { ...entry, kind }; point = null; sending = false; size = "normal"; yaw = 0; session++;
+      repeat.checked = false; syncRepeat();
+      $("placement-hint").textContent = t("place_hint");
       setSize(size);
       $("place-rotate").textContent = t("rotate_place", { angle: yaw });
       $("object-placement-controls").hidden = kind !== "object";
@@ -66,6 +71,12 @@ export function initCreation({ start, submit, cancel, change }) {
   }
   return {
     active: () => item !== null,
+    session: () => session,
+    repeating: () => item?.kind === "object" && repeat.checked,
+    next() {
+      point = null; $("place-here").disabled = true;
+      $("placement-hint").textContent = t("place_next_hint");
+    },
     preview: () => item?.kind === "object" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
     open() { setOpen(true); $("create-list").querySelector("button")?.focus(); },
     render(entries, editable, busy, objects = []) {
@@ -73,6 +84,10 @@ export function initCreation({ start, submit, cancel, change }) {
       $("create-list").replaceChildren(...entries.map((entry) => card(entry, "robot", busy)));
       $("object-list").replaceChildren(...(editable ? objects : []).map((entry) => card(entry, "object", busy)));
       $("objects-note").hidden = editable;
+      $("build-pick-map").hidden = editable;
+      $("build-add-robot").hidden = !editable || !entries.length;
+      $("build-add-robot").dataset.off = editable ? "0" : "1";
+      $("build-add-robot").disabled = busy || !editable;
     },
     point(value) { point = value; $("place-here").disabled = !value || sending; },
     busy(value) {
@@ -81,10 +96,11 @@ export function initCreation({ start, submit, cancel, change }) {
       $("place-cancel").disabled = value;
       for (const b of sizeButtons) b.disabled = value;
       $("place-rotate").disabled = value;
+      repeat.disabled = value;
       $("placement-bar").setAttribute("aria-busy", String(value));
     },
     clear() {
-      item = point = null;
+      session++; item = point = null;
       sending = false;
       $("placement-bar").hidden = true;
       $("place-cancel").disabled = false;

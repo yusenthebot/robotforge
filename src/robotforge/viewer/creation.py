@@ -25,6 +25,7 @@ class Placement(BaseModel):
     template: Literal["rover", "quadruped", "arm", "humanoid"]
     pos: list[Coordinate] = Field(min_length=2, max_length=3)
     version: int = Field(ge=1)
+    generation: int | None = Field(default=None, ge=0)
 
 
 class ObjectPlacement(BaseModel):
@@ -35,6 +36,7 @@ class ObjectPlacement(BaseModel):
     yaw: Literal[0, 90, 180, 270] = 0
     pos: list[Coordinate] = Field(min_length=2, max_length=3)
     version: int = Field(ge=1)
+    generation: int | None = Field(default=None, ge=0)
 
     @field_validator("yaw", mode="before")
     @classmethod
@@ -156,7 +158,9 @@ def _place(
     store = pg._require_store()
     with pg.session.execution.command(f"viewer_add_{kind}"):
         with pg.session.lock:
-            if pg.session.version != request.version:
+            if pg.session.version != request.version or (
+                request.generation is not None and pg.session.generation != request.generation
+            ):
                 raise PlaygroundError("the scene changed; choose a spot in the current scene")
             generation = pg.session.generation
         saved_world = store.file.read_bytes()
@@ -207,6 +211,7 @@ def _place(
             pg._play_addition = receipt
             return {
                 kind: name,
+                **({"generation": receipt.generation} if request.generation is not None else {}),
                 "version": pg.session.version,
                 "notes": result["notes"],
                 "undo": {"token": receipt.token, "version": receipt.version, "name": name},

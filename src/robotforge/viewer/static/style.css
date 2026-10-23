@@ -356,7 +356,7 @@ kbd {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 4px 10px 2px;
   padding: 2px;
   border-radius: 10px;
@@ -759,6 +759,10 @@ input[type="range"]::-moz-range-thumb {
 .placement-bar > div { flex: 1 1 260px; }
 .placement-bar .note { margin: 4px 0 0; }
 .placement-bar[aria-busy="true"] { opacity: 0.75; }
+/* Keep repeated building controls inside the existing placement sheet on narrow screens. */
+.placement-options .repeat-placement { margin: 0; min-height: 32px; }
+#build-add-robot { margin-bottom: 10px; }
+
 .placement-bar .placement-options { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .size-choices { display: flex; gap: 4px; }
 .size-choices .pill { min-height: 36px; padding: 5px 8px; }

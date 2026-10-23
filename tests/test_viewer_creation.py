@@ -223,3 +223,28 @@ def test_ground_placement_follows_new_terrain_and_recognizes_its_surface(pg):
     height = terrain.Ground.build(world.terrain, world.floor.style).height(x, y)
     place(pg, "arm", [x, y, round(height, 4)])
     assert pg.store.load().robots[-1].pos == [x, y]
+
+
+def test_generation_admission_rejects_zero_time_reset_without_changing_version(pg):
+    version, generation = pg.session.version, pg.session.generation
+    assert pg.session.data.time == 0
+    pg.session.reset()
+    assert pg.session.version == version and pg.session.generation > generation
+    before = pg.store.file.read_bytes()
+    with pytest.raises(PlaygroundError, match="scene changed"):
+        place(pg, generation=generation)
+    assert pg.store.file.read_bytes() == before
+    # Existing callers can still omit the new optional field and retain their exact reply shape.
+    legacy = place(pg)
+    assert "generation" not in legacy
+    current = place(pg, pos=[2.0, 0.0], generation=pg.session.generation)
+    assert current["generation"] == pg.session.generation
+    assert ViewerHub(pg.session).state_message()["generation"] == current["generation"]
+
+
+@pytest.mark.parametrize("generation", [-1, True, "1", 1.5])
+def test_invalid_placement_generation_is_rejected_before_edit(pg, generation):
+    before = pg.store.file.read_bytes()
+    with pytest.raises(PlaygroundError, match="invalid robot placement"):
+        place(pg, generation=generation)
+    assert pg.store.file.read_bytes() == before

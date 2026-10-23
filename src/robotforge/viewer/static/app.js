@@ -913,6 +913,7 @@ canvas.addEventListener(
   "pointerdown",
   (e) => {
     if (e.button !== 0) return;
+    if (performance.now() < creationClickUntil) { e.stopImmediatePropagation(); e.preventDefault(); return; }
     if (creator.active()) {
       e.stopImmediatePropagation();
       e.preventDefault();
@@ -920,7 +921,6 @@ canvas.addEventListener(
       creator.place();
       return;
     }
-    if (performance.now() < creationClickUntil) { e.stopImmediatePropagation(); return; }
     const hit = pickBody(e);
     if (!hit) return;
     controls.enabled = false; // must happen before OrbitControls sees this event
@@ -1338,7 +1338,17 @@ function receiveRobotInfo(info) {
   }
 }
 
+let stateGeneration = null;
+
 function applyState(s) {
+  if (Number.isInteger(s.generation)) {
+    if (stateGeneration !== null && stateGeneration !== s.generation && !busy) {
+      lastAddition = null; cancelCreation(true);
+    }
+    stateGeneration = s.generation; // retain changes during our own edit, then reconcile against its reply
+    if (creator.active() && !busy && placementGeneration === null) placementGeneration = s.generation;
+    resolveCreatedRobot();
+  }
   paused = s.paused;
   rtf = s.rtf;
   rotorCommands(s.ctrl, paused);
@@ -1743,6 +1753,7 @@ document.addEventListener("pointerdown", dismissCoach, { capture: true });
 const togglePlay = () => send({ type: "cmd", cmd: paused ? "play" : "pause" });
 $("btn-play").addEventListener("click", togglePlay);
 function resetWorld() {
+  cancelCreation(true);
   lastAddition = null; updateUndo();
   send({ type: "cmd", cmd: "reset" });
 }
@@ -1826,11 +1837,13 @@ $("show-shadows").addEventListener("change", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (e.defaultPrevented) return;
+  if (creator.active() && e.key === "Escape") { cancelCreation(); canvas.focus(); e.preventDefault(); return; }
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
       || e.target instanceof HTMLTextAreaElement || e.target.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
   if (creator.active()) {
-    if (e.key === "Escape") { cancelCreation(); e.preventDefault(); }
-    else if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
+    if (e.repeat && e.key === "Enter") { e.preventDefault(); return; }
+    if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
       creator.place(); e.preventDefault();
     }
     return; // Tab and focused buttons retain their native keyboard behavior.
@@ -1850,9 +1863,11 @@ window.addEventListener("keydown", (e) => {
   } else if (e.key === "?") {
     setHelp($("help").hidden);
   } else if (e.key === "Escape") {
+    const back = !$("world-panel").hidden ? $("world-toggle") : !$("drawer").hidden ? $("drawer-toggle") : $("help-toggle");
     setHelp(false);
     setDrawer(false);
     setWorldPanel(false);
+    back.focus();
   }
 });
 
@@ -1906,13 +1921,13 @@ async function runChoice(button, msg, { frame = false, done } = {}) {
 function setPanelBusy(on) {
   $("world-panel").setAttribute("aria-busy", String(on));
   $("drawer").setAttribute("aria-busy", String(on));
-  for (const b of document.querySelectorAll("#world-panel .choice, #world-panel .swatch, #world-panel .object-card, #drawer .choice, #drawer .create-card")) b.disabled = on || b.dataset.off === "1";
+  for (const b of document.querySelectorAll("#world-panel .choice, #world-panel .swatch, #world-panel .object-card, #build-add-robot, #drawer .choice, #drawer .create-card")) b.disabled = on || b.dataset.off === "1";
   updateUndo();
 }
 
 // ------------------------------------------------------------ pick a local robot, click to place
 
-let placementVersion = 0, creationClickUntil = 0, creationSelection = null;
+let placementVersion = 0, placementGeneration = null, creationClickUntil = 0, creationSelection = null;
 let lastAddition = null, creationSurface = null;
 const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
 creationMarker.visible = false;
@@ -1928,6 +1943,7 @@ $("empty-add").addEventListener("click", () => { setDrawer(true); creator.open()
 function beginCreation() {
   stopDriving(); endDrag();
   placementVersion = sceneDesc.version;
+  placementGeneration = stateGeneration;
   setDrawer(false); setWorldPanel(false); setHelp(false);
   controls.enabled = true; // placement intercepts left clicks; wheel zoom and right-drag remain available.
   canvas.classList.add("placing"); canvas.focus();
@@ -1938,6 +1954,7 @@ function beginCreation() {
 
 function cancelCreation(force = false) {
   if (busy && !force) return;
+  if (force) creationSelection?.reject(new Error(t("create_scene_changed")));
   creator.clear(); creationMarker.visible = false;
   creationSurface = null; placementPreview.clear();
   canvas.classList.remove("placing"); controls.enabled = true;
@@ -1975,43 +1992,58 @@ function objectInScene(name) {
 function resolveCreatedRobot() {
   const wanted = creationSelection;
   if (!wanted || posedVersion !== sceneDesc?.version) return;
+  if (Number.isInteger(wanted.generation) && stateGeneration !== wanted.generation) {
+    if (stateGeneration > wanted.generation) wanted.reject(new Error(t("create_scene_changed")));
+    return;
+  }
   if (sceneDesc.version < wanted.version) return;
   if (sceneDesc.version !== wanted.version || (wanted.robot && !robotByName(wanted.robot))
       || (wanted.object && !objectInScene(wanted.object))
       || (wanted.removed && (robotByName(wanted.removed) || objectInScene(wanted.removed)))) {
     wanted.reject(new Error(t("create_scene_changed"))); return;
   }
+  if (wanted.rendered && renderedVersion !== wanted.version) return;
   if (wanted.robot) select(wanted.robot, { focus: true });
   wanted.resolve();
 }
 
-function waitForCreation(data) {
+function waitForCreation(data, rendered = false) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => creationSelection?.reject(new Error(t("create_scene_changed"))), 15000);
     const finish = (callback, error) => { clearTimeout(timer); creationSelection = null; callback(error); };
-    creationSelection = { ...data, resolve: () => finish(resolve), reject: (error) => finish(reject, error) };
+    creationSelection = { ...data, rendered, resolve: () => finish(resolve), reject: (error) => finish(reject, error) };
     resolveCreatedRobot();
   });
 }
 
 async function placeEntity(item, pos) {
   if (busy || !item || !pos) return;
+  if (creator.repeating() && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
+  const placementSession = creator.session();
   creator.busy(true);
   const payload = item.kind === "robot" ? { action: "add_robot", template: item.name }
     : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw };
-  await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion }, {
+  await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
     frame: item.kind === "robot",
     done: async (data) => {
-      await waitForCreation(data);
+      if (creator.repeating() && !Number.isInteger(data.generation)) {
+        cancelCreation(true); throw new Error(t("create_scene_changed"));
+      }
+      await waitForCreation(data, creator.repeating());
+      if (placementSession !== creator.session()) return;
       lastAddition = data.undo || null;
       creationClickUntil = performance.now() + 500;
-      cancelCreation(true);
+      if (creator.repeating()) {
+        placementVersion = data.version; placementGeneration = data.generation ?? stateGeneration;
+        creator.next(); creationSurface = null; creationMarker.visible = false; placementPreview.clear();
+      } else cancelCreation(true);
       toast(t("robot_added", { name: data.robot || data.object }));
       canvas.focus();
     },
   });
   creator.busy(false);
-  if (sceneDesc?.version !== placementVersion) cancelCreation(true);
+  if (sceneDesc?.version !== placementVersion
+      || (placementGeneration !== null && stateGeneration !== placementGeneration)) cancelCreation(true);
 }
 
 function updateUndo() {
@@ -2052,14 +2084,31 @@ function choice({ title, desc, pressed, off = false, onClick }) {
   return b;
 }
 
-function selectTab(name) {
-  for (const tab of $("world-panel").querySelectorAll("[role=tab]")) tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
+const worldTabs = [...$("world-panel").querySelectorAll("[role=tab]")];
+function selectTab(name, focus = false) {
+  if (!worldTabs.some((tab) => tab.dataset.tab === name)) name = "maps";
+  for (const tab of worldTabs) {
+    const selected = tab.dataset.tab === name;
+    tab.setAttribute("aria-selected", String(selected)); tab.tabIndex = selected ? 0 : -1;
+    if (selected && focus) tab.focus();
+  }
   for (const body of $("world-panel").querySelectorAll(".tab-body")) body.hidden = body.dataset.body !== name;
   storageSet("robotforge.tab", name);
   if (name === "terrain") renderGround();
 }
 
-for (const tab of $("world-panel").querySelectorAll("[role=tab]")) tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+for (const tab of worldTabs) {
+  tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+  tab.addEventListener("keydown", (e) => {
+    const index = worldTabs.indexOf(tab);
+    const to = { ArrowRight: (index + 1) % worldTabs.length, ArrowLeft: (index + worldTabs.length - 1) % worldTabs.length,
+      Home: 0, End: worldTabs.length - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault(); e.stopPropagation(); selectTab(worldTabs[to].dataset.tab, true);
+  });
+}
+$("build-add-robot").addEventListener("click", () => { setWorldPanel(false); setDrawer(true); creator.open(); });
+$("build-pick-map").addEventListener("click", () => selectTab("maps", true));
 selectTab(storageGet("robotforge.tab") || "maps");
 
 let lastMap = null; // the map picked here; a world does not remember which preset it came from
@@ -2404,6 +2453,7 @@ function loop() {
     renderedVersion = sceneDesc.version;
     $("loading").hidden = true;
     updateEmpty();
+    resolveCreatedRobot();
   }
   frames++;
   const now = performance.now();
