@@ -73,6 +73,19 @@ export function initCreation({ start, submit, cancel, change }) {
     yaw = (yaw + 90) % 360;
     $("place-rotate").textContent = t("rotate_place", { angle: yaw }); change();
   });
+  function begin(entry, kind, title) {
+    item = { ...entry, kind }; point = null; sending = false; size = "normal"; yaw = kind === "edit" ? entry.yaw : 0; session++;
+    repeat.checked = false; syncRepeat();
+    $("placement-hint").textContent = t(kind === "edit" ? "edit_place_hint" : "place_hint");
+    setSize(size);
+    $("place-rotate").textContent = t("rotate_place", { angle: yaw });
+    $("object-placement-controls").hidden = kind === "robot";
+    for (const node of document.querySelectorAll(".prop-size-control, .repeat-placement")) node.hidden = kind === "edit";
+    $("placement-title").textContent = t(kind === "edit" ? "move_named_prop" : "place_robot", { name: title });
+    $("placement-bar").hidden = false;
+    $("place-here").disabled = true;
+    start();
+  }
   function card(entry, kind, busy) {
     const button = document.createElement("button");
     button.type = "button";
@@ -88,29 +101,20 @@ export function initCreation({ start, submit, cancel, change }) {
     title.textContent = tOr(`${key}_${entry.name}`, entry.name);
     desc.textContent = tOr(`${key}_${entry.name}_desc`, entry.summary || "");
     copy.append(title, desc); button.append(icon, copy);
-    button.addEventListener("click", () => {
-      item = { ...entry, kind }; point = null; sending = false; size = "normal"; yaw = 0; session++;
-      repeat.checked = false; syncRepeat();
-      $("placement-hint").textContent = t("place_hint");
-      setSize(size);
-      $("place-rotate").textContent = t("rotate_place", { angle: yaw });
-      $("object-placement-controls").hidden = kind !== "object";
-      $("placement-title").textContent = t("place_robot", { name: title.textContent });
-      $("placement-bar").hidden = false;
-      $("place-here").disabled = true;
-      start();
-    });
+    button.addEventListener("click", () => begin(entry, kind, title.textContent));
     return button;
   }
   return {
     active: () => item !== null,
+    editing: () => item?.kind === "edit" ? item : null,
+    edit: (entry) => begin(entry, "edit", entry.name),
     session: () => session,
     repeating: () => item?.kind === "object" && repeat.checked,
     next() {
       point = null; $("place-here").disabled = true;
       $("placement-hint").textContent = t("place_next_hint");
     },
-    preview: () => item?.kind === "object" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
+    preview: () => item && item.kind !== "robot" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
     open() { setOpen(true); $("create-list").querySelector("button")?.focus(); },
     render(entries, editable, busy, objects = []) {
       $("create-section").hidden = !editable || !entries.length;

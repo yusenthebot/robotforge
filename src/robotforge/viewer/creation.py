@@ -218,7 +218,7 @@ def _place(
             }
 
 
-def _object_obstacles(model, data, name: str) -> dict[str, float]:
+def _object_obstacles(model, data, name: str, owners: dict[int, str] | None = None) -> dict[str, float]:
     """Explicit distances include fixed-fixed pairs that MuJoCo's contact generation omits."""
     import mujoco
     import numpy as np
@@ -227,8 +227,9 @@ def _object_obstacles(model, data, name: str) -> dict[str, float]:
 
     mujoco.mj_forward(model, data)
     solid = [g for g in range(model.ngeom) if model.geom_contype[g] or model.geom_conaffinity[g]]
-    mine = [g for g in solid if owner(model, g) == name]
-    others = [g for g in solid if owner(model, g) != name and model.geom_type[g] != mujoco.mjtGeom.mjGEOM_PLANE]
+    owners = owners or {g: owner(model, g) for g in solid}
+    mine = [g for g in solid if owners[g] == name]
+    others = [g for g in solid if owners[g] != name and model.geom_type[g] != mujoco.mjtGeom.mjGEOM_PLANE]
     boxes = {}
     for g in [*mine, *others]:
         rot, local = data.geom_xmat[g].reshape(3, 3), model.geom_aabb[g]
@@ -250,7 +251,7 @@ def _object_obstacles(model, data, name: str) -> dict[str, float]:
                 finally:
                     model.opt.disableflags = flags
             if distance < -0.002:
-                other = owner(model, b)
+                other = owners[b]
                 blocked[other] = max(blocked.get(other, 0.0), -distance)
     return blocked
 
