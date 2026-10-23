@@ -15,6 +15,7 @@ import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook 
 import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 import { canMove, moveAxes, moveSpeed } from "./padmap.js";
+import { initCreation } from "./creation.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -24,6 +25,7 @@ translatePage();
 // ---------------------------------------------------------------- renderer setup
 
 const canvas = $("view");
+const creator = initCreation({ start: beginCreation, submit: placeRobot, cancel: cancelCreation });
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -121,6 +123,7 @@ let sceneDesc = null; // last scene description from the server
 let bodyNodes = []; // THREE.Group per body, index = MuJoCo body id
 let worldRoot = null;
 let firstScene = true;
+let posedVersion = 0;
 let pendingFit = null; // "camera" | "lights" | null
 let showCollision = false;
 let water = null; // the scene's water (water.js), or null
@@ -359,6 +362,7 @@ let pendingRobotInfo = null;
 async function applyScene(desc) {
   const request = ++sceneRequest;
   loadingScene = true;
+  posedVersion = 0;
   if (pendingRobotInfo?.version <= desc.version) pendingRobotInfo = null;
   let buffer = new ArrayBuffer(0);
   if (desc.meshes.length > 0 || (desc.hfields || []).length > 0) {
@@ -696,6 +700,8 @@ function applyPoses(buffer) {
     pendingFit = null;
     $("loading").hidden = true;
   }
+  posedVersion = sceneDesc.version;
+  resolveCreatedRobot();
 }
 
 // ---------------------------------------------------------------- camera moves
@@ -897,6 +903,14 @@ canvas.addEventListener(
   "pointerdown",
   (e) => {
     if (e.button !== 0) return;
+    if (creator.active()) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      creationPoint(e);
+      creator.place();
+      return;
+    }
+    if (performance.now() < creationClickUntil) { e.stopImmediatePropagation(); return; }
     const hit = pickBody(e);
     if (!hit) return;
     controls.enabled = false; // must happen before OrbitControls sees this event
@@ -919,6 +933,7 @@ canvas.addEventListener(
 );
 
 canvas.addEventListener("pointermove", (e) => {
+  if (creator.active()) { creationPoint(e); return; }
   if (!drag) {
     canvas.classList.toggle("hover-body", !!pickBody(e));
     return;
@@ -947,6 +962,7 @@ canvas.addEventListener("pointercancel", endDrag);
 // destination) and shows its path. A robot or a loose object under the pointer is for dragging, not a place;
 // so is a wall's side: only a face that looks up (the floor, a ramp, a table top) is.
 canvas.addEventListener("dblclick", (e) => {
+  if (creator.active() || performance.now() < creationClickUntil) return;
   const robot = driveTarget();
   if (!robot || lessonActive() || !worldRoot || !sceneDesc) return;
   setPointer(e);
@@ -1011,6 +1027,8 @@ function connect() {
     setConnected(false);
     for (const p of pending.values()) p.reject(new Error(t("disconnected")));
     pending.clear();
+    creationSelection?.reject(new Error(t("disconnected")));
+    cancelCreation(true);
     setTimeout(connect, retryMs);
     retryMs = Math.min(retryMs * 2, 5000);
   };
@@ -1051,6 +1069,7 @@ let worldName = "";
 const robotByName = (name) => robots.find((r) => r.name === name) ?? null;
 
 function onScene(desc) {
+  if (creator.active() && !busy) cancelCreation(true);
   robots = desc.robots || [];
   learnedWalkers = desc.learned || {};
   robotModes = desc.modes || {};
@@ -1085,7 +1104,7 @@ function onScene(desc) {
   renderWorldPanel();
   lessonScene(desc);
   sensorsScene(desc);
-  $("empty").hidden = !(desc.world && robots.length === 0);
+  updateEmpty();
 }
 
 function renderTitle() {
@@ -1095,6 +1114,7 @@ function renderTitle() {
 }
 
 function renderRobotList() {
+  creator.render(worldInfo.catalog?.robot_templates || [], worldInfo.isWorld && !sceneDesc?.lesson, busy);
   const list = $("robot-list");
   list.replaceChildren(
     ...robots.map((r) => {
@@ -1116,7 +1136,7 @@ function renderRobotList() {
   );
   $("robot-section").hidden = robots.length === 0;
   const n = robots.length || (sceneDesc?.actuators.length ?? 0);
-  $("drawer-label").textContent = robots.length ? t("robots") : t("joints");
+  $("drawer-label").textContent = worldInfo.isWorld || robots.length ? t("robots") : t("joints");
   $("drawer-count").textContent = n ? String(n) : "";
 }
 
@@ -1351,6 +1371,7 @@ const pressed = new Set();
 let lastDrive = "";
 
 function driveTarget() {
+  if (creator.active()) return null;
   const robot = robotByName(selected);
   return canMove(robot) ? robot : null;
 }
@@ -1440,8 +1461,8 @@ controls.addEventListener("change", () => {
 
 function stopDriving() {
   // Switching robots mid-drive must not leave the old one walking off on its own.
-  const robot = driveTarget();
-  if (robot && (pressed.size || padAxes())) send({ type: "teleop", robot: robot.name, speed: 0, turn: 0 });
+  const robot = robotByName(selected);
+  if (canMove(robot) && (pressed.size || padAxes())) send({ type: "teleop", robot: robot.name, speed: 0, turn: 0 });
   pressed.clear();
   padRelease(false); // the pad's arm, if it was jogging one, is told to hold
   lastDrive = "";
@@ -1546,6 +1567,7 @@ function setDrawer(open) {
   if (open && narrow()) setOpen("world-toggle", "world-panel", false);
   storageSet("robotforge.drawer", open ? "1" : "0");
   shiftForDrawers();
+  updateEmpty();
 }
 
 function setWorldPanel(open) {
@@ -1555,6 +1577,7 @@ function setWorldPanel(open) {
   if (open && narrow()) setOpen("drawer-toggle", "drawer", false);
   storageSet("robotforge.world", open ? "1" : "0");
   shiftForDrawers();
+  updateEmpty();
 }
 
 // The part of the window no panel covers. Left panels and right columns bound it sideways; a panel spanning most
@@ -1777,6 +1800,13 @@ $("show-shadows").addEventListener("change", (e) => {
 
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (creator.active()) {
+    if (e.key === "Escape") { cancelCreation(); e.preventDefault(); }
+    else if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
+      creator.place(); e.preventDefault();
+    }
+    return; // Tab and focused buttons retain their native keyboard behavior.
+  }
   dismissCoach();
   if (driveKey(e, true)) return;
   if (e.target instanceof HTMLButtonElement && (e.key === " " || e.key === "Enter")) return; // let buttons click
@@ -1834,7 +1864,7 @@ async function runChoice(button, msg, { frame = false, done } = {}) {
   setPanelBusy(true);
   try {
     const data = await request(msg); // not inside done?.(...): that skips its arguments when done is unset
-    done?.(data);
+    await done?.(data);
   } catch (err) {
     wantFrame = false;
     toast(err.message);
@@ -1847,7 +1877,84 @@ async function runChoice(button, msg, { frame = false, done } = {}) {
 
 function setPanelBusy(on) {
   $("world-panel").setAttribute("aria-busy", String(on));
-  for (const b of $("world-panel").querySelectorAll(".choice, .swatch")) b.disabled = on || b.dataset.off === "1";
+  $("drawer").setAttribute("aria-busy", String(on));
+  for (const b of document.querySelectorAll("#world-panel .choice, #world-panel .swatch, #drawer .choice, #drawer .create-card")) b.disabled = on || b.dataset.off === "1";
+}
+
+// ------------------------------------------------------------ pick a local robot, click to place
+
+let placementVersion = 0, creationClickUntil = 0, creationSelection = null;
+const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
+creationMarker.visible = false;
+scene3.add(creationMarker);
+
+function updateEmpty() {
+  $("empty").hidden = !(sceneDesc?.world && robots.length === 0) || creator.active()
+    || !$("world-panel").hidden || !$("drawer").hidden || lessonActive();
+}
+
+$("empty-add").addEventListener("click", () => { setDrawer(true); creator.open(); });
+
+function beginCreation() {
+  stopDriving(); endDrag();
+  placementVersion = sceneDesc.version;
+  setDrawer(false); setWorldPanel(false); setHelp(false);
+  controls.enabled = true; // placement intercepts left clicks; wheel zoom and right-drag remain available.
+  canvas.classList.add("placing"); canvas.focus();
+  creationPoint({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+  updateEmpty();
+}
+
+function cancelCreation(force = false) {
+  if (busy && !force) return;
+  creator.clear(); creationMarker.visible = false;
+  canvas.classList.remove("placing"); controls.enabled = true;
+  updateEmpty();
+}
+
+function creationPoint(e) {
+  setPointer(e);
+  const hit = worldRoot && raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
+  const body = hit?.object.userData.body;
+  const up = hit?.face?.normal.clone().transformDirection(hit.object.matrixWorld);
+  const valid = hit && up?.z >= 0.7 && !(body > 0 && sceneDesc.bodies[body]?.dynamic);
+  const point = valid ? hit.point.toArray().map((v) => +v.toFixed(4)) : null;
+  creator.point(point);
+  creationMarker.visible = !!point;
+  if (point) creationMarker.position.set(point[0], point[1], point[2] + 0.008);
+}
+
+function resolveCreatedRobot() {
+  const wanted = creationSelection;
+  if (!wanted || posedVersion !== sceneDesc?.version) return;
+  if (sceneDesc.version < wanted.version) return;
+  if (sceneDesc.version !== wanted.version || !robotByName(wanted.robot)) {
+    wanted.reject(new Error(t("create_scene_changed"))); return;
+  }
+  select(wanted.robot, { focus: true });
+  wanted.resolve();
+}
+
+async function placeRobot(template, pos) {
+  if (busy || !template || !pos) return;
+  creator.busy(true);
+  await runChoice($("place-here"), { type: "world", action: "add_robot", template, pos, version: placementVersion }, {
+    frame: true,
+    done: async (data) => {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => creationSelection?.reject(new Error(t("create_scene_changed"))), 15000);
+        const finish = (callback, error) => { clearTimeout(timer); creationSelection = null; callback(error); };
+        creationSelection = { ...data, resolve: () => finish(resolve), reject: (error) => finish(reject, error) };
+        resolveCreatedRobot();
+      });
+      creationClickUntil = performance.now() + 500;
+      cancelCreation(true);
+      toast(t("robot_added", { name: data.robot }));
+      canvas.focus();
+    },
+  });
+  creator.busy(false);
+  if (sceneDesc?.version !== placementVersion) cancelCreation(true);
 }
 
 function el(tag, className, text) {
@@ -2310,7 +2417,7 @@ initFlow({ inLesson: () => lessonActive(), storageGet, storageSet });
 initGamepad({
   send,
   toast,
-  robot: () => robotByName(selected),
+  robot: () => creator.active() ? null : robotByName(selected),
   screenToWorld,
   changed: renderDrive,
   onDrive: () => {
