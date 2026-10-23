@@ -1,0 +1,1311 @@
+{
+  "baseline_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+  "source_under_ab": "18235084efd8e3a9ddfeca96573fc5e6af10f74be2ce5125a1b0ba7bf3de9863",
+  "final_source_sha256": "d1fef8db1b62d98cd0a05399876babc66d5d93e1819b85852e658f62df401d77",
+  "note": "A/B preceded final CSS-only isolation of ground buttons and training swatches. No renderer or material changed afterward. Final source has separate browser, interaction video and budget checks.",
+  "viewport": {
+    "width": 1280,
+    "height": 800,
+    "dpr": 1
+  },
+  "run_order": [
+    "before",
+    "after",
+    "before-r2",
+    "after-r2",
+    "before-r3",
+    "after-r3"
+  ],
+  "equality": {
+    "gallery": {
+      "world": {
+        "labels": [
+          "before",
+          "after",
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      },
+      "scene": {
+        "labels": [
+          "before",
+          "after",
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      },
+      "initial": {
+        "labels": [
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      }
+    },
+    "kitchen": {
+      "world": {
+        "labels": [
+          "before",
+          "after",
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      },
+      "scene": {
+        "labels": [
+          "before",
+          "after",
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      },
+      "initial": {
+        "labels": [
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      }
+    },
+    "park": {
+      "world": {
+        "labels": [
+          "before",
+          "after",
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      },
+      "scene": {
+        "labels": [
+          "before",
+          "after",
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      },
+      "initial": {
+        "labels": [
+          "before-r2",
+          "after-r2",
+          "before-r3",
+          "after-r3"
+        ],
+        "identical": true
+      }
+    }
+  },
+  "runs": {
+    "before": {
+      "total_seconds": 19.55814866599394,
+      "harness_sha256": "d7783daa550294231369c203e8956178a17aa810c631cc8907a9937b46bff4f2",
+      "source": {
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+        "git_dirty": false,
+        "active_source_sha256": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d",
+        "plugins": [],
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+      },
+      "source_stable": true,
+      "manifest_sha256": "02fa20336b02e0c8bded4cd7bc712fd7cc02094ae68c672341e95b1713c0793a"
+    },
+    "after": {
+      "total_seconds": 21.986449125019135,
+      "harness_sha256": "d7783daa550294231369c203e8956178a17aa810c631cc8907a9937b46bff4f2",
+      "source": {
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+        "git_dirty": true,
+        "active_source_sha256": "18235084efd8e3a9ddfeca96573fc5e6af10f74be2ce5125a1b0ba7bf3de9863",
+        "plugins": [],
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+      },
+      "source_stable": true,
+      "manifest_sha256": "90c2140536db6bada36cafe142b50566179ece8f9c438cfb873323a4e22a93d8"
+    },
+    "before-r2": {
+      "total_seconds": 18.658138833998237,
+      "harness_sha256": "0e60186728bab7ffc982eece4d6a3baf729491d2838903155995b2460f8d98e6",
+      "source": {
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+        "git_dirty": false,
+        "active_source_sha256": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d",
+        "plugins": [],
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+      },
+      "source_stable": true,
+      "manifest_sha256": "d76e0c499ca8a0dc5e71cc2fa21030fdbfe9ba0e301c88d17d03916661df3740"
+    },
+    "after-r2": {
+      "total_seconds": 19.152462166995974,
+      "harness_sha256": "0e60186728bab7ffc982eece4d6a3baf729491d2838903155995b2460f8d98e6",
+      "source": {
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+        "git_dirty": true,
+        "active_source_sha256": "18235084efd8e3a9ddfeca96573fc5e6af10f74be2ce5125a1b0ba7bf3de9863",
+        "plugins": [],
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+      },
+      "source_stable": true,
+      "manifest_sha256": "fec995dbaf8b8cc40dbf79dc3c0c9f786f8e85d79ef159c5c12a4507415f48af"
+    },
+    "before-r3": {
+      "total_seconds": 18.654575874999864,
+      "harness_sha256": "0e60186728bab7ffc982eece4d6a3baf729491d2838903155995b2460f8d98e6",
+      "source": {
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+        "git_dirty": false,
+        "active_source_sha256": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d",
+        "plugins": [],
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+      },
+      "source_stable": true,
+      "manifest_sha256": "5077ff50ae8294e259b332c18869316ac2e0a461a51027a99557558bdc8abdc3"
+    },
+    "after-r3": {
+      "total_seconds": 19.115526625013445,
+      "harness_sha256": "0e60186728bab7ffc982eece4d6a3baf729491d2838903155995b2460f8d98e6",
+      "source": {
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+        "git_dirty": true,
+        "active_source_sha256": "18235084efd8e3a9ddfeca96573fc5e6af10f74be2ce5125a1b0ba7bf3de9863",
+        "plugins": [],
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+      },
+      "source_stable": true,
+      "manifest_sha256": "d632e4563f19a1dca751157375a17208cb235c8802dad7ff709503679962b1c5"
+    }
+  },
+  "scenes": {
+    "gallery": {
+      "before": {
+        "fresh_ms": [
+          394.2999999821186,
+          431.7999999821186,
+          445.59999999403954
+        ],
+        "warm_ms": [
+          194.59999999403954,
+          178.5,
+          253.59999999403954
+        ],
+        "http_bytes": [
+          30424162,
+          30424162,
+          30424162
+        ],
+        "http_resources": [
+          23,
+          23,
+          23
+        ],
+        "views": {
+          "far": {
+            "pooled_median_ms": 3.25,
+            "pooled_p95_ms": 6.5999999940395355,
+            "calls": [
+              246,
+              246,
+              246
+            ],
+            "triangles": [
+              606010,
+              606010,
+              606010
+            ],
+            "textures": [
+              4,
+              4,
+              4
+            ],
+            "programs": [
+              12,
+              12,
+              22
+            ]
+          },
+          "near": {
+            "pooled_median_ms": 2.7000000178813934,
+            "pooled_p95_ms": 6.199999988079071,
+            "calls": [
+              246,
+              246,
+              246
+            ],
+            "triangles": [
+              606010,
+              606010,
+              606010
+            ],
+            "textures": [
+              4,
+              4,
+              4
+            ],
+            "programs": [
+              12,
+              12,
+              22
+            ]
+          }
+        }
+      },
+      "after": {
+        "fresh_ms": [
+          1848,
+          458.30000001192093,
+          413.69999998807907
+        ],
+        "warm_ms": [
+          213.09999999403954,
+          262.2000000178814,
+          194.7000000178814
+        ],
+        "http_bytes": [
+          30428695,
+          30428695,
+          30428695
+        ],
+        "http_resources": [
+          24,
+          24,
+          24
+        ],
+        "views": {
+          "far": {
+            "pooled_median_ms": 3.2000000178813934,
+            "pooled_p95_ms": 6.5999999940395355,
+            "calls": [
+              246,
+              246,
+              246
+            ],
+            "triangles": [
+              606010,
+              606010,
+              606010
+            ],
+            "textures": [
+              5,
+              5,
+              5
+            ],
+            "programs": [
+              12,
+              22,
+              12
+            ]
+          },
+          "near": {
+            "pooled_median_ms": 3.0999999940395355,
+            "pooled_p95_ms": 5.199999988079071,
+            "calls": [
+              246,
+              246,
+              246
+            ],
+            "triangles": [
+              606010,
+              606010,
+              606010
+            ],
+            "textures": [
+              5,
+              5,
+              5
+            ],
+            "programs": [
+              12,
+              22,
+              12
+            ]
+          }
+        }
+      }
+    },
+    "kitchen": {
+      "before": {
+        "fresh_ms": [
+          413.90000000596046,
+          401.7999999821186,
+          382.69999998807907
+        ],
+        "warm_ms": [
+          195.40000000596046,
+          229.30000001192093,
+          230
+        ],
+        "http_bytes": [
+          4034289,
+          4034289,
+          4034289
+        ],
+        "http_resources": [
+          23,
+          23,
+          23
+        ],
+        "views": {
+          "far": {
+            "pooled_median_ms": 2.2000000178813934,
+            "pooled_p95_ms": 4.0999999940395355,
+            "calls": [
+              123,
+              123,
+              123
+            ],
+            "triangles": [
+              39752,
+              39752,
+              39752
+            ],
+            "textures": [
+              4,
+              4,
+              4
+            ],
+            "programs": [
+              11,
+              20,
+              20
+            ]
+          },
+          "near": {
+            "pooled_median_ms": 2.4000000059604645,
+            "pooled_p95_ms": 4.0999999940395355,
+            "calls": [
+              123,
+              123,
+              123
+            ],
+            "triangles": [
+              39752,
+              39752,
+              39752
+            ],
+            "textures": [
+              4,
+              4,
+              4
+            ],
+            "programs": [
+              11,
+              20,
+              20
+            ]
+          }
+        }
+      },
+      "after": {
+        "fresh_ms": [
+          1440.7000000178814,
+          420.7000000178814,
+          441.19999998807907
+        ],
+        "warm_ms": [
+          296.7000000178814,
+          191.7999999821186,
+          279.59999999403954
+        ],
+        "http_bytes": [
+          4038822,
+          4038822,
+          4038822
+        ],
+        "http_resources": [
+          24,
+          24,
+          24
+        ],
+        "views": {
+          "far": {
+            "pooled_median_ms": 2.3999999910593033,
+            "pooled_p95_ms": 4,
+            "calls": [
+              123,
+              123,
+              123
+            ],
+            "triangles": [
+              39752,
+              39752,
+              39752
+            ],
+            "textures": [
+              5,
+              5,
+              5
+            ],
+            "programs": [
+              26,
+              14,
+              26
+            ]
+          },
+          "near": {
+            "pooled_median_ms": 2.300000011920929,
+            "pooled_p95_ms": 4.100000023841858,
+            "calls": [
+              123,
+              123,
+              123
+            ],
+            "triangles": [
+              39752,
+              39752,
+              39752
+            ],
+            "textures": [
+              5,
+              5,
+              5
+            ],
+            "programs": [
+              26,
+              14,
+              26
+            ]
+          }
+        }
+      }
+    },
+    "park": {
+      "before": {
+        "fresh_ms": [
+          480.5,
+          440.30000001192093,
+          486.89999997615814
+        ],
+        "warm_ms": [
+          267.69999998807907,
+          195.7000000178814,
+          261.40000000596046
+        ],
+        "http_bytes": [
+          18634846,
+          18634846,
+          18634846
+        ],
+        "http_resources": [
+          23,
+          23,
+          23
+        ],
+        "views": {
+          "far": {
+            "pooled_median_ms": 2.5,
+            "pooled_p95_ms": 5.300000011920929,
+            "calls": [
+              132,
+              132,
+              132
+            ],
+            "triangles": [
+              458058,
+              458058,
+              458058
+            ],
+            "textures": [
+              12,
+              12,
+              12
+            ],
+            "programs": [
+              21,
+              12,
+              21
+            ]
+          },
+          "near": {
+            "pooled_median_ms": 2.199999988079071,
+            "pooled_p95_ms": 3.7999999821186066,
+            "calls": [
+              109,
+              109,
+              109
+            ],
+            "triangles": [
+              442218,
+              442218,
+              442218
+            ],
+            "textures": [
+              12,
+              12,
+              12
+            ],
+            "programs": [
+              21,
+              12,
+              21
+            ]
+          }
+        }
+      },
+      "after": {
+        "fresh_ms": [
+          865.2000000178814,
+          491,
+          407.10000002384186
+        ],
+        "warm_ms": [
+          246.5,
+          303.09999999403954,
+          229.59999999403954
+        ],
+        "http_bytes": [
+          18639379,
+          18639379,
+          18639379
+        ],
+        "http_resources": [
+          24,
+          24,
+          24
+        ],
+        "views": {
+          "far": {
+            "pooled_median_ms": 2.8499999940395355,
+            "pooled_p95_ms": 5.699999988079071,
+            "calls": [
+              132,
+              132,
+              132
+            ],
+            "triangles": [
+              458058,
+              458058,
+              458058
+            ],
+            "textures": [
+              7,
+              7,
+              7
+            ],
+            "programs": [
+              15,
+              27,
+              15
+            ]
+          },
+          "near": {
+            "pooled_median_ms": 2.800000011920929,
+            "pooled_p95_ms": 4.899999976158142,
+            "calls": [
+              109,
+              109,
+              109
+            ],
+            "triangles": [
+              442218,
+              442218,
+              442218
+            ],
+            "textures": [
+              7,
+              7,
+              7
+            ],
+            "programs": [
+              15,
+              27,
+              15
+            ]
+          }
+        }
+      }
+    }
+  },
+  "raw_evidence": {
+    "folder": "../robotforge-evidence/2026-10-23-visual-playability",
+    "comparison_sha256": "cc224f1a78e21d1da304548370eaedf19f7d852a450912f759e18ad5484c330b",
+    "video_sha256": "3e5f9f219f4fb05a4291f0c795e2689840d38779b8dc708c68f081a47c287d48"
+  },
+  "budget_benchmark": {
+    "started": "2026-10-23T18:38:25+08:00",
+    "sha": "4ccf838-dirty",
+    "quick": false,
+    "partial": true,
+    "covers": [
+      "install",
+      "viewer"
+    ],
+    "machine": {
+      "system": "Darwin",
+      "release": "26.3.2",
+      "machine": "arm64",
+      "cpus": 18,
+      "python": "3.12.13",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "load": [
+        12.4,
+        14.5,
+        14.2
+      ]
+    },
+    "load_after": [
+      11.1,
+      13.9,
+      14.0
+    ],
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3627.4424,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.1098,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.0
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.6474,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.371
+        },
+        "fps": {
+          "value": 60.237,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 3.3,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.300000011920929,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.2349,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 3.7,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.699999988079071,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 133.2,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 557.1
+        },
+        "idle_cpu_pct": {
+          "value": 5.2,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "budgets": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "imports.robotforge_cpu_ms": "not run",
+      "imports.cli_cpu_ms": "not run",
+      "imports.mcp_server_cpu_ms": "not run",
+      "imports.robotforge_heavy": "not run",
+      "imports.cli_heavy": "not run",
+      "imports.mcp_server_heavy": "not run",
+      "physics.dog_idle.steps_per_s": "not run",
+      "physics.dog_idle.controllers_share": "not run",
+      "physics.dog_walk.steps_per_s": "not run",
+      "physics.go2_idle.steps_per_s": "not run",
+      "physics.go2_idle.controllers_share": "not run",
+      "physics.go2_walk.steps_per_s": "not run",
+      "physics.go2_rl_idle.steps_per_s": "not run",
+      "physics.go2_rl_idle.controllers_share": "not run",
+      "physics.humanoid_idle.steps_per_s": "not run",
+      "physics.humanoid_idle.controllers_share": "not run",
+      "physics.arm_pick.steps_per_s": "not run",
+      "physics.warehouse_nav.steps_per_s": "not run",
+      "physics.objects_20.steps_per_s": "not run",
+      "physics.machine.steps_per_s": "not run",
+      "physics.dog_idle.peak_mb": "not run",
+      "physics.go2_walk.peak_mb": "not run",
+      "physics.warehouse_nav.peak_mb": "not run",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok",
+      "mcp.start_s": "not run",
+      "mcp.new_world_ms": "not run",
+      "mcp.add_robot_ms": "not run",
+      "mcp.move_ms": "not run",
+      "mcp.observe_ms": "not run",
+      "mcp.server_rss_mb": "not run",
+      "mcp.idle_cpu_pct": "not run"
+    }
+  },
+  "wheel_before_bytes": 3712570,
+  "wheel_after_bytes": 3714501,
+  "verification": {
+    "focused": {
+      "passed": 242,
+      "deselected": 1,
+      "seconds": 9.74
+    },
+    "gpu_browser": {
+      "passed": 4,
+      "seconds": 22.21
+    },
+    "independent_review": "approved",
+    "full_default_suite": "not rerun for this viewer-only change; previous framework round is separate",
+    "optional_tools": {
+      "mypy": "unavailable",
+      "pyright": "unavailable",
+      "bandit": "unavailable",
+      "pip_audit": "unavailable"
+    },
+    "gamepad_browser": {
+      "passed": 8,
+      "seconds": 33.95
+    },
+    "framework": {
+      "cases": 7,
+      "status": "pass",
+      "canonical_sha256": "e6c82b5c364b47273a8c45ee85441f37b50e1676ecd7cff5bbf2f72d4f88852b"
+    },
+    "cli_mcp_smoke": {
+      "status": "passed",
+      "seconds": 3.5,
+      "tools": 60
+    }
+  },
+  "video": {
+    "path": "../robotforge-evidence/2026-10-23-visual-playability/video-final/visual-playability.mp4",
+    "seconds": 34.733,
+    "width": 1280,
+    "height": 800,
+    "fps": 30,
+    "decoded_frames": 1042,
+    "sha256": "3e5f9f219f4fb05a4291f0c795e2689840d38779b8dc708c68f081a47c287d48",
+    "rover_displacement_m": 1.52043,
+    "reset_xy_error_m": 1.074e-05,
+    "browser_errors": []
+  },
+  "surface_comparison": {
+    "before_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+      "git_dirty": false,
+      "active_source_sha256": "a2f248df09fbbd4284b8591fc39fa3d5752f1d6e75521eba6abfefd66ce4102d",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "final_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+      "git_dirty": true,
+      "active_source_sha256": "d1fef8db1b62d98cd0a05399876babc66d5d93e1819b85852e658f62df401d77",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "source_stable": true,
+    "views": {
+      "wood_low": {
+        "before": {
+          "flips": 6042,
+          "perMegapixel": 421,
+          "camera": {
+            "eye": [
+              0,
+              -4,
+              0.24
+            ],
+            "target": [
+              0,
+              -0.7,
+              0.01
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "final": {
+          "flips": 8516,
+          "perMegapixel": 594,
+          "camera": {
+            "eye": [
+              0,
+              -4,
+              0.24
+            ],
+            "target": [
+              0,
+              -0.7,
+              0.01
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "per_megapixel_delta": 173
+      },
+      "grass_hfield_boundary": {
+        "before": {
+          "flips": 431,
+          "perMegapixel": 30,
+          "camera": {
+            "eye": [
+              7.5,
+              -2,
+              0.22
+            ],
+            "target": [
+              7.5,
+              2,
+              0.12
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "final": {
+          "flips": 429,
+          "perMegapixel": 30,
+          "camera": {
+            "eye": [
+              7.5,
+              -2,
+              0.22
+            ],
+            "target": [
+              7.5,
+              2,
+              0.12
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "per_megapixel_delta": 0
+      },
+      "stairs_faces": {
+        "before": {
+          "flips": 3288,
+          "perMegapixel": 229,
+          "camera": {
+            "eye": [
+              1.9,
+              -4,
+              0.28
+            ],
+            "target": [
+              -0.5,
+              -2.5,
+              0.2
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "final": {
+          "flips": 3255,
+          "perMegapixel": 227,
+          "camera": {
+            "eye": [
+              1.9,
+              -4,
+              0.28
+            ],
+            "target": [
+              -0.5,
+              -2.5,
+              0.2
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "per_megapixel_delta": -2
+      }
+    },
+    "physics_world_identical": {
+      "kitchen": {
+        "world": true,
+        "initial": true
+      },
+      "park": {
+        "world": true,
+        "initial": true
+      }
+    },
+    "background_go2": {
+      "samples": [
+        {
+          "stage": "drive_start",
+          "sim_time": 0.10000000000000007,
+          "position": [
+            -0.003123594856670515,
+            -0.9999996704013888,
+            0.25984834661079187
+          ],
+          "quaternion_wxyz": [
+            0.9999637166625898,
+            -9.008353592117577e-07,
+            0.00851853024107003,
+            2.4737083967135355e-07
+          ],
+          "body_up_z": 0.9998548692834409,
+          "tilt_degrees": 0.9761634725787844
+        },
+        {
+          "stage": "after_W",
+          "sim_time": 3.5139999999998346,
+          "position": [
+            -0.012013830598126383,
+            -1.00000000109125,
+            0.264178835833141
+          ],
+          "quaternion_wxyz": [
+            0.999998350275233,
+            -9.95950155248737e-09,
+            -0.0018164379459596836,
+            4.5021551280481246e-08
+          ],
+          "body_up_z": 0.9999934011063768,
+          "tilt_degrees": 0.20814857056688352
+        },
+        {
+          "stage": "after_D",
+          "sim_time": 4.513999999999725,
+          "position": [
+            -0.012052236859328403,
+            -1.0000000008930687,
+            0.26402304746348565
+          ],
+          "quaternion_wxyz": [
+            0.9999982414213507,
+            -1.067561829624858e-08,
+            -0.0018754077436076053,
+            4.875536144468613e-08
+          ],
+          "body_up_z": 0.9999929656915902,
+          "tilt_degrees": 0.2149060231290708
+        },
+        {
+          "stage": "drive_end",
+          "sim_time": 6.529999999999503,
+          "position": [
+            -0.012123804562857318,
+            -1.000000000637203,
+            0.2637438515507538
+          ],
+          "quaternion_wxyz": [
+            0.9999980260577125,
+            -1.1667699399533602e-08,
+            -0.0019869274460925213,
+            5.540195534363727e-08
+          ],
+          "body_up_z": 0.9999921042386477,
+          "tilt_degrees": 0.22768526353537635
+        },
+        {
+          "stage": "reset",
+          "sim_time": 0.0,
+          "position": [
+            0.0,
+            -1.0,
+            0.290372500302558
+          ],
+          "quaternion_wxyz": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "body_up_z": 1.0,
+          "tilt_degrees": 0.0
+        }
+      ],
+      "scope": "Saved Go2 root free-joint qpos snapshots and inspected video contact frames show no flip; not continuous posture telemetry or a separate Go2 control validation. Rover drive/reset is the validated interaction."
+    }
+  },
+  "rejected_experiment": {
+    "source_sha256": "b3106052c4700d178b68fcb2e0127bd8557525e559e758a37e613661d28bc544",
+    "change": "half wood ground bump and weaker albedo grain",
+    "wood_flips_per_megapixel": 599,
+    "decision": "reverted; did not improve the whole-frame metric; final runtime bytes match the previously verified d1fef source"
+  },
+  "final_source": {
+    "package": "robotforge",
+    "package_version": "0.0.1",
+    "python": "3.12.13",
+    "platform": "macOS-26.3.2-arm64-arm-64bit",
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "git_commit": "4ccf83874580f521870c4800d24eb018fbddc472",
+    "git_dirty": true,
+    "active_source_sha256": "d1fef8db1b62d98cd0a05399876babc66d5d93e1819b85852e658f62df401d77",
+    "plugins": [],
+    "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+  },
+  "low_angle_isolation": {
+    "full": {
+      "before": 421,
+      "after": 594
+    },
+    "floor_only": {
+      "before": 186,
+      "after": 231
+    },
+    "props_only": {
+      "before": 225,
+      "after": 354
+    },
+    "final_floor_bump_disabled": 594,
+    "unit": "luminance flips per megapixel",
+    "note": "Whole-frame heuristic; isolated counts are not additive; no blanket shimmer non-regression claim."
+  },
+  "verification_record": {
+    "path": "verification/d59ee0bd-c184-4c0f-8e3f-79b426efecdf/experiment.json",
+    "record_id": "d59ee0bd-c184-4c0f-8e3f-79b426efecdf",
+    "status": "completed",
+    "artifacts_verified": 31,
+    "sha256": "c359f389c78942da3582d16ae1c4c288cda3b3f8e5b3847d833cb5811508bcdc"
+  }
+}

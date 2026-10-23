@@ -115,7 +115,7 @@
 .tv-table tr.sel td:first-child { box-shadow: inset 2px 0 0 var(--ink-2); padding-left: 6px; }
 .tv-table tr.lead { background: var(--amber-soft); }
 .tv-table tr.faded td { opacity: 0.55; }
-.swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.tv-table .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .lead-badge { margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 650; background: var(--amber); color: var(--amber-ink); }
 .tv-table button.mini {
   width: 22px;

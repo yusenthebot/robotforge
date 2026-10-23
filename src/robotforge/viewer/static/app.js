@@ -10,6 +10,7 @@ import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, se
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
+import { groundMaterial, groundPreview, groundStyle } from "./ground-look.js";
 import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
 import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
@@ -195,9 +196,9 @@ function planeObject(geom, extent, look) {
   const [half, halfY] = planeHalf(geom, extent);
   let mat;
   if (look && look.pattern !== "checker") {
-    const tex = groundTexture(look.pattern);
-    tex.repeat.set((2 * half) / look.tile, (2 * halfY) / look.tile);
-    mat = new THREE.MeshStandardMaterial({ map: tex, color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0, ...FLOOR_OFFSET });
+    mat = groundLook(geom, look);
+    Object.assign(mat, FLOOR_OFFSET);
+    groundMapping(mat, (2 * half) / look.tile, (2 * halfY) / look.tile);
   } else {
     const tex = checkerTexture(geom.rgba);
     const cell = Math.max(0.25, extent / 4);
@@ -211,82 +212,15 @@ function planeObject(geom, extent, look) {
 
 // ---------------------------------------------------------------- ground surfaces and terrain
 
-// Grayscale surface patterns; the material color tints them, so one canvas serves every style.
-const groundCanvases = new Map();
-
-function groundCanvas(pattern) {
-  if (groundCanvases.has(pattern)) return groundCanvases.get(pattern);
-  const size = 256;
-  const c = document.createElement("canvas");
-  c.width = c.height = size;
-  const g = c.getContext("2d");
-  let seed = 7;
-  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  if (pattern === "tiles") {
-    g.fillStyle = "#ffffff";
-    g.fillRect(0, 0, size, size);
-    g.fillStyle = "#b8b8b8"; // grout
-    for (const at of [0, size / 2]) {
-      g.fillRect(at, 0, 3, size);
-      g.fillRect(0, at, size, 3);
-    }
-  } else if (pattern === "planks") {
-    const rows = 8;
-    for (let r = 0; r < rows; r++) {
-      const v = Math.round(225 + 30 * rand());
-      g.fillStyle = `rgb(${v},${v},${v})`;
-      g.fillRect(0, (r * size) / rows, size, size / rows);
-      g.fillStyle = "#9a9a9a";
-      g.fillRect(0, (r * size) / rows, size, 2);
-      g.fillRect(((r % 2) + 0.5) * (size / 2) * rand(), (r * size) / rows, 2, size / rows); // butt joint
-    }
-  } else {
-    // speckle: soft blotches plus finer mottling, like grass, soil or concrete seen from standing height.
-    // Both layers wrap around (so tiles meet without a seam) and are smooth over several texels: per-texel
-    // noise is finer than mipmapping can filter and shimmers when a low camera moves.
-    const blotches = periodicNoise(16, size, rand);
-    const mottle = periodicNoise(64, size, rand);
-    const img = g.createImageData(size, size);
-    for (let i = 0; i < size * size; i++) {
-      const v = Math.round(228 + 27 * blotches[i] + 10 * (mottle[i] - 0.5));
-      img.data.fill(Math.max(0, Math.min(255, v)), 4 * i, 4 * i + 3);
-      img.data[4 * i + 3] = 255;
-    }
-    g.putImageData(img, 0, 0);
-  }
-  groundCanvases.set(pattern, c);
-  return c;
+function groundLook(geom, look) {
+  return groundMaterial(groundStyle(geom.material, look), rgbaColor(geom.rgba), renderer.capabilities.getMaxAnisotropy());
 }
 
-// Value noise on a `cells` x `cells` grid that wraps around, sampled at `size` x `size` with smooth
-// (smoothstep) interpolation: values in 0..1, seamless when tiled.
-function periodicNoise(cells, size, rand) {
-  const grid = Float32Array.from({ length: cells * cells }, () => rand());
-  const at = (x, y) => grid[((y + cells) % cells) * cells + ((x + cells) % cells)];
-  const smooth = (t) => t * t * (3 - 2 * t);
-  const out = new Float32Array(size * size);
-  for (let py = 0; py < size; py++) {
-    const fy = (py / size) * cells;
-    const y0 = Math.floor(fy);
-    const ty = smooth(fy - y0);
-    for (let px = 0; px < size; px++) {
-      const fx = (px / size) * cells;
-      const x0 = Math.floor(fx);
-      const tx = smooth(fx - x0);
-      const top = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * tx;
-      const bottom = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * tx;
-      out[py * size + px] = top + (bottom - top) * ty;
-    }
+function groundMapping(mat, x, y, offset = [0, 0]) {
+  for (const tex of new Set([mat.map, mat.bumpMap, mat.roughnessMap])) {
+    tex.repeat.set(x, y);
+    tex.offset.set(...offset);
   }
-  return out;
-}
-
-function groundTexture(pattern) {
-  const tex = new THREE.CanvasTexture(groundCanvas(pattern)); // its own texture, so disposing it is safe
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  return tex;
 }
 
 // A MuJoCo heightfield as a displaced grid. Rows run from -y to +y (MuJoCo's order); PlaneGeometry
@@ -324,22 +258,17 @@ function hfieldObject(geom, desc, floats, look) {
   }
   g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   g.computeVertexNormals();
-  const tex = groundTexture(look ? look.pattern : "speckle");
+  const mat = groundLook(geom, look);
+  mat.vertexColors = true;
   const tile = look ? look.tile : 0.6;
-  tex.repeat.set((2 * rx) / tile, (2 * ry) / tile);
+  let offset = [0, 0];
   const f = floorFrame;
   if (f && look && f.material === geom.material) {
     // Same surface as the floor: line the pattern up with the floor's, so the two meet without a seam.
     const shift = (a) => ((a % 1) + 1) % 1;
-    tex.offset.set(shift((f.half - f.x + geom.pos[0] - rx) / tile), shift((f.halfY - f.y + geom.pos[1] - ry) / tile));
+    offset = [shift((f.half - f.x + geom.pos[0] - rx) / tile), shift((f.halfY - f.y + geom.pos[1] - ry) / tile)];
   }
-  const mat = new THREE.MeshStandardMaterial({
-    color: rgbaColor(geom.rgba),
-    map: tex,
-    vertexColors: true,
-    roughness: 0.95,
-    metalness: 0,
-  });
+  groundMapping(mat, (2 * rx) / tile, (2 * ry) / tile, offset);
   const mesh = new THREE.Mesh(g, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -415,7 +344,7 @@ function disposeWorld() {
   worldRoot.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) {
-      if (o.material.map) o.material.map.dispose();
+      for (const tex of new Set([o.material.map, o.material.bumpMap, o.material.roughnessMap])) tex?.dispose();
       o.material.dispose();
     }
   });
@@ -473,13 +402,12 @@ async function applyScene(desc) {
       const g = geometryFor(geom, meshGeometries);
       if (!g) continue;
       const mat = look
-        ? new THREE.MeshStandardMaterial({ color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0 })
+        ? groundLook(geom, look)
         : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3], desc.surfaces);
       if (g.userData.vertexColors) mat.vertexColors = true;
       if (look && geom.type === "box") {
         // Terrain blocks (stairs, ramps, stones) share the ground's surface, tiled in meters on every face:
         // one repeat for the whole box squeezed the pattern on thin faces (risers, sides) into shimmer.
-        mat.map = groundTexture(look.pattern === "checker" ? "speckle" : look.pattern);
         boxUvsInMeters(g, geom.size, look.tile);
       }
       obj = new THREE.Mesh(g, mat);
@@ -1622,6 +1550,7 @@ function setDrawer(open) {
 
 function setWorldPanel(open) {
   setOpen("world-toggle", "world-panel", open);
+  if (open) renderGround();
   if (open) setOpen("help-toggle", "help", false);
   if (open && narrow()) setOpen("drawer-toggle", "drawer", false);
   storageSet("robotforge.world", open ? "1" : "0");
@@ -1945,6 +1874,7 @@ function selectTab(name) {
   for (const tab of $("world-panel").querySelectorAll("[role=tab]")) tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
   for (const body of $("world-panel").querySelectorAll(".tab-body")) body.hidden = body.dataset.body !== name;
   storageSet("robotforge.tab", name);
+  if (name === "terrain") renderGround();
 }
 
 for (const tab of $("world-panel").querySelectorAll("[role=tab]")) tab.addEventListener("click", () => selectTab(tab.dataset.tab));
@@ -1983,6 +1913,7 @@ function renderMaps() {
 function renderGround() {
   const cat = worldInfo.catalog;
   if (!cat) return;
+  const preview = !$("world-panel").hidden && !$("world-panel").querySelector('[data-body="terrain"]').hidden;
   $("ground-list").replaceChildren(
     ...Object.entries(cat.grounds).map(([name, rgb]) => {
       const b = el("button", "swatch");
@@ -1990,9 +1921,8 @@ function renderGround() {
       b.setAttribute("aria-pressed", String(worldInfo.floor === name));
       b.dataset.off = worldInfo.isWorld ? "0" : "1";
       b.disabled = !worldInfo.isWorld || busy;
-      const dot = el("i");
-      dot.style.setProperty("--c", `rgb(${rgb.map((c) => Math.round(c * 255)).join(",")})`);
-      b.append(dot, el("span", "", tOr(`ground_${name}`, name)));
+      b.dataset.ground = name;
+      b.append(groundPreview(name, rgb, preview), el("span", "", tOr(`ground_${name}`, name)));
       b.addEventListener("click", () => runChoice(b, { type: "world", action: "floor", style: name }));
       return b;
     })

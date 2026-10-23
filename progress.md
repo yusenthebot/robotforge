@@ -657,3 +657,25 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
   Existing performance budgets and relevant physics/interface regressions remain guardrails.
 - This is a documentation and goal-setting change only.
   No material, renderer, gameplay or success-rate code changed; no new visual or performance result is claimed.
+
+
+## Round 50: shared surface quality and direct exploration (2026-10-23)
+
+- Established three-scene visual/performance comparisons with fixed cameras, real cached Panda/Go2 meshes, paused matching physics and cold/warm browser navigations.
+  Three alternating baseline/candidate pairs retain every sample, including initial candidate first-frame delays up to 1.848 seconds.
+  World/scene JSON and captured initial physics arrays match; later captures normalize an existing startup selection-ring-size artifact without changing app behavior.
+- Added shared 256-pixel ground color/detail tiles and distinct roughness/bump profiles across planes, heightfields and terrain blocks.
+  GPU Source sharing and disposal avoid per-object image allocations; park textures fall from 12 to 7.
+  Added wood/bark/stone/fabric detail and corrected texture strength/scale semantics.
+- Ground previews use the same tiles; separate ground-button/training-marker CSS fixes tiny ground hit areas while keeping training markers 9 x 9 pixels.
+  Native browser interaction switches tile/wood, drives the rover 1.52043 m and resets within 0.00001074 m in XY.
+  The actual 34.733-second video is decoded and visually inspected.
+- Validation: 242 focused, four actual GPU/chooser, eight gamepad browser and seven unchanged canonical framework cases pass; wheel, Ruff, actual CLI/MCP smoke and independent review pass.
+  Full install/viewer budget sections pass without changing limits: 163 MB installation, 0.65-second CLI first frame and about 60 FPS at DPR 2.
+  No complete default-suite rerun for this viewer-only change; prior full framework validation stays separate.
+- Residual: wood whole-frame low-angle flips increase from 421 to 594 per megapixel; grass boundary stays 30 and stairs 229 to 227.
+  Weaker floor grain/bump did not improve it and was reverted; isolation puts much of this view's extra signal in prop detail, with all evidence retained.
+  No lighting or shadow settings changed, and no blanket visual/performance improvement or new game loop is claimed.
+- Evidence: docs/bench/2026-10-23-visual-playability.md/.json and ../robotforge-evidence/2026-10-23-visual-playability/.
+  No new dependencies, physics/controller/interface changes, individual manipulation tuning, release or paid Actions.
+  Next: coherent lighting/contact readability, temporal stability and a complete easy-to-start scene play loop against this baseline.
