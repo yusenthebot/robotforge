@@ -1,4 +1,4 @@
-"""Transactional repositioning of existing rigid props in the local viewer."""
+"""Guarded rigid-prop edits and copies with a one-use inverse in the local viewer."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ class Edit:
     token: str
     world_sha256: str
     name: str
-    before: ObjectEntry
+    before: ObjectEntry | None
     after: ObjectEntry | None
     index: int
     pose: carry.Snapshot
@@ -192,7 +192,6 @@ def _task_users(world, name):
 
 
 def edit(pg: Playground, message: dict) -> dict:
-    from robotforge.design import terrain
     from robotforge.playground import PlaygroundError
 
     removing = message.get("action") == "remove_object"
@@ -209,14 +208,47 @@ def edit(pg: Playground, message: dict) -> dict:
                 raise PlaygroundError(f"{before.name} is used by task {', '.join(users)}; edit the task first")
         after = None
         if not removing:
-            pos = request.pos[:2]
-            if len(request.pos) == 3:
-                ground = terrain.Ground.build(world.terrain, world.floor.style)
-                if abs(request.pos[2] - ground.height(*pos)) > 0.001:
-                    pos = [*pos, request.pos[2] + (0 if before.shape in {"table", "bin"} else before.size[-1] / 2)]
-            after = before.model_copy(update={"pos": pos, "yaw": request.yaw})
+            after = before.model_copy(update={"pos": _surface_pos(world, before, request.pos), "yaw": request.yaw})
         index = world.objects.index(before)
         return _commit(pg, store, request, before, after, index)
+
+
+def _surface_pos(world, entry, position):
+    from robotforge.design import terrain
+
+    pos = position[:2]
+    if len(position) == 3:
+        ground = terrain.Ground.build(world.terrain, world.floor.style)
+        if abs(position[2] - ground.height(*pos)) > 0.001:
+            pos = [*pos, position[2] + (0 if entry.shape in {"table", "bin"} else entry.size[-1] / 2)]
+    return pos
+
+
+def duplicate(pg: Playground, message: dict) -> dict:
+    """Copy server-owned authored settings, leaving the selected source and its task bindings alone."""
+    from robotforge.design.world import ObjectEntry
+    from robotforge.playground import PlaygroundError
+
+    request = _parse(Reposition, message, "object copy")
+    with pg.session.execution.command("viewer_duplicate_object"):
+        store = pg._require_store()
+        with pg.lessons._lock, pg.session.lock:
+            world = _guard(pg, store, request.version, request.generation, request.world_sha256)
+            source = next((o for o in world.objects if o.name == request.name and o.shape in SHAPES), None)
+            if source is None:
+                raise PlaygroundError("select an existing editable prop")
+        taken = {entry.name for entries in (world.robots, world.objects, world.terrain) for entry in entries}
+        n = 2
+        while True:
+            suffix = f"_{n}"
+            name = source.name[: 32 - len(suffix)] + suffix
+            if name not in taken:
+                break
+            n += 1
+        clone = ObjectEntry.model_validate(
+            {**source.model_dump(), "name": name, "pos": _surface_pos(world, source, request.pos), "yaw": request.yaw}
+        )
+        return _commit(pg, store, request, None, clone, len(world.objects))
 
 
 def _guard(pg, store, version, generation, digest):
