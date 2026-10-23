@@ -25,13 +25,13 @@ export function groundStyle(materialName, look) {
 }
 
 // Periodic value noise: filtered features and matching edges prevent seams and distant shimmer.
-function noise(cells, rand) {
-  const grid = Float32Array.from({ length: cells * cells }, rand);
-  const at = (x, y) => grid[(y % cells) * cells + (x % cells)];
+function noise(cells, rand, rows = cells) {
+  const grid = Float32Array.from({ length: cells * rows }, rand);
+  const at = (x, y) => grid[(y % rows) * cells + (x % cells)];
   const smooth = (t) => t * t * (3 - 2 * t);
   const out = new Float32Array(SIZE * SIZE);
   for (let y = 0; y < SIZE; y++) {
-    const fy = y / SIZE * cells, iy = Math.floor(fy), ty = smooth(fy - iy);
+    const fy = y / SIZE * rows, iy = Math.floor(fy), ty = smooth(fy - iy);
     for (let x = 0; x < SIZE; x++) {
       const fx = x / SIZE * cells, ix = Math.floor(fx), tx = smooth(fx - ix);
       const a = at(ix, iy) * (1 - tx) + at(ix + 1, iy) * tx;
@@ -46,6 +46,11 @@ const fract = (v) => v - Math.floor(v);
 const edge = (v) => Math.min(fract(v), 1 - fract(v));
 const byte = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255);
 
+// Average a thin joint over a source texel instead of snapping it to a wide dark pixel.
+function stripeCoverage(distance, halfWidth, footprint) {
+  return Math.max(0, Math.min(distance + footprint, halfWidth) - Math.max(distance - footprint, -halfWidth)) / (2 * footprint);
+}
+
 function surfaceTile(style) {
   if (!Object.hasOwn(PROFILES, style)) style = "concrete";
   if (tiles.has(style)) return tiles.get(style);
@@ -53,6 +58,8 @@ function surfaceTile(style) {
   const rand = () => ((seed = seed * 16807 % 2147483647) / 2147483647);
   const broad = noise(8, rand), fine = noise(48, rand);
   const boards = Array.from({ length: 8 }, rand);
+  const figure = style === "wood" ? noise(3, rand, 24) : null;
+  const fibres = style === "wood" ? noise(6, rand, 96) : null;
   const make = () => {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = SIZE;
@@ -68,11 +75,18 @@ function surfaceTile(style) {
     let roughness = PROFILES[style].roughness;
     if (style === "wood") {
       const row = Math.floor(v * 8);
-      const grain = Math.sin((v * 64 + 0.45 * b + 0.18 * Math.sin(u * Math.PI * 2)) * Math.PI * 2);
-      const joint = edge(v * 8) < 0.025 || edge(u - boards[row]) < 0.004;
-      height = joint ? 0.05 : 0.64 + 0.09 * grain + 0.08 * f;
-      shade = joint ? 0.72 : 0.87 + boards[row] * 0.09 + grain * 0.025 + f * 0.025;
-      roughness += joint ? 0.36 : 0.1 * (1 - f);
+      // Long, irregular fibres and broader figure share the object wood's 0.575 mean.
+      // Shift each board independently; the fields themselves wrap at the tile boundary.
+      const sx = (x + Math.floor(boards[row] * SIZE)) % SIZE, sample = y * SIZE + sx;
+      const grain = 0.15 + 0.6 * figure[sample] + 0.25 * fibres[sample];
+      const joint = Math.max(stripeCoverage(edge(v * 8), 1 / 150, 4 / SIZE),
+        stripeCoverage(edge(u - boards[row]), 1 / 1200, 0.5 / SIZE)); // 2 mm across the 1.2 m tile
+      height = 0.62 + 0.18 * (grain - 0.575) + 0.025 * (f - 0.5);
+      shade = 0.875 + boards[row] * 0.075 + 0.18 * (grain - 0.575) + 0.01 * (f - 0.5);
+      roughness += 0.05 + 0.06 * (0.575 - grain);
+      height += (0.18 - height) * joint;
+      shade += (0.68 - shade) * joint;
+      roughness += (0.8 - roughness) * joint;
     } else if (style === "tile") {
       const grout = Math.min(edge(u * 2), edge(v * 2)) < 0.018;
       shade = grout ? 0.72 : 0.97 + b * 0.025;
