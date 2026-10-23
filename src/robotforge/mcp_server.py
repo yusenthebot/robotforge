@@ -33,6 +33,7 @@ from robotforge import demonstration_tool, lessons, tool_input, wording
 from robotforge.behaviors import Kind, catch_stand, fetch
 from robotforge.behaviors import catch as catching
 from robotforge.behaviors import mcp_tools as operate_tools
+from robotforge.behaviors.execution import ArmExecution
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
@@ -288,9 +289,6 @@ class _Server(MCPServer):
                 in {
                     "simulate",
                     "set_controls",
-                    "move_arm",
-                    "pick_and_place",
-                    "operate",
                 }
                 or name in {"demonstration", "mapping"}
                 and arguments.get("action") in {"replay", "explore"}
@@ -1021,7 +1019,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         watched=lambda: bool(hub.clients) and not playground.session.paused,
         wall_limit=lambda: FAST_WALL_LIMIT,
     )
-    operate_tools.register(server, playground, run_until)
+    operate_tools.register(
+        server,
+        playground,
+        run_until,
+        watched=lambda: bool(hub.clients) and not playground.session.paused,
+        wall_limit=lambda: FAST_WALL_LIMIT,
+    )
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
@@ -1037,13 +1041,24 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     lessons.register(server)
     policy_tools.register(server)
 
-    async def carrier_stands(robot: str) -> dict[str, Any]:
-        """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
-        stop = playground.behaviors.stop_carrier(robot)
-        if stop is None:
-            return {}
-        waited = await run_until(stop.still, stop.seconds)
-        return {"carrier_stopped": f"{stop.robot} stopped first and stood still after {waited['sim_seconds']:.1f} s"}
+    arm_executions = {
+        name: RecordedExecution(
+            playground,
+            lambda: bool(hub.clients) and not playground.session.paused,
+            lambda: FAST_WALL_LIMIT,
+            owner=name,
+            sim_seconds=seconds,
+            phase_count=phases,
+        )
+        for name, seconds, phases in (("move_arm", 26.0, 2), ("pick_and_place", 336.5, 3))
+    }
+
+    def arm_record(execution, robot, name, params):
+        execution.call.record.update(
+            task={"domain": "behavior", "robot": robot, "name": name},
+            algorithm={"domain": "behavior", "name": name, "params": params},
+            seeds={"mode": "current_state"},
+        )
 
     @server.tool()
     def stop(robot: str) -> str:
@@ -1107,18 +1122,33 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             )
 
     @server.tool()
+    @arm_executions["move_arm"].owned
     async def move_arm(robot: str, position: list[float], gripper: Literal["open", "close"] | None = None) -> str:
         """Move an arm's gripper to [x, y, z] (meters, world frame) pointing down, optionally opening or closing the
         gripper on the way. Fails with the distance and reach if the point cannot be reached. robot is an arm, or a
         robot carrying one ("rover", or "rover/arm" for the mounted arm); a robot carrying it stops first."""
-        with _tool_errors():
-            robot = playground.behaviors.resolve(robot, arm=True)
-            stopped = await carrier_stands(robot)
-            # Planned off the event loop: going over a carrier it can take a second, and the viewer froze meanwhile.
-            arm = await asyncio.to_thread(playground.behaviors.move_arm, robot, position, gripper)
-            run = await run_until(lambda: arm.done, 20.0)
-            tcp = playground.session.data.site_xpos[arm.site]
-            return _json({"tool_position": [round(float(v), 3) for v in tcp], **run, **stopped})
+        execution = arm_executions["move_arm"]
+        async with ArmExecution(playground, execution.call.run) as family:
+            execution.call.metrics["phases"] = family.phases
+            with _tool_errors(preserve_execution=True):
+                robot = playground.behaviors.resolve(robot, arm=True)
+                arm_record(execution, robot, "move_arm", {"position": position, "gripper": gripper})
+                stopped = await family.carrier_stands(robot)
+                arm = await family.plan(playground.behaviors.move_arm, robot, position, gripper)
+                family.budget(execution, [p["limit_seconds"] for p in family.phases] + [20.0])
+                run = await family.advance(lambda: arm.done, 20.0, "motion")
+                with playground.session.lock:
+                    family.check()
+                    tcp = playground.session.data.site_xpos[arm.site]
+                    execution.call.metrics["behavior_done"] = bool(arm.done)
+                    return _json(
+                        {
+                            "tool_position": [round(float(v), 3) for v in tcp],
+                            **run,
+                            **stopped,
+                            "execution": execution.reference(),
+                        }
+                    )
 
     @server.tool()
     @gripper_execution.owned
@@ -1145,6 +1175,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         return _json({"gripper": state, **run, "execution": gripper_execution.reference()})
 
     @server.tool()
+    @arm_executions["pick_and_place"].owned
     async def pick_and_place(
         robot: str,
         object: str,
@@ -1185,72 +1216,106 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         at). For two arms that stand apart, each out of reach of the other's side; both must stay where they are (go is
         not used, and an arm riding on a robot that moves is refused); both must be free, no motion or hand-over
         running on either."""
-        with _tool_errors():
-            robot = playground.behaviors.resolve(robot, arm=True)
-            stopped = await carrier_stands(robot)
-            if hand_to is not None:
-                hand_to = playground.behaviors.resolve(hand_to, arm=True)
-                relayed, info = await asyncio.to_thread(playground.behaviors.hand_over, robot, hand_to, object, target)
-                run = await run_until(lambda: relayed.done, relayed.time_limit)
-                settle = await run_until(lambda: False, 0.5)
-                return _json(
-                    {
-                        **playground.behaviors.placed(info["object"], info["region"]),
-                        "object": info["object"],
-                        "target": target,
-                        **relayed.result(),
-                        "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
-                        "shown_live": run["shown_live"],
-                        **stopped,
-                    }
+        execution = arm_executions["pick_and_place"]
+        async with ArmExecution(playground, execution.call.run) as family:
+            execution.call.metrics["phases"] = family.phases
+            with _tool_errors(preserve_execution=True):
+                robot = playground.behaviors.resolve(robot, arm=True)
+                arm_record(
+                    execution,
+                    robot,
+                    "pick_and_place",
+                    {"object": object, "target": target, "go": go, "grasp": grasp, "pour": pour, "hand_to": hand_to},
                 )
-            # Planned off the event loop: on a carrier, an errand, or advising where a refused pick works, that can
-            # take seconds, and the viewer froze meanwhile.
-            motion, info = await asyncio.to_thread(
-                playground.behaviors.pick_and_place, robot, object, target, go, grasp, pour
-            )
-            object = info["object"]  # as the world spells it
-            started_at = playground.behaviors.position_of(object)
-            errand = motion if isinstance(motion, fetch.Errand) else None
-            caught = motion if isinstance(motion, (catching.Catch, catch_stand.Approach)) else None
-            if caught is not None:  # caught off a moving belt, then put down or carried there
-                run = await run_until(lambda: motion.done, caught.time_limit)
-            elif errand is None:
-                run = await run_until(lambda: motion.done, 100.0 if pour else 40.0)
-            else:  # a reset or a world edit ends it; one no longer attached is waited for no more
-                robot_name = errand.robot
-                run = await run_until(
-                    lambda: errand.done or playground.behaviors.errand(robot_name) is not errand, errand.time_limit
+                stopped = await family.carrier_stands(robot)
+                if hand_to is not None:
+                    hand_to = playground.behaviors.resolve(hand_to, arm=True)
+                    family.reserve(hand_to)
+                    relayed, info = await family.plan(playground.behaviors.hand_over, robot, hand_to, object, target)
+                    family.budget(execution, [p["limit_seconds"] for p in family.phases] + [relayed.time_limit, 0.5])
+                    run = await family.advance(lambda: relayed.done, relayed.time_limit, "handover")
+                    settle = await family.advance(lambda: False, 0.5, "settle", legacy_elapsed=True)
+                    with playground.session.lock:
+                        family.check()
+                        execution.call.metrics["behavior_done"] = bool(relayed.done)
+                        return _json(
+                            {
+                                **playground.behaviors.placed(info["object"], info["region"]),
+                                "object": info["object"],
+                                "target": target,
+                                **relayed.result(),
+                                "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
+                                "shown_live": run["shown_live"],
+                                **stopped,
+                                "execution": execution.reference(),
+                            }
+                        )
+                # Planned off the event loop: on a carrier, an errand, or advising where a refused pick works, that can
+                # take seconds, and the viewer froze meanwhile.
+                motion, info = await family.plan(
+                    playground.behaviors.pick_and_place, robot, object, target, go, grasp, pour
                 )
-                if not errand.done:  # out of time: it stops where it is, holding what it holds
-                    playground.behaviors.stop(robot_name)
-                    errand.interrupt(
-                        "it ran out of time; call pick_and_place again with the same object and target to go on",
-                        float(playground.session.data.time),
+                object = info["object"]  # as the world spells it
+                started_at = playground.behaviors.position_of(object)
+                errand = motion if isinstance(motion, fetch.Errand) else None
+                caught = motion if isinstance(motion, (catching.Catch, catch_stand.Approach)) else None
+                cap = (
+                    caught.time_limit
+                    if caught is not None
+                    else errand.time_limit
+                    if errand is not None
+                    else 100.0
+                    if pour
+                    else 40.0
+                )
+                family.budget(execution, [p["limit_seconds"] for p in family.phases] + [cap, 0.5])
+                if caught is not None:  # caught off a moving belt, then put down or carried there
+                    run = await family.advance(lambda: motion.done, caught.time_limit, "catch")
+                elif errand is None:
+                    run = await family.advance(lambda: motion.done, 100.0 if pour else 40.0, "motion")
+                else:  # a reset or a world edit ends it; one no longer attached is waited for no more
+                    robot_name = errand.robot
+                    run = await family.advance(
+                        lambda: errand.done or playground.behaviors.errand(robot_name) is not errand,
+                        errand.time_limit,
+                        "errand",
                     )
-                    errand.why = "out_of_time"
-            settle = await run_until(lambda: False, 0.5)
-            region = info["region"] if caught is None or caught.region is None else caught.region
-            result = (
-                playground.behaviors.placed(object, region, started_at) if region is not None else {"success": False}
-            )
-            if info.get("pour"):
-                result = playground.behaviors.poured(info)
-            if info.get("hold"):
-                result = playground.behaviors.held(info)
-            return _json(
-                {
-                    **result,
-                    "object": object,
-                    "target": target,
-                    **({"grasp": info["grasp"]} if info.get("grasp") else {}),
-                    **(errand.result() if errand is not None else {}),
-                    **(caught.result() if caught is not None else {}),
-                    "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
-                    "shown_live": run["shown_live"],
-                    **stopped,
-                }
-            )
+                    if not errand.done:  # out of time: it stops where it is, holding what it holds
+                        with family.command(check_deadline=False):
+                            playground.behaviors.stop(robot_name)
+                        errand.interrupt(
+                            "it ran out of time; call pick_and_place again with the same object and target to go on",
+                            float(playground.session.data.time),
+                        )
+                        errand.why = "out_of_time"
+                settle = await family.advance(lambda: False, 0.5, "settle", legacy_elapsed=True)
+                with playground.session.lock:
+                    family.check()
+                    execution.call.metrics["behavior_done"] = bool(motion.done)
+                    region = info["region"] if caught is None or caught.region is None else caught.region
+                    result = (
+                        playground.behaviors.placed(object, region, started_at)
+                        if region is not None
+                        else {"success": False}
+                    )
+                    if info.get("pour"):
+                        result = playground.behaviors.poured(info)
+                    if info.get("hold"):
+                        result = playground.behaviors.held(info)
+                    return _json(
+                        {
+                            **result,
+                            "object": object,
+                            "target": target,
+                            **({"grasp": info["grasp"]} if info.get("grasp") else {}),
+                            **(errand.result() if errand is not None else {}),
+                            **(caught.result() if caught is not None else {}),
+                            "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
+                            "shown_live": run["shown_live"],
+                            **stopped,
+                            "execution": execution.reference(),
+                        }
+                    )
 
     @server.tool()
     def plan_grasp(robot: str, object: str) -> str:
@@ -1542,11 +1607,15 @@ MAX_CRASH_TEXT = 200  # characters of an unexpected error's own text that an age
 
 
 @contextlib.contextmanager
-def _tool_errors() -> Iterator[None]:
+def _tool_errors(*, preserve_execution: bool = False) -> Iterator[None]:
     """Turn failures into ToolError so the agent sees the actual message. The MCP SDK would answer anything
     else with a bare "Error executing tool" and keep the reason in a log the agent and user never see."""
     try:
         yield
+    except ExecutionError as exc:
+        if preserve_execution:
+            raise
+        raise ToolError(str(exc)) from exc
     except (PlaygroundError, BehaviorError, ModelLoadError, IndexError, ValueError) as exc:
         raise ToolError(str(exc)) from exc
     except ToolError:

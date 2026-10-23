@@ -147,6 +147,7 @@ class ExecutionRun:
         self.shown_live = False
         self.reason = EndReason.COMPLETED
         self._interrupted: str | None = None
+        self._invalidated: str | None = None
         self._entered = False
         self.resources: set[str] = set()
         self._workers: set[asyncio.Task] = set()
@@ -215,11 +216,20 @@ class ExecutionRun:
             if self._interrupted is not None:
                 self.reason = EndReason.CANCELLED
                 raise ExecutionError(EndReason.CANCELLED, self._interrupted)
+            if self._invalidated is not None:
+                self.reason = EndReason.INVALIDATED
+                raise ExecutionError(EndReason.INVALIDATED, self._invalidated)
 
     def interrupt(self, message: str = "the execution was stopped; run it again to continue") -> None:
         with self.session.lock:
             self._interrupted = message
             self.reason = EndReason.CANCELLED
+
+    def invalidate(self, message: str) -> None:
+        """Refuse further work while retaining ownership identity for safe cleanup."""
+        with self.session.lock:
+            self._invalidated = message
+            self.reason = EndReason.INVALIDATED
 
     def check(self) -> None:
         self.check_valid()

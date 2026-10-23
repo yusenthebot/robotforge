@@ -42,8 +42,10 @@ class RecordedExecution:
         *,
         owner: str,
         sim_seconds: float,
+        phase_count: int = 1,
     ):
         self.owner = owner
+        self.phase_count = phase_count
         self.sim_seconds = sim_seconds
         self.pg = playground
         self.session = playground.session
@@ -62,7 +64,11 @@ class RecordedExecution:
         @functools.wraps(invoke)
         async def execute(*args: Any, **kwargs: Any) -> str:
             # Configure the task's actual duration after binding, without starting a new wall deadline.
-            wall = self.sim_seconds * 3 + 5 if self.watched() else float(self.wall_limit())
+            wall = (
+                self.sim_seconds * 3 + 5 * self.phase_count
+                if self.watched()
+                else float(self.wall_limit()) * self.phase_count
+            )
             with self.session.execution.run(
                 self.owner, RunLimits(self.sim_seconds, max(wall, 1e-12)), self.watched
             ) as run:
