@@ -646,3 +646,14 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
 - Evidence: docs/bench/2026-10-23-arm-execution.md/.json and ../robotforge-evidence/2026-10-23-arm-execution/.
   No success-rate/reward/controller tuning, new dependencies, release or paid Actions; native Windows, optional RL and unavailable type/security tools remain unverified.
 - Next: migrate the remaining direct simulation/control and admission-only adapters incrementally against the unchanged framework baseline.
+
+## Round 49: overall visual quality and playability goal (2026-10-23)
+
+- User set the broader goal: improve simulation materials and overall visual quality while keeping the project lightweight and quick to load, and improve playability.
+  Single-action success-rate work such as weight lifting or drawer operation stays deferred.
+- Updated GOAL, ROADMAP and STATUS so the next run starts from this direction.
+  Existing execution, capability, task and experiment infrastructure serves the experience work; remaining adapter migrations no longer define the default next milestone.
+- Next: representative robot/indoor/outdoor visual and interaction baselines, measured cold/warm loading and rendering costs, then shared visual improvements and a playable scene loop selected by observed benefit.
+  Existing performance budgets and relevant physics/interface regressions remain guardrails.
+- This is a documentation and goal-setting change only.
+  No material, renderer, gameplay or success-rate code changed; no new visual or performance result is claimed.
