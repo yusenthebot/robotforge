@@ -626,3 +626,23 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
   Evidence: docs/bench/2026-10-22-pose-gripper.md/.json and ../robotforge-evidence/2026-10-22-pose-gripper/.
   No controller/reward/success-rate tuning, dependencies, release or paid Actions; native Windows, optional RL and unavailable type/security tools remain unverified.
 - Next: arm planning and multi-phase adapters in separate increments, preserving carrier settling and phase budgets.
+
+## Round 48: arm planning and multi-phase execution (2026-10-23)
+
+- Migrated MCP move_arm, pick_and_place and operate to RecordedExecution/ArmExecution; tracked script arm planners and kept one script family ledger.
+  The existing factories and controller math still own queues, catches, relays, fetch errands and mechanism visits.
+  Carrier waits, original phase caps, legacy settle rounding and script cumulative limits remain; whole-call metadata/preparation and all phases consume one anchored budget.
+- Added controller actor provenance and same-step invalidation checks.
+  Foreign replacements survive cleanup; delayed callbacks are disarmed; owned navigation ends; repeated cancellation retains native workers and reaps the script child.
+  Owned Errand contact/grip changes restore before reset/model replacement discards old IDs.
+- Frozen prior-core 6ac862e captures: 13 completed cases exact in steps, public response and qpos/qvel/ctrl.
+  The moving-carrier unreachable request still refuses after the same 670 settlement steps and final state; only its newly attached empty arm is now removed.
+  This is not successful mounted-arm coverage and is not counted as such.
+- Actual installed MCP and Chrome: movement, handover and mobile operation agree in initial state/results/steps/final arrays across headless, playing, paused and disconnected modes.
+  Actual stop/reset, script wrapper flow and empty browser error list pass; the decoded/inspected 141.80 s MP4 is retained for the user.
+- Verification: 3285 passed, 127 skipped, zero failures/errors over all 3412 default-selected cases (830.2 s); 117 focused tests, 37 new cases, 8 real Chrome gamepad tests, wheel, Ruff, CLI smoke and seven unchanged framework baseline cases pass.
+  Independent Python review approved after mounted alias, ownership, deadline, old-settle rounding and repeated script cancellation regressions.
+  Source/tests/scripts/dependencies remained unchanged during final verification.
+- Evidence: docs/bench/2026-10-23-arm-execution.md/.json and ../robotforge-evidence/2026-10-23-arm-execution/.
+  No success-rate/reward/controller tuning, new dependencies, release or paid Actions; native Windows, optional RL and unavailable type/security tools remain unverified.
+- Next: migrate the remaining direct simulation/control and admission-only adapters incrementally against the unchanged framework baseline.

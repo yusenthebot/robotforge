@@ -26,6 +26,7 @@ from typing import Any
 import mujoco
 
 import robotforge
+from robotforge.behaviors.execution import ArmExecution
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.demonstrations import RATE_HZ
 from robotforge.playground import Playground, PlaygroundError
@@ -142,9 +143,17 @@ class ScriptRunner:
         self.pg = playground
         self.watched = watched
         self._execution: ExecutionRun | None = None
+        self._arms: ArmExecution | None = None
         self._command_robots: set[str] = set()
         self._controlled: dict[str, Any] = {}
         self._replays: list[Any] = []
+
+    def _arm_execution(self) -> ArmExecution:
+        if self._arms is None:
+            if self._execution is None:
+                raise PlaygroundError("the script has no active execution")
+            self._arms = ArmExecution(self.pg, self._execution)
+        return self._arms
 
     async def run(
         self,
@@ -157,12 +166,15 @@ class ScriptRunner:
         try:
             with self.pg.session.execution.run("script", limits, self.watched) as execution:
                 self._execution = execution
+                self._arms = ArmExecution(self.pg, execution)
                 self._command_robots = set()
                 self._controlled = {}
                 self._replays = []
                 try:
-                    return await self._run_script(path, args, execution)
+                    async with self._arms:
+                        return await self._run_script(path, args, execution)
                 finally:
+                    self._arms = None
                     self._execution = None
         except ExecutionError as exc:
             raise PlaygroundError(str(exc)) from exc
@@ -299,19 +311,27 @@ class ScriptRunner:
                     if proc is None or proc.returncode != 0 or timed_out or interrupted is not None:
                         with self.pg.session.lock:
                             if execution.current:
+                                self._arms.cancel()
                                 for replay in self._replays:
                                     if self.pg.demonstrations.replays.get(replay.robot) is replay and not replay.done:
                                         replay.cancel()
                                 for robot, controller in self._controlled.items():
+                                    if robot in self._arms.expected and id(controller) in self._arms.owned:
+                                        continue  # the family cleanup already protects foreign navigation on this base
                                     if self.pg.session.controllers.get(robot) is controller:
                                         self.pg.behaviors.stop(robot)
 
             cleaning = asyncio.create_task(cleanup())
-            try:
-                await asyncio.shield(cleaning)
-            except asyncio.CancelledError:
-                await cleaning
-                raise
+            cancelled = False
+            while True:
+                try:
+                    await asyncio.shield(cleaning)
+                    break
+                except asyncio.CancelledError:
+                    # Repeated caller cancellation must not cancel the cleanup task or detach native work.
+                    cancelled = True
+            if cancelled:
+                raise asyncio.CancelledError
 
         text = tidy_output(output.decode("utf-8", errors="replace"), path.parent)
         if len(text) > OUTPUT_LIMIT:
@@ -345,7 +365,9 @@ class ScriptRunner:
             handler = getattr(self, f"_op_{op}", None)
             if handler is None:
                 raise PlaygroundError(f"unknown request {op!r}")
-            result = handler(req)
+            # Async handlers mark only their actual attachment below; a command context must never span stepping.
+            with self._arms.command() if self._arms is not None else contextlib.nullcontext():
+                result = handler(req)
             if asyncio.iscoroutine(result):
                 result = await result
             if op in {"move", "run_policy", "start_controller"}:
@@ -452,7 +474,8 @@ class ScriptRunner:
         return self.pg.demonstrations.stop(req.get("name"))
 
     async def _op_demo_replay(self, req) -> dict:
-        replay = self.pg.demonstrations.replay(str(req["name"]), req.get("robot"), str(req.get("mode", "commands")))
+        with self._arm_execution().command():
+            replay = self.pg.demonstrations.replay(str(req["name"]), req.get("robot"), str(req.get("mode", "commands")))
         self._replays.append(replay)
         self._remember_command(replay.robot)
         if req.get("wait", True):
@@ -482,28 +505,38 @@ class ScriptRunner:
         return self.pg.behaviors.stop(req["robot"])
 
     async def _op_pose(self, req) -> bool:
-        ctrl = self.pg.behaviors.strike_pose(req["robot"], str(req["name"]))
+        with self._arm_execution().command():
+            ctrl = self.pg.behaviors.strike_pose(req["robot"], str(req["name"]))
         robot = self.pg.behaviors.resolve(req["robot"])
         self._remember_command(robot)
         await self._advance_controller(robot, ctrl, 20.0)
         return bool(self.pg.behaviors.pose(req["robot"])["upright"])
 
     async def _carrier_stands(self, robot: str) -> None:
-        """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
-        stop = self.pg.behaviors.stop_carrier(robot)
+        family = self._arm_execution()
+        family.reserve(robot)
+        with family.command():
+            stop = self.pg.behaviors.stop_carrier(robot)
+            if stop is not None:
+                family.claim(self.pg.session.controllers.get(stop.robot))
+                self._remember_command(stop.robot)
         if stop is not None:
-            self._remember_command(stop.robot)
             await self._advance(stop.still, stop.seconds)
 
     async def _op_move_arm(self, req) -> list[float]:
         await self._carrier_stands(req["robot"])
-        arm = self.pg.behaviors.move_arm(req["robot"], req["position"], req.get("gripper"))
+        arm = await self._arm_execution().plan(
+            self.pg.behaviors.move_arm, req["robot"], req["position"], req.get("gripper")
+        )
         self._remember_command(arm.robot)
         await self._advance(lambda: arm.done, 20.0)
-        return [round(float(v), 4) for v in self.pg.session.data.site_xpos[arm.site]]
+        with self.pg.session.lock:
+            self._arm_execution().check()
+            return [round(float(v), 4) for v in self.pg.session.data.site_xpos[arm.site]]
 
     async def _op_gripper(self, req) -> None:
-        arm = self.pg.behaviors.set_gripper(req["robot"], req["state"])
+        with self._arm_execution().command():
+            arm = self.pg.behaviors.set_gripper(req["robot"], req["state"])
         self._remember_command(arm.robot)
         await self._advance_controller(arm.robot, arm, 5.0)
 
@@ -522,15 +555,15 @@ class ScriptRunner:
         # tree panel a script shows) stood still for that long
         assert self._execution is not None
 
-        def plan():
-            motion, info = self.pg.behaviors.pick_and_place(req["robot"], req["object"], target)
-            self._remember_command(motion.robot)
-            return motion, info
-
-        motion, info = await self._execution.call_thread(plan)
+        motion, info = await self._arm_execution().plan(
+            self.pg.behaviors.pick_and_place, req["robot"], req["object"], target
+        )
+        self._remember_command(motion.robot)
         await self._advance(lambda: motion.done, getattr(motion, "time_limit", 40.0))  # an errand goes over first
         await self._advance(lambda: False, 0.5)
-        return bool(self.pg.behaviors.placed(req["object"], info["region"])["success"])
+        with self.pg.session.lock:
+            self._arm_execution().check()
+            return bool(self.pg.behaviors.placed(req["object"], info["region"])["success"])
 
     def _op_experiments(self, req) -> dict[str, Any]:
         from robotforge.experiments.live import history
@@ -556,14 +589,15 @@ class ScriptRunner:
             raise PlaygroundError("the script has no active execution")
 
         def attach() -> dict[str, Any]:
-            result = start_control(
-                self.pg,
-                req["robot"],
-                req["task"],
-                req["method"],
-                req.get("task_params"),
-                req.get("method_params"),
-            )
+            with self._arm_execution().command():
+                result = start_control(
+                    self.pg,
+                    req["robot"],
+                    req["task"],
+                    req["method"],
+                    req.get("task_params"),
+                    req.get("method_params"),
+                )
             # A cancelled dispatch may never resume; cleanup still owns a controller attached by its worker.
             self._remember_command(result["robot"])
             self._remember_controllers()
@@ -591,7 +625,13 @@ class ScriptRunner:
             raise PlaygroundError("the script has no active execution")
         self._remember_controllers()
         before = execution.sim_seconds
-        result = await execution.advance(done, max_seconds)
+
+        def checked() -> bool:
+            if self._arms is not None:
+                self._arms.check()
+            return done()
+
+        result = await execution.advance(checked, max_seconds)
         if result.reason == EndReason.WALL_LIMIT:
             raise PlaygroundError("script wall time limit reached")
         # A last, clipped step request still succeeds as before; the next request reports exhaustion.
@@ -607,6 +647,8 @@ class ScriptRunner:
 
     def _remember_command(self, robot: str) -> None:
         self._command_robots.add(robot)
+        if self._arms is not None:
+            self._arms.claim(self.pg.session.controllers.get(robot))
         if self._execution is not None:
             self._execution.resources.add(f"robot:{robot.split('/', 1)[0]}")
         # Only an explicit successful command may adopt a replacement controller. Polling must not claim it.

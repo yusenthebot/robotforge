@@ -68,7 +68,14 @@ The default test suite, existing browser regressions and installed CLI smoke rem
 This small acceptance suite supplements them; it does not establish Windows or optional backend compatibility.
 Remaining legacy adapters retain admission protection and should migrate in separate increments.
 
-The next increment migrates MCP pose and gripper without changing this suite or its committed capture.
+The following increment migrated MCP pose and gripper without changing this suite or its committed capture.
 It also compares ten fixed headless MCP scenarios against the preceding `fac7d71` core and tests the new ownership boundaries.
 Those additional captures supplement the seven-case baseline rather than silently changing its inventory.
 Actual Chrome and script checks, including the test video, are recorded in [the pose/gripper report](bench/2026-10-22-pose-gripper.md).
+
+The arm planning/multi-phase increment also retains this original seven-case capture unchanged.
+Fourteen frozen old-core MCP recipes cover queued movement, carrier waiting, pick/hold/pour, handover, catch, approach/carry, fetch, direct operation, force stall, valve regrasp and visit.
+Thirteen completed cases match exact step counts, public results and terminal qpos/qvel/ctrl; the remaining unreachable mounted request retains its refusal and physics while cleaning its empty controller.
+These captures verify fixed outcomes and terminal state, not every intermediate trajectory or general success rates.
+Actual MCP/Chrome checks compare initial integration state, public results, exact steps and terminal arrays across headless, playing, paused and disconnected modes for movement, handover and mobile operation.
+See [the arm execution report](bench/2026-10-23-arm-execution.md) for measured results, evidence provenance, boundary tests and the actual test video.

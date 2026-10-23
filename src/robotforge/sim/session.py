@@ -96,6 +96,7 @@ class SimSession:
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
     _controller_thread: int | None = field(default=None, repr=False)
+    _updating_controller: Controller | None = field(default=None, init=False, repr=False)
     _rtf_window: list[tuple[float, float]] = field(default_factory=list, repr=False)
     controller_hooks: list[Callable[[str, Controller | None, Controller | None, str], None]] = field(
         default_factory=list, repr=False
@@ -230,7 +231,7 @@ class SimSession:
         with self.lock:
             for _ in range(n):
                 self.execution.check_step(owner)
-                self._run_controllers()
+                self._run_controllers(owner)
                 if owner is not None:
                     self.execution.check_step(owner)
                 self._apply_drag()
@@ -261,7 +262,7 @@ class SimSession:
             mujoco.mj_step(m, d)
         d.xfrc_applied[:] = pushes
 
-    def _run_controllers(self) -> None:
+    def _run_controllers(self, owner: ExecutionRun | None = None) -> None:
         if not self.controllers:
             return
         t = self.data.time
@@ -271,7 +272,13 @@ class SimSession:
                 due = self._next_update.get(name, 0.0)
                 # Due, or the clock was turned back under it (data reset without reset()): it would sit idle until then.
                 if t + 1e-9 >= due or t < due - 2.0 / controller.rate_hz:
-                    controller.update(self.model, self.data)
+                    if owner is not None:
+                        self.execution.check_step(owner)
+                    self._updating_controller = controller
+                    try:
+                        controller.update(self.model, self.data)
+                    finally:
+                        self._updating_controller = None
                     self._next_update[name] = t + 1.0 / controller.rate_hz
         finally:
             self._controller_thread = None
@@ -281,6 +288,11 @@ class SimSession:
         """Whether the calling thread is inside a controller's update: what a controller asks of the robots' behaviors
         is part of its own work, not a command someone gave (a demonstration records only the commands)."""
         return self._controller_thread == threading.get_ident()
+
+    @property
+    def updating_controller(self) -> Controller | None:
+        """The current update's actor, visible only to its own controller thread."""
+        return self._updating_controller if self.in_controller else None
 
     def advance(self, wall_dt: float) -> int:
         """Advance by `wall_dt` seconds of wall time scaled by `speed`. Returns steps taken."""
