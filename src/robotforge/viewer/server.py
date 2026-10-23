@@ -108,6 +108,7 @@ class ViewerHub:
         self.clients: set[WebSocket] = set()
         self._payload_version = -1
         self._mesh_payload: scene.MeshPayload | None = None
+        self._texture_gzip: bytes = b""
         self._scene_msg: dict | None = None
         self._announced_version = session.version
         # Hooks the playground installs: extra message types (e.g. teleop) and extra scene and state info.
@@ -166,8 +167,18 @@ class ViewerHub:
         with s.lock:
             version = s.version
             payload = scene.build_mesh_payload(s.model)
-            message = scene.describe(s.model, version, payload.entries, payload.hfields)
-        self._scene_msg, self._mesh_payload, self._payload_version = message, payload, version
+            message = scene.describe(s.model, version, payload.entries, payload.hfields, payload.textures)
+        compressed = b""
+        if payload.texture_blob:
+            import gzip
+
+            compressed = gzip.compress(payload.texture_blob, compresslevel=1, mtime=0)
+        self._scene_msg, self._mesh_payload, self._texture_gzip, self._payload_version = (
+            message,
+            payload,
+            compressed,
+            version,
+        )
 
     def scene_message(self) -> dict:
         """The model's description (cached per version) plus the extras, asked for afresh every time: the
@@ -187,6 +198,12 @@ class ViewerHub:
         if version != self._payload_version or self._mesh_payload is None:
             return None
         return self._mesh_payload.blob
+
+    def texture_blob(self, version: int) -> bytes | None:
+        self._ensure_scene()
+        if version != self._payload_version or self._mesh_payload is None:
+            return None
+        return self._texture_gzip
 
     def state_message(self) -> dict:
         s = self.session
@@ -402,6 +419,13 @@ def create_app(hub: ViewerHub) -> Starlette:
     async def scene_json(_request):
         return JSONResponse(hub.scene_message())
 
+    async def texture_blob(request):
+        blob = hub.texture_blob(int(request.path_params["version"]))
+        if blob is None:
+            return Response("stale scene version", status_code=409)
+        headers = {"Cache-Control": "no-store", **({"Content-Encoding": "gzip"} if blob else {})}
+        return Response(blob, media_type="application/octet-stream", headers=headers)
+
     async def ws_endpoint(ws: WebSocket):
         await ws.accept()
         hub.clients.add(ws)
@@ -443,6 +467,7 @@ def create_app(hub: ViewerHub) -> Starlette:
             Route("/", index),
             Route("/scene.json", scene_json),
             Route("/mesh/{version:int}.bin", mesh_blob),
+            Route("/texture/{version:int}.bin", texture_blob),
             WebSocketRoute("/ws", ws_endpoint),
             Mount("/static", RevalidatingStaticFiles(directory=STATIC_DIR), name="static"),
         ],
