@@ -725,3 +725,35 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
   Evidence and immutable verification record: ../robotforge-evidence/2026-10-23-lighting-contact/; report: docs/bench/2026-10-23-lighting-contact.md/.json.
 - Next: creative scene editing/exploration and targeted temporal stability within the same budgets.
   No individual success-rate tuning, new dependencies, paid Actions, release or deployment; the broader goal remains active.
+
+
+## Round 53: build, interact and undo local props (2026-10-23)
+
+- Added World-menu Build palette with ball/block/pin/barrier/table, three server-owned scales, quarter-turn controls and one transient wire size envelope.
+  Native desktop/touch placement supports ground, tabletop and loose-block surfaces, excludes robot bodies, and retains the four robot starters and existing controls.
+  Geometry disposes on replacement/cancel/success; there is no new light, shadow caster, render pass, texture asset or dependency.
+- Reused edit/admission ownership and private saved/live preflight, including fixed-fixed pairs and libccd fallback for coincident native-CCD zeros.
+  Undo add uses a bounded opaque receipt tied to exact entry/store/version/generation/file digest, removing only that entity rather than popping world history.
+  Exact carry preserves free-body/joint/control fields even in existing deep contacts, with velocities restarted; compile-time disk-write detection remains optimistic.
+- Review fixes: coincident pins bypassed native distance queries; generic undo carry teleported unrelated deep-contact bodies; dynamic block tops were initially excluded; a fixed robot base bypassed a dynamic-only support rule.
+  Added regressions and an actual imported fixed-body browser case.
+  The initial native size picker harness did not behave as assumed on this Mac; replaced it with three visible keyboard-accessible buttons.
+  Browser setup also needed localhost proxy bypass and an open collision-probe point rather than clicking a robot surface that correctly refused dispatch.
+- Final frozen runtime ed392c58959f2d1d459ce0ed898835672bc0733d97948265d99c5bdecce67016 passes the complete default selection: 3400 passed, 127 skipped, 82 deselected, zero failures/errors across 3527 selected cases, 1145.45 seconds.
+  It includes all 61 new object core cases and 21 JS parsers.
+  Eight new object browser cases plus 16 existing creation/gamepad/lighting cases pass; seven unchanged canonical framework cases, wheel, Ruff and real installed CLI/viewer/MCP smoke (60 tools) pass.
+  Independent Python, frontend/source and evidence review approved; optional unavailable type/security tooling and native Windows remain unverified.
+- All 11 existing install/viewer budgets pass unchanged: 3642 KB wheel, 163 MB installed, 42 packages, 0.70 s CLI first frame, about 60 FPS at DPR 2, 2.50/7.50 ms standard/complex-asset rendering, 132 MB server peak and 5.20% idle CPU.
+  HTTP grows by 9080 B/one request; wheel by 5511 B.
+  Four alternating frozen-world desktop/phone pairs retain all 16 captures: warm desktop navigation medians are about 20% slower and props-phone render median/p95 increase from 1.25/1.80 to 1.60/2.35 ms.
+  Workload stays 34 calls/14566 triangles in the prop world; no overall speed or memory improvement claim.
+- Accepted native videos: desktop 39.70 s and Chrome touch-emulated phone 40.90 s, both fully decoded and inspected, with all props/preview/stacking/tabletop arm/joints/refusal/retry/undo, actual named rover-ball/pin contacts, terrain/floor/map/reset.
+  Desktop ball/pin displacements are 0.889806/0.545388 m; phone 0.522893/0.571355 m.
+  An earlier final phone gesture began at x=-12.79054 outside the viewport and failed acquisition; its 31.77 s partial recording remains retained.
+  One diagnostic-camera-only retry checks in-viewport coordinates and actual acquired chassis bodies; force-drag tips rovers, so no phone joystick or hardware-performance claim.
+  Pre-static-support-fix captures stay explicitly historical; no physics/controller/force-strength tuning was used.
+- Report: docs/bench/2026-10-23-prop-playground.md/.json; guide: docs/CREATIVE_PLAY.md.
+  Raw evidence: ../robotforge-evidence/2026-10-23-prop-playground/; all 6579 indexed raw artifacts verify, and completed unified record c7fd332d-c8d3-4fbb-bc71-8b028523b52a verifies 213 immutable artifacts.
+  Candidate-source.patch applies cleanly to baseline 86305fb; raw frames stay externally indexed and videos/source/tests/results are copied immutably.
+- Next: improve navigation and free editing clarity, including the four-tab panel that currently wraps Modes onto a second row, plus targeted wood temporal stability.
+  The broad visual/playability goal remains active; individual action success rates, releases and paid Actions remain deferred.

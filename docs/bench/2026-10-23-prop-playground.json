@@ -1,0 +1,2733 @@
+{
+  "baseline_commit": "86305fb489b680c1cc32709a0e0a1415d11b6f1f",
+  "final_source_sha256": "ed392c58959f2d1d459ce0ed898835672bc0733d97948265d99c5bdecce67016",
+  "evidence_root": "../robotforge-evidence/2026-10-23-prop-playground",
+  "verification": {
+    "full_default_suite": {
+      "passed": 3400,
+      "skipped": 127,
+      "selected": 3527,
+      "seconds": 1145.327,
+      "failures": 0,
+      "errors": 0
+    },
+    "browser": {
+      "passed": 24,
+      "objects_passed": 8,
+      "existing_passed": 16,
+      "count_note": "objects8 plus creation5/gamepad8/lighting3 = 24"
+    },
+    "framework": {
+      "passed": 7,
+      "canonical_sha256": "e6c82b5c364b47273a8c45ee85441f37b50e1676ecd7cff5bbf2f72d4f88852b"
+    },
+    "smoke": {
+      "tools": 60,
+      "status": "pass"
+    },
+    "independent_review": "Python boundary and frontend/source review approved; external evidence audit approved",
+    "lint": "Ruff check/format, JS parsers and diff check passed",
+    "wheel": "built; preview module bytes verified",
+    "optional_tools": {
+      "mypy": "unavailable",
+      "pyright": "unavailable",
+      "bandit": "unavailable",
+      "pip_audit": "unavailable"
+    }
+  },
+  "comparison": {
+    "order": [
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/final-A1",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/final-B1",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/final-A2",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/final-B2"
+    ],
+    "harness_sha256": "93bcb1aaa9dbe40e2a7e3065363df6e0ac8bd437036c75485ade18b3db8e5f32",
+    "baseline_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "86305fb489b680c1cc32709a0e0a1415d11b6f1f",
+      "git_dirty": false,
+      "active_source_sha256": "3d820d1407dab3407a5108d64396bd4b714a7b0df20553729a18cb70ce69920d",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "candidate_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "86305fb489b680c1cc32709a0e0a1415d11b6f1f",
+      "git_dirty": true,
+      "active_source_sha256": "ed392c58959f2d1d459ce0ed898835672bc0733d97948265d99c5bdecce67016",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "fixtures": {
+      "props.initial.json": "38b913be0c15ac43189845c99396fd5187854eb4c35dbf9855c4368003b3033f",
+      "empty.world.json": "a7ffca821561f4cc30434cdf6a8a6935cfcd617b643af04b9456993984a4dd74",
+      "empty.initial.json": "2d03cd573f377774c22cfd318aa7c342ed951aa5303ffb73ff9be15a0ec423e8",
+      "props.world.json": "b919ffacfc70e1d2d13ed21b0cade4a73b8b57c8f13477358aff59f096160258"
+    },
+    "scenes": {
+      "empty_desktop": {
+        "fresh_first_frame_ms": {
+          "baseline_samples": [
+            190.7999999821186,
+            161.90000000596046
+          ],
+          "candidate_samples": [
+            187.7000000178814,
+            170.09999999403954
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -3.099999964237213,
+            8.199999988079071
+          ],
+          "baseline_median": 176.34999999403954,
+          "candidate_median": 178.90000000596046,
+          "median_delta_percent": 1.445988098671469
+        },
+        "warm_first_frame_ms": {
+          "baseline_samples": [
+            94.69999998807907,
+            76.2999999821186
+          ],
+          "candidate_samples": [
+            93.60000002384186,
+            112.30000001192093
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -1.0999999642372131,
+            36.00000002980232
+          ],
+          "baseline_median": 85.49999998509884,
+          "candidate_median": 102.9500000178814,
+          "median_delta_percent": 20.40935676704536
+        },
+        "fresh_http_encoded_bytes": {
+          "baseline_samples": [
+            1251790,
+            1251790
+          ],
+          "candidate_samples": [
+            1260870,
+            1260870
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            9080,
+            9080
+          ],
+          "baseline_median": 1251790.0,
+          "candidate_median": 1260870.0,
+          "median_delta_percent": 0.7253612826432443
+        },
+        "fresh_websocket_received_bytes": {
+          "baseline_samples": [
+            218057,
+            218025
+          ],
+          "candidate_samples": [
+            218346,
+            218346
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            289,
+            321
+          ],
+          "baseline_median": 218041.0,
+          "candidate_median": 218346.0,
+          "median_delta_percent": 0.13988194880778515
+        },
+        "http_resource_count": {
+          "baseline_samples": [
+            26,
+            26
+          ],
+          "candidate_samples": [
+            27,
+            27
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            1,
+            1
+          ],
+          "baseline_median": 26.0,
+          "candidate_median": 27.0,
+          "median_delta_percent": 3.8461538461538547
+        },
+        "render_median_ms": {
+          "baseline_samples": [
+            1.300000011920929,
+            1.5
+          ],
+          "candidate_samples": [
+            1.3999999910593033,
+            1.300000011920929
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0.09999997913837433,
+            -0.19999998807907104
+          ],
+          "baseline_median": 1.4000000059604645,
+          "candidate_median": 1.3500000014901161,
+          "median_delta_percent": -3.5714288755338996
+        },
+        "render_p95_ms": {
+          "baseline_samples": [
+            2.0999999940395355,
+            2
+          ],
+          "candidate_samples": [
+            2.0999999940395355,
+            2.2999999821186066
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0.0,
+            0.29999998211860657
+          ],
+          "baseline_median": 2.0499999970197678,
+          "candidate_median": 2.199999988079071,
+          "median_delta_percent": 7.317072745237518
+        },
+        "paused_raf_fps": {
+          "baseline_samples": [
+            59.99999999999999,
+            60.00198353664584
+          ],
+          "candidate_samples": [
+            60.004959087527894,
+            60.004959087527894
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0.004959087527900863,
+            0.0029755508820556997
+          ],
+          "baseline_median": 60.00099176832292,
+          "candidate_median": 60.004959087527894,
+          "median_delta_percent": 0.006612089380619857
+        },
+        "chrome_tree_rss_kib": {
+          "baseline_samples": [
+            1841616,
+            1835696
+          ],
+          "candidate_samples": [
+            1839584,
+            1686304
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -2032,
+            -149392
+          ],
+          "baseline_median": 1838656.0,
+          "candidate_median": 1762944.0,
+          "median_delta_percent": -4.117790386021092
+        },
+        "draw_calls": {
+          "baseline_samples": [
+            2,
+            2
+          ],
+          "candidate_samples": [
+            2,
+            2
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 2.0,
+          "candidate_median": 2.0,
+          "median_delta_percent": 0.0
+        },
+        "triangles": {
+          "baseline_samples": [
+            4,
+            4
+          ],
+          "candidate_samples": [
+            4,
+            4
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 4.0,
+          "candidate_median": 4.0,
+          "median_delta_percent": 0.0
+        },
+        "textures": {
+          "baseline_samples": [
+            5,
+            5
+          ],
+          "candidate_samples": [
+            5,
+            5
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 5.0,
+          "candidate_median": 5.0,
+          "median_delta_percent": 0.0
+        },
+        "geometries": {
+          "baseline_samples": [
+            2,
+            2
+          ],
+          "candidate_samples": [
+            2,
+            2
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 2.0,
+          "candidate_median": 2.0,
+          "median_delta_percent": 0.0
+        },
+        "programs": {
+          "baseline_samples": [
+            3,
+            2
+          ],
+          "candidate_samples": [
+            2,
+            3
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -1,
+            1
+          ],
+          "baseline_median": 2.5,
+          "candidate_median": 2.5,
+          "median_delta_percent": 0.0
+        }
+      },
+      "empty_phone": {
+        "fresh_first_frame_ms": {
+          "baseline_samples": [
+            177.5,
+            197.30000001192093
+          ],
+          "candidate_samples": [
+            181,
+            216.59999999403954
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            3.5,
+            19.299999982118607
+          ],
+          "baseline_median": 187.40000000596046,
+          "candidate_median": 198.79999999701977,
+          "median_delta_percent": 6.083244392047349
+        },
+        "warm_first_frame_ms": {
+          "baseline_samples": [
+            92.60000002384186,
+            77.19999998807907
+          ],
+          "candidate_samples": [
+            77.30000001192093,
+            95.30000001192093
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -15.300000011920929,
+            18.100000023841858
+          ],
+          "baseline_median": 84.90000000596046,
+          "candidate_median": 86.30000001192093,
+          "median_delta_percent": 1.648998829048498
+        },
+        "fresh_http_encoded_bytes": {
+          "baseline_samples": [
+            1251790,
+            1251790
+          ],
+          "candidate_samples": [
+            1260870,
+            1260870
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            9080,
+            9080
+          ],
+          "baseline_median": 1251790.0,
+          "candidate_median": 1260870.0,
+          "median_delta_percent": 0.7253612826432443
+        },
+        "fresh_websocket_received_bytes": {
+          "baseline_samples": [
+            218053,
+            218021
+          ],
+          "candidate_samples": [
+            218342,
+            218374
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            289,
+            353
+          ],
+          "baseline_median": 218037.0,
+          "candidate_median": 218358.0,
+          "median_delta_percent": 0.147222719079787
+        },
+        "http_resource_count": {
+          "baseline_samples": [
+            26,
+            26
+          ],
+          "candidate_samples": [
+            27,
+            27
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            1,
+            1
+          ],
+          "baseline_median": 26.0,
+          "candidate_median": 27.0,
+          "median_delta_percent": 3.8461538461538547
+        },
+        "render_median_ms": {
+          "baseline_samples": [
+            0.7999999970197678,
+            0.7000000178813934
+          ],
+          "candidate_samples": [
+            0.7999999821186066,
+            0.800000011920929
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -1.4901161193847656e-08,
+            0.09999999403953552
+          ],
+          "baseline_median": 0.7500000074505806,
+          "candidate_median": 0.7999999970197678,
+          "median_delta_percent": 6.666665209664258
+        },
+        "render_p95_ms": {
+          "baseline_samples": [
+            1.4000000059604645,
+            1
+          ],
+          "candidate_samples": [
+            1.699999988079071,
+            1.5
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0.29999998211860657,
+            0.5
+          ],
+          "baseline_median": 1.2000000029802322,
+          "candidate_median": 1.5999999940395355,
+          "median_delta_percent": 33.33333250549104
+        },
+        "paused_raf_fps": {
+          "baseline_samples": [
+            60.001983536645845,
+            60
+          ],
+          "candidate_samples": [
+            60.00198353664584,
+            59.50609937518596
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -7.105427357601002e-15,
+            -0.49390062481403874
+          ],
+          "baseline_median": 60.00099176832292,
+          "candidate_median": 59.754041455915896,
+          "median_delta_percent": -0.4115770508603456
+        },
+        "chrome_tree_rss_kib": {
+          "baseline_samples": [
+            1826768,
+            1669168
+          ],
+          "candidate_samples": [
+            1829056,
+            1824496
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            2288,
+            155328
+          ],
+          "baseline_median": 1747968.0,
+          "candidate_median": 1826776.0,
+          "median_delta_percent": 4.5085493555946154
+        },
+        "draw_calls": {
+          "baseline_samples": [
+            2,
+            2
+          ],
+          "candidate_samples": [
+            2,
+            2
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 2.0,
+          "candidate_median": 2.0,
+          "median_delta_percent": 0.0
+        },
+        "triangles": {
+          "baseline_samples": [
+            4,
+            4
+          ],
+          "candidate_samples": [
+            4,
+            4
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 4.0,
+          "candidate_median": 4.0,
+          "median_delta_percent": 0.0
+        },
+        "textures": {
+          "baseline_samples": [
+            5,
+            5
+          ],
+          "candidate_samples": [
+            5,
+            5
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 5.0,
+          "candidate_median": 5.0,
+          "median_delta_percent": 0.0
+        },
+        "geometries": {
+          "baseline_samples": [
+            2,
+            2
+          ],
+          "candidate_samples": [
+            2,
+            2
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 2.0,
+          "candidate_median": 2.0,
+          "median_delta_percent": 0.0
+        },
+        "programs": {
+          "baseline_samples": [
+            3,
+            2
+          ],
+          "candidate_samples": [
+            2,
+            3
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -1,
+            1
+          ],
+          "baseline_median": 2.5,
+          "candidate_median": 2.5,
+          "median_delta_percent": 0.0
+        }
+      },
+      "props_desktop": {
+        "fresh_first_frame_ms": {
+          "baseline_samples": [
+            337.5,
+            309.09999999403954
+          ],
+          "candidate_samples": [
+            331.2000000178814,
+            271.69999998807907
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -6.299999982118607,
+            -37.400000005960464
+          ],
+          "baseline_median": 323.29999999701977,
+          "candidate_median": 301.45000000298023,
+          "median_delta_percent": -6.758428702208774
+        },
+        "warm_first_frame_ms": {
+          "baseline_samples": [
+            189.2999999821186,
+            174.59999999403954
+          ],
+          "candidate_samples": [
+            191.5,
+            244.69999998807907
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            2.2000000178813934,
+            70.09999999403954
+          ],
+          "baseline_median": 181.94999998807907,
+          "candidate_median": 218.09999999403954,
+          "median_delta_percent": 19.868095635245364
+        },
+        "fresh_http_encoded_bytes": {
+          "baseline_samples": [
+            2263985,
+            2263985
+          ],
+          "candidate_samples": [
+            2273065,
+            2273065
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            9080,
+            9080
+          ],
+          "baseline_median": 2263985.0,
+          "candidate_median": 2273065.0,
+          "median_delta_percent": 0.4010627278890899
+        },
+        "fresh_websocket_received_bytes": {
+          "baseline_samples": [
+            239230,
+            239230
+          ],
+          "candidate_samples": [
+            239551,
+            240876
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            321,
+            1646
+          ],
+          "baseline_median": 239230.0,
+          "candidate_median": 240213.5,
+          "median_delta_percent": 0.41111064665801944
+        },
+        "http_resource_count": {
+          "baseline_samples": [
+            27,
+            27
+          ],
+          "candidate_samples": [
+            28,
+            28
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            1,
+            1
+          ],
+          "baseline_median": 27.0,
+          "candidate_median": 28.0,
+          "median_delta_percent": 3.703703703703698
+        },
+        "render_median_ms": {
+          "baseline_samples": [
+            1.9500000029802322,
+            2.4500000029802322
+          ],
+          "candidate_samples": [
+            2.0999999940395355,
+            2.0499999970197678
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0.14999999105930328,
+            -0.4000000059604645
+          ],
+          "baseline_median": 2.2000000029802322,
+          "candidate_median": 2.0749999955296516,
+          "median_delta_percent": -5.681818512784053
+        },
+        "render_p95_ms": {
+          "baseline_samples": [
+            2.7999999821186066,
+            3.0999999940395355
+          ],
+          "candidate_samples": [
+            2.800000011920929,
+            2.7999999821186066
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            2.9802322387695312e-08,
+            -0.30000001192092896
+          ],
+          "baseline_median": 2.949999988079071,
+          "candidate_median": 2.7999999970197678,
+          "median_delta_percent": -5.084745480184816
+        },
+        "paused_raf_fps": {
+          "baseline_samples": [
+            60.001983536645845,
+            60.0049590875279
+          ],
+          "candidate_samples": [
+            59.99999999999999,
+            60.00198353664584
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -0.0019835366458522685,
+            -0.002975550882062805
+          ],
+          "baseline_median": 60.00347131208687,
+          "candidate_median": 60.00099176832292,
+          "median_delta_percent": -0.0041323338629162265
+        },
+        "chrome_tree_rss_kib": {
+          "baseline_samples": [
+            1859776,
+            1856384
+          ],
+          "candidate_samples": [
+            1874864,
+            1729072
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            15088,
+            -127312
+          ],
+          "baseline_median": 1858080.0,
+          "candidate_median": 1801968.0,
+          "median_delta_percent": -3.0198915009041594
+        },
+        "draw_calls": {
+          "baseline_samples": [
+            34,
+            34
+          ],
+          "candidate_samples": [
+            34,
+            34
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 34.0,
+          "candidate_median": 34.0,
+          "median_delta_percent": 0.0
+        },
+        "triangles": {
+          "baseline_samples": [
+            14566,
+            14566
+          ],
+          "candidate_samples": [
+            14566,
+            14566
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 14566.0,
+          "candidate_median": 14566.0,
+          "median_delta_percent": 0.0
+        },
+        "textures": {
+          "baseline_samples": [
+            5,
+            5
+          ],
+          "candidate_samples": [
+            5,
+            5
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 5.0,
+          "candidate_median": 5.0,
+          "median_delta_percent": 0.0
+        },
+        "geometries": {
+          "baseline_samples": [
+            32,
+            32
+          ],
+          "candidate_samples": [
+            32,
+            32
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 32.0,
+          "candidate_median": 32.0,
+          "median_delta_percent": 0.0
+        },
+        "programs": {
+          "baseline_samples": [
+            20,
+            20
+          ],
+          "candidate_samples": [
+            20,
+            20
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 20.0,
+          "candidate_median": 20.0,
+          "median_delta_percent": 0.0
+        }
+      },
+      "props_phone": {
+        "fresh_first_frame_ms": {
+          "baseline_samples": [
+            277,
+            265.69999998807907
+          ],
+          "candidate_samples": [
+            280.59999999403954,
+            285.69999998807907
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            3.5999999940395355,
+            20.0
+          ],
+          "baseline_median": 271.34999999403954,
+          "candidate_median": 283.1499999910593,
+          "median_delta_percent": 4.3486272331966
+        },
+        "warm_first_frame_ms": {
+          "baseline_samples": [
+            228,
+            203.60000002384186
+          ],
+          "candidate_samples": [
+            182.40000000596046,
+            143.90000000596046
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -45.599999994039536,
+            -59.70000001788139
+          ],
+          "baseline_median": 215.80000001192093,
+          "candidate_median": 163.15000000596046,
+          "median_delta_percent": -24.39759036286008
+        },
+        "fresh_http_encoded_bytes": {
+          "baseline_samples": [
+            2263985,
+            2263985
+          ],
+          "candidate_samples": [
+            2273065,
+            2273065
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            9080,
+            9080
+          ],
+          "baseline_median": 2263985.0,
+          "candidate_median": 2273065.0,
+          "median_delta_percent": 0.4010627278890899
+        },
+        "fresh_websocket_received_bytes": {
+          "baseline_samples": [
+            240779,
+            238998
+          ],
+          "candidate_samples": [
+            239547,
+            240644
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -1232,
+            1646
+          ],
+          "baseline_median": 239888.5,
+          "candidate_median": 240095.5,
+          "median_delta_percent": 0.08629008893714651
+        },
+        "http_resource_count": {
+          "baseline_samples": [
+            27,
+            27
+          ],
+          "candidate_samples": [
+            28,
+            28
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            1,
+            1
+          ],
+          "baseline_median": 27.0,
+          "candidate_median": 28.0,
+          "median_delta_percent": 3.703703703703698
+        },
+        "render_median_ms": {
+          "baseline_samples": [
+            1.300000011920929,
+            1.199999988079071
+          ],
+          "candidate_samples": [
+            1.7999999970197678,
+            1.4000000059604645
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0.4999999850988388,
+            0.20000001788139343
+          ],
+          "baseline_median": 1.25,
+          "candidate_median": 1.6000000014901161,
+          "median_delta_percent": 28.00000011920929
+        },
+        "render_p95_ms": {
+          "baseline_samples": [
+            1.899999976158142,
+            1.699999988079071
+          ],
+          "candidate_samples": [
+            2.699999988079071,
+            2
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0.800000011920929,
+            0.30000001192092896
+          ],
+          "baseline_median": 1.7999999821186066,
+          "candidate_median": 2.3499999940395355,
+          "median_delta_percent": 30.555556521371564
+        },
+        "paused_raf_fps": {
+          "baseline_samples": [
+            60,
+            59.99999999999999
+          ],
+          "candidate_samples": [
+            59.99900828085486,
+            60.00495908752789
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            -0.0009917191451407348,
+            0.004959087527893757
+          ],
+          "baseline_median": 60.0,
+          "candidate_median": 60.00198368419137,
+          "median_delta_percent": 0.003306140318959372
+        },
+        "chrome_tree_rss_kib": {
+          "baseline_samples": [
+            1857552,
+            1845840
+          ],
+          "candidate_samples": [
+            1860224,
+            1852752
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            2672,
+            6912
+          ],
+          "baseline_median": 1851696.0,
+          "candidate_median": 1856488.0,
+          "median_delta_percent": 0.25878977974787
+        },
+        "draw_calls": {
+          "baseline_samples": [
+            34,
+            34
+          ],
+          "candidate_samples": [
+            34,
+            34
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 34.0,
+          "candidate_median": 34.0,
+          "median_delta_percent": 0.0
+        },
+        "triangles": {
+          "baseline_samples": [
+            14566,
+            14566
+          ],
+          "candidate_samples": [
+            14566,
+            14566
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 14566.0,
+          "candidate_median": 14566.0,
+          "median_delta_percent": 0.0
+        },
+        "textures": {
+          "baseline_samples": [
+            5,
+            5
+          ],
+          "candidate_samples": [
+            5,
+            5
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 5.0,
+          "candidate_median": 5.0,
+          "median_delta_percent": 0.0
+        },
+        "geometries": {
+          "baseline_samples": [
+            32,
+            32
+          ],
+          "candidate_samples": [
+            32,
+            32
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            0
+          ],
+          "baseline_median": 32.0,
+          "candidate_median": 32.0,
+          "median_delta_percent": 0.0
+        },
+        "programs": {
+          "baseline_samples": [
+            20,
+            20
+          ],
+          "candidate_samples": [
+            20,
+            11
+          ],
+          "pair_deltas_candidate_minus_baseline": [
+            0,
+            -9
+          ],
+          "baseline_median": 20.0,
+          "candidate_median": 15.5,
+          "median_delta_percent": -22.499999999999996
+        }
+      }
+    },
+    "all_runtime_and_gl_checks_pass": true
+  },
+  "native_validation": {
+    "pass": true,
+    "source_sha256": "ed392c58959f2d1d459ce0ed898835672bc0733d97948265d99c5bdecce67016",
+    "checks": [
+      {
+        "label": "desktop",
+        "folder": "native-final",
+        "source_sha256": "ed392c58959f2d1d459ce0ed898835672bc0733d97948265d99c5bdecce67016",
+        "harness_sha256": "96d1b02f529e46aed8f62432436495df48323232299a3fde173ba9352e2deb4f",
+        "supports": [
+          {
+            "wall_seconds": 14.78653400001349,
+            "kind": "support_height",
+            "expected": "block_2",
+            "requested_support_z": 0.27,
+            "observed_body_z": 0.3375,
+            "expected_body_z": 0.3375
+          },
+          {
+            "wall_seconds": 17.220328958006576,
+            "kind": "support_height",
+            "expected": "block_3",
+            "requested_support_z": 0.75,
+            "observed_body_z": 0.8175,
+            "expected_body_z": 0.8175
+          },
+          {
+            "wall_seconds": 18.941915916017024,
+            "kind": "support_height",
+            "expected": "arm",
+            "requested_support_z": 0.75,
+            "observed_body_z": 0.75,
+            "saved_pos": [
+              1.1843,
+              1.1893,
+              0.75
+            ]
+          }
+        ],
+        "pushes": [
+          {
+            "rover": "rover",
+            "prop": "ball",
+            "displacement_m": 0.8898064576350374,
+            "contact_samples": 5
+          },
+          {
+            "rover": "rover_2",
+            "prop": "pin",
+            "displacement_m": 0.5453880757013682,
+            "contact_samples": 54
+          }
+        ],
+        "native_drag_acquired": [],
+        "occupied_refusal": "that spot is occupied by table; choose an open spot",
+        "undo_preserved_other_positions_and_ctrl": true,
+        "recording_seconds": 39.621897958015325,
+        "frame_count": 2099,
+        "undo_exact_state_checks": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true
+        },
+        "provenance_start_record": "native-final/manifest.json#source",
+        "provenance_after_record": "native-final/source-after.json",
+        "provenance_after_context": "Independent source check after combined run exited on failed phone gesture, before corrected phone retry; normal manifest ending record absent."
+      },
+      {
+        "label": "phone",
+        "folder": "native-final-phone",
+        "source_sha256": "ed392c58959f2d1d459ce0ed898835672bc0733d97948265d99c5bdecce67016",
+        "harness_sha256": "ee76140240b5b2907a456a18909820e4c54e8894838a8b9bcdcd42cad4799571",
+        "supports": [
+          {
+            "wall_seconds": 14.319021750008687,
+            "kind": "support_height",
+            "expected": "block_2",
+            "requested_support_z": 0.27,
+            "observed_body_z": 0.3375,
+            "expected_body_z": 0.3375
+          },
+          {
+            "wall_seconds": 16.603601707989583,
+            "kind": "support_height",
+            "expected": "block_3",
+            "requested_support_z": 0.75,
+            "observed_body_z": 0.8175,
+            "expected_body_z": 0.8175
+          },
+          {
+            "wall_seconds": 18.310234500007937,
+            "kind": "support_height",
+            "expected": "arm",
+            "requested_support_z": 0.75,
+            "observed_body_z": 0.75,
+            "saved_pos": [
+              1.2405,
+              1.1405,
+              0.75
+            ]
+          }
+        ],
+        "pushes": [
+          {
+            "rover": "rover",
+            "prop": "ball",
+            "displacement_m": 0.5228929178279164,
+            "contact_samples": 88,
+            "rover_displacement_m": 0.8232465417642124,
+            "active_viewer_fps": 60
+          },
+          {
+            "rover": "rover_2",
+            "prop": "pin",
+            "displacement_m": 0.5713547994100238,
+            "contact_samples": 80,
+            "rover_displacement_m": 0.8765775658336281,
+            "active_viewer_fps": 60
+          }
+        ],
+        "native_drag_acquired": [
+          {
+            "wall_seconds": 26.967019333009375,
+            "kind": "native_drag_acquired",
+            "rover": "rover",
+            "body": "rover/chassis",
+            "sent": {
+              "type": "drag_start",
+              "body": 1,
+              "point": [
+                -0.6745282562526461,
+                -0.4356026951837051,
+                0.07211495111813786
+              ]
+            }
+          },
+          {
+            "wall_seconds": 32.732858707982814,
+            "kind": "native_drag_acquired",
+            "rover": "rover_2",
+            "body": "rover_2/chassis",
+            "sent": {
+              "type": "drag_start",
+              "body": 4,
+              "point": [
+                -0.6743750435554212,
+                0.36459674009062726,
+                0.07211646416049924
+              ]
+            }
+          }
+        ],
+        "occupied_refusal": "that spot is occupied by table; choose an open spot",
+        "undo_preserved_other_positions_and_ctrl": true,
+        "recording_seconds": 40.83648937498219,
+        "frame_count": 2421,
+        "undo_exact_state_checks": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true
+        },
+        "provenance_start_record": "native-final-phone/manifest.json#source",
+        "provenance_after_record": "native-final-phone/manifest.json#source_after"
+      }
+    ],
+    "failed_phone_attempt": {
+      "folder": "native-final",
+      "partial_report": "phone.partial.json",
+      "video": "phone-partial.mp4",
+      "reason": "Native drag started outside viewport at x=-12.79054 CSS px; no rover acquisition/contacts and only0.0001688m ball settling."
+    }
+  },
+  "video_qa": {
+    "method": "Serial CPU decode of every frame, ffprobe metadata, and decoded PNG pixel statistics at10/50/90percent; no browser or simulation overrides.",
+    "videos": [
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/native-final/desktop.mp4",
+        "role": "accepted desktop",
+        "sha256": "c00e7a7ef0e3e94fb7ce0257b99ed855aa1a258583d576fd198add3543592bb2",
+        "probe": {
+          "streams": [
+            {
+              "index": 0,
+              "codec_name": "h264",
+              "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "profile": "High",
+              "codec_type": "video",
+              "codec_tag_string": "avc1",
+              "codec_tag": "0x31637661",
+              "mime_codec_string": "avc1.640028",
+              "width": 1440,
+              "height": 900,
+              "coded_width": 1440,
+              "coded_height": 900,
+              "has_b_frames": 2,
+              "sample_aspect_ratio": "1:1",
+              "display_aspect_ratio": "8:5",
+              "pix_fmt": "yuvj420p",
+              "level": 40,
+              "color_range": "pc",
+              "color_space": "bt470bg",
+              "chroma_location": "left",
+              "field_order": "progressive",
+              "is_avc": "true",
+              "nal_length_size": "4",
+              "id": "0x1",
+              "r_frame_rate": "30/1",
+              "avg_frame_rate": "30/1",
+              "time_base": "1/15360",
+              "start_pts": 0,
+              "start_time": "0.000000",
+              "duration_ts": 609792,
+              "duration": "39.700000",
+              "bit_rate": "1692668",
+              "bits_per_raw_sample": "8",
+              "nb_frames": "1191",
+              "extradata_size": 50,
+              "disposition": {
+                "default": 1,
+                "dub": 0,
+                "original": 0,
+                "comment": 0,
+                "lyrics": 0,
+                "karaoke": 0,
+                "forced": 0,
+                "hearing_impaired": 0,
+                "visual_impaired": 0,
+                "clean_effects": 0,
+                "attached_pic": 0,
+                "timed_thumbnails": 0,
+                "non_diegetic": 0,
+                "captions": 0,
+                "descriptions": 0,
+                "metadata": 0,
+                "dependent": 0,
+                "still_image": 0,
+                "multilayer": 0
+              },
+              "tags": {
+                "language": "und",
+                "handler_name": "VideoHandler",
+                "encoder": "Lavc62.28.101 libx264"
+              }
+            }
+          ],
+          "format": {
+            "filename": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/native-final/desktop.mp4",
+            "nb_streams": 1,
+            "nb_programs": 0,
+            "nb_stream_groups": 0,
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "start_time": "0.000000",
+            "duration": "39.700000",
+            "size": "8414888",
+            "bit_rate": "1695695",
+            "probe_score": 100,
+            "tags": {
+              "major_brand": "isom",
+              "minor_version": "512",
+              "compatible_brands": "isomiso2avc1mp41",
+              "encoder": "Lavf62.12.101"
+            }
+          }
+        },
+        "full_decode_exit_code": 0,
+        "full_decode_stderr": "",
+        "cpu_decode_wall_seconds": 1.2851174999959767,
+        "samples": [
+          {
+            "seconds": 3.9700000000000006,
+            "size": [
+              1440,
+              900
+            ],
+            "rgb_mean": [
+              149.48561959876542,
+              147.84166358024692,
+              146.88171296296295
+            ],
+            "rgb_stddev": [
+              28.570923717880547,
+              26.46008085120404,
+              27.504482022481653
+            ],
+            "decoded_png_sha256": "bd31773750aab33eb8715478cc3346824b2cc48d5e845e85a5d179fd0a376ec0"
+          },
+          {
+            "seconds": 19.85,
+            "size": [
+              1440,
+              900
+            ],
+            "rgb_mean": [
+              138.74363194444445,
+              130.00317283950616,
+              120.30440586419753
+            ],
+            "rgb_stddev": [
+              55.96935663980048,
+              46.02971295262433,
+              42.98085786283699
+            ],
+            "decoded_png_sha256": "3ac521ddc73710aa13116178dbb3b51d45e3d0b98cd6a023944bd2165eb41536"
+          },
+          {
+            "seconds": 35.730000000000004,
+            "size": [
+              1440,
+              900
+            ],
+            "rgb_mean": [
+              150.82549614197532,
+              146.52935725308643,
+              142.68141666666668
+            ],
+            "rgb_stddev": [
+              29.889207372980223,
+              26.574356243503455,
+              29.947712304152983
+            ],
+            "decoded_png_sha256": "321c8ed141bfe06056976c83a61b2b037b721d9666b4cc2feeb94c6b5c77ccae"
+          }
+        ]
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/native-final-phone/phone.mp4",
+        "role": "accepted phone",
+        "sha256": "20bc1e0f86acd2d6363a733672fd2813a6c72f7fdde366b7b80f3ab38b4cacca",
+        "probe": {
+          "streams": [
+            {
+              "index": 0,
+              "codec_name": "h264",
+              "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "profile": "High",
+              "codec_type": "video",
+              "codec_tag_string": "avc1",
+              "codec_tag": "0x31637661",
+              "mime_codec_string": "avc1.64001e",
+              "width": 390,
+              "height": 844,
+              "coded_width": 390,
+              "coded_height": 844,
+              "has_b_frames": 2,
+              "sample_aspect_ratio": "1:1",
+              "display_aspect_ratio": "195:422",
+              "pix_fmt": "yuvj420p",
+              "level": 30,
+              "color_range": "pc",
+              "color_space": "bt470bg",
+              "chroma_location": "left",
+              "field_order": "progressive",
+              "is_avc": "true",
+              "nal_length_size": "4",
+              "id": "0x1",
+              "r_frame_rate": "30/1",
+              "avg_frame_rate": "30/1",
+              "time_base": "1/15360",
+              "start_pts": 0,
+              "start_time": "0.000000",
+              "duration_ts": 628224,
+              "duration": "40.900000",
+              "bit_rate": "587030",
+              "bits_per_raw_sample": "8",
+              "nb_frames": "1227",
+              "extradata_size": 51,
+              "disposition": {
+                "default": 1,
+                "dub": 0,
+                "original": 0,
+                "comment": 0,
+                "lyrics": 0,
+                "karaoke": 0,
+                "forced": 0,
+                "hearing_impaired": 0,
+                "visual_impaired": 0,
+                "clean_effects": 0,
+                "attached_pic": 0,
+                "timed_thumbnails": 0,
+                "non_diegetic": 0,
+                "captions": 0,
+                "descriptions": 0,
+                "metadata": 0,
+                "dependent": 0,
+                "still_image": 0,
+                "multilayer": 0
+              },
+              "tags": {
+                "language": "und",
+                "handler_name": "VideoHandler",
+                "encoder": "Lavc62.28.101 libx264"
+              }
+            }
+          ],
+          "format": {
+            "filename": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/native-final-phone/phone.mp4",
+            "nb_streams": 1,
+            "nb_programs": 0,
+            "nb_stream_groups": 0,
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "start_time": "0.000000",
+            "duration": "40.900000",
+            "size": "3016426",
+            "bit_rate": "590009",
+            "probe_score": 100,
+            "tags": {
+              "major_brand": "isom",
+              "minor_version": "512",
+              "compatible_brands": "isomiso2avc1mp41",
+              "encoder": "Lavf62.12.101"
+            }
+          }
+        },
+        "full_decode_exit_code": 0,
+        "full_decode_stderr": "",
+        "cpu_decode_wall_seconds": 0.3869059589924291,
+        "samples": [
+          {
+            "seconds": 4.09,
+            "size": [
+              390,
+              844
+            ],
+            "rgb_mean": [
+              139.76367116296026,
+              139.2568933041682,
+              138.3193735569328
+            ],
+            "rgb_stddev": [
+              39.18993690212185,
+              36.59950074427934,
+              36.48871960382735
+            ],
+            "decoded_png_sha256": "2e78572b91375301f5b8270e8074fca6d2a25c3be2f77c2830e358ebb2fbacda"
+          },
+          {
+            "seconds": 20.45,
+            "size": [
+              390,
+              844
+            ],
+            "rgb_mean": [
+              95.01430915056507,
+              95.5426479523636,
+              95.71273240977033
+            ],
+            "rgb_stddev": [
+              52.60783873348372,
+              50.495387488135975,
+              49.136317590958456
+            ],
+            "decoded_png_sha256": "211d800d7e9f6adcc084dfb366d0c928c12738c54e03029ad511a88f96e1ee7c"
+          },
+          {
+            "seconds": 36.81,
+            "size": [
+              390,
+              844
+            ],
+            "rgb_mean": [
+              147.16675780775307,
+              144.74129906428485,
+              141.5168124924049
+            ],
+            "rgb_stddev": [
+              36.46516076366298,
+              31.89813288546725,
+              31.665159714944735
+            ],
+            "decoded_png_sha256": "2d9b1e03ff9e6986d851258e1243bca90a613b5d5d1b68b46ddad7a8f7e92447"
+          }
+        ]
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/native-final/phone-partial.mp4",
+        "role": "retained failed offviewport touch attempt",
+        "sha256": "00ef46502039571c9675baa2886abc1a05a45d7b614676f1a4c73b101b88d58e",
+        "probe": {
+          "streams": [
+            {
+              "index": 0,
+              "codec_name": "h264",
+              "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "profile": "High",
+              "codec_type": "video",
+              "codec_tag_string": "avc1",
+              "codec_tag": "0x31637661",
+              "mime_codec_string": "avc1.64001e",
+              "width": 390,
+              "height": 844,
+              "coded_width": 390,
+              "coded_height": 844,
+              "has_b_frames": 2,
+              "sample_aspect_ratio": "1:1",
+              "display_aspect_ratio": "195:422",
+              "pix_fmt": "yuvj420p",
+              "level": 30,
+              "color_range": "pc",
+              "color_space": "bt470bg",
+              "chroma_location": "left",
+              "field_order": "progressive",
+              "is_avc": "true",
+              "nal_length_size": "4",
+              "id": "0x1",
+              "r_frame_rate": "30/1",
+              "avg_frame_rate": "30/1",
+              "time_base": "1/15360",
+              "start_pts": 0,
+              "start_time": "0.000000",
+              "duration_ts": 487936,
+              "duration": "31.766667",
+              "bit_rate": "561853",
+              "bits_per_raw_sample": "8",
+              "nb_frames": "953",
+              "extradata_size": 51,
+              "disposition": {
+                "default": 1,
+                "dub": 0,
+                "original": 0,
+                "comment": 0,
+                "lyrics": 0,
+                "karaoke": 0,
+                "forced": 0,
+                "hearing_impaired": 0,
+                "visual_impaired": 0,
+                "clean_effects": 0,
+                "attached_pic": 0,
+                "timed_thumbnails": 0,
+                "non_diegetic": 0,
+                "captions": 0,
+                "descriptions": 0,
+                "metadata": 0,
+                "dependent": 0,
+                "still_image": 0,
+                "multilayer": 0
+              },
+              "tags": {
+                "language": "und",
+                "handler_name": "VideoHandler",
+                "encoder": "Lavc62.28.101 libx264"
+              }
+            }
+          ],
+          "format": {
+            "filename": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-prop-playground/native-final/phone-partial.mp4",
+            "nb_streams": 1,
+            "nb_programs": 0,
+            "nb_stream_groups": 0,
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+            "format_long_name": "QuickTime / MOV",
+            "start_time": "0.000000",
+            "duration": "31.766667",
+            "size": "2243074",
+            "bit_rate": "564887",
+            "probe_score": 100,
+            "tags": {
+              "major_brand": "isom",
+              "minor_version": "512",
+              "compatible_brands": "isomiso2avc1mp41",
+              "encoder": "Lavf62.12.101"
+            }
+          }
+        },
+        "full_decode_exit_code": 0,
+        "full_decode_stderr": "",
+        "cpu_decode_wall_seconds": 0.2997347080090549,
+        "samples": [
+          {
+            "seconds": 3.1766667,
+            "size": [
+              390,
+              844
+            ],
+            "rgb_mean": [
+              65.01006501397497,
+              68.31491371977154,
+              71.86419978126139
+            ],
+            "rgb_stddev": [
+              39.679150966624235,
+              37.1106440626952,
+              34.88847828832536
+            ],
+            "decoded_png_sha256": "2b81cf8128e6ff72e935ce5aeb5d5bbae6530753b1f779a4099ca24482ab9c8b"
+          },
+          {
+            "seconds": 15.8833335,
+            "size": [
+              390,
+              844
+            ],
+            "rgb_mean": [
+              122.80266435775914,
+              120.76516587677725,
+              117.98483412322275
+            ],
+            "rgb_stddev": [
+              57.97932449671302,
+              51.86780832093102,
+              47.99095884807812
+            ],
+            "decoded_png_sha256": "50865039dc1e26800ab602adb7b5adfa678e9143c362667283dca0d3d90e4936"
+          },
+          {
+            "seconds": 28.590000300000003,
+            "size": [
+              390,
+              844
+            ],
+            "rgb_mean": [
+              145.47682585976426,
+              143.73791772997933,
+              142.20667760359703
+            ],
+            "rgb_stddev": [
+              35.89521556233238,
+              32.11129384587277,
+              34.22433681834744
+            ],
+            "decoded_png_sha256": "cffc0186ff12882daf9a3f2e1a980645187b398b2edf7e19ab25cace555c6448"
+          }
+        ]
+      }
+    ]
+  },
+  "budgets": {
+    "partial": true,
+    "scope": [
+      "install",
+      "viewer"
+    ],
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3641.8975,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.1506,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.1
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.698,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.413
+        },
+        "fps": {
+          "value": 60.1009,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1329,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 7.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 7.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 132.4,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 557.7
+        },
+        "idle_cpu_pct": {
+          "value": 5.2,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "checks": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    }
+  },
+  "wheel_bytes": {
+    "before": 3723792,
+    "after": 3729303,
+    "delta": 5511
+  },
+  "source_patch_sha256": "bd9f78340b0f3b46c6e7d90c2c9a7ec1f14fc4f4d7b6afebbb79085aa3d88680",
+  "raw_evidence_index": {
+    "sha256": "cab5ad8c832a7a12b9698e869605c2cfa8c27cfb7072a09f73cb5d8c8beae9dc",
+    "files_verified": 6579,
+    "bytes": 496581941
+  },
+  "artifacts": {
+    "BASELINE.md": {
+      "sha256": "5618f4ffda6545d12ca59b5c8e0251a6dda88c8010a8d7c89275eece7d14671a",
+      "bytes": 3874
+    },
+    "FINAL-RESULTS.md": {
+      "sha256": "9a99a6be06a94354a00b18795e24f33d81c292a21c543efe357446e84271bd6e",
+      "bytes": 8981
+    },
+    "PRE-FIX.md": {
+      "sha256": "d5db00d4a172962a203958a9fc9bf8caa6e577183f7482963abc3e7a210013df",
+      "bytes": 1132
+    },
+    "accepted-frozen_compare.py": {
+      "sha256": "93bcb1aaa9dbe40e2a7e3065363df6e0ac8bd437036c75485ade18b3db8e5f32",
+      "bytes": 10675
+    },
+    "accepted-native_journey.py": {
+      "sha256": "96d1b02f529e46aed8f62432436495df48323232299a3fde173ba9352e2deb4f",
+      "bytes": 23775
+    },
+    "accepted-phone_journey.py": {
+      "sha256": "ee76140240b5b2907a456a18909820e4c54e8894838a8b9bcdcd42cad4799571",
+      "bytes": 25073
+    },
+    "final-A1/empty_desktop.chrome.log": {
+      "sha256": "54c92d21ac4b6ef32fbb49cac09acb37a45ac6aa62d97d4886a8a8507a1708a3",
+      "bytes": 5113
+    },
+    "final-A1/empty_desktop.png": {
+      "sha256": "1b79710f590736591c5d423b724689f94ed7cc45706497f0eee1f9808a423698",
+      "bytes": 154321
+    },
+    "final-A1/empty_desktop.scene.json": {
+      "sha256": "792999460166f40460a22fb33732fc54806c7deac2453459472e31d918942d73",
+      "bytes": 232097
+    },
+    "final-A1/empty_phone.chrome.log": {
+      "sha256": "ac9d19fcee54be864071745c4cb2236d321709f2d8a0dae5bff139571d74890f",
+      "bytes": 4964
+    },
+    "final-A1/empty_phone.png": {
+      "sha256": "a7ea0dbf5266bbe09663658d2da09213bcd92e3b3e99cba97a6df0346fc6b9aa",
+      "bytes": 47149
+    },
+    "final-A1/empty_phone.scene.json": {
+      "sha256": "792999460166f40460a22fb33732fc54806c7deac2453459472e31d918942d73",
+      "bytes": 232097
+    },
+    "final-A1/manifest.json": {
+      "sha256": "abcccb493940739180f46d7d32cdfde6d412b7a564199961a64af3947ebe6de4",
+      "bytes": 165885
+    },
+    "final-A1/props_desktop.chrome.log": {
+      "sha256": "166d3733057afb868cfbada7356e67a276a85c66c5f65af416939a422ce7dee4",
+      "bytes": 5113
+    },
+    "final-A1/props_desktop.png": {
+      "sha256": "7769b295f680e8ac5f0707324c20b13765c7d410085ad66ac908cc61a659ffad",
+      "bytes": 755690
+    },
+    "final-A1/props_desktop.scene.json": {
+      "sha256": "b5b414768582dda30815aad3db86a56a05d8139a8fcca05b5e60e9b83d01188a",
+      "bytes": 263598
+    },
+    "final-A1/props_phone.chrome.log": {
+      "sha256": "4e9181d7011f1d235bb3888feb35efb83f81c361e002eeede54791c6d9d3ca88",
+      "bytes": 5707
+    },
+    "final-A1/props_phone.png": {
+      "sha256": "c049d7e65489c629b41e88404b96582e59079e61f74423a6b5056d6122dfe35f",
+      "bytes": 210828
+    },
+    "final-A1/props_phone.scene.json": {
+      "sha256": "b5b414768582dda30815aad3db86a56a05d8139a8fcca05b5e60e9b83d01188a",
+      "bytes": 263598
+    },
+    "final-A1.log": {
+      "sha256": "60ae659f77535420f93e8d0ec5002069978efd988bf3f54319af77aa8a1dc6ad",
+      "bytes": 148
+    },
+    "final-A2/empty_desktop.chrome.log": {
+      "sha256": "31ac70981c57569ff38107687c0cecd668e77d174e66d47b4fe6a62dd7aaf81d",
+      "bytes": 5707
+    },
+    "final-A2/empty_desktop.png": {
+      "sha256": "1b79710f590736591c5d423b724689f94ed7cc45706497f0eee1f9808a423698",
+      "bytes": 154321
+    },
+    "final-A2/empty_desktop.scene.json": {
+      "sha256": "792999460166f40460a22fb33732fc54806c7deac2453459472e31d918942d73",
+      "bytes": 232097
+    },
+    "final-A2/empty_phone.chrome.log": {
+      "sha256": "44961f16d5cc429575c71e0999f9aceb9ff6f8b62c875c0ed432c384b366e9b7",
+      "bytes": 4877
+    },
+    "final-A2/empty_phone.png": {
+      "sha256": "a7ea0dbf5266bbe09663658d2da09213bcd92e3b3e99cba97a6df0346fc6b9aa",
+      "bytes": 47149
+    },
+    "final-A2/empty_phone.scene.json": {
+      "sha256": "792999460166f40460a22fb33732fc54806c7deac2453459472e31d918942d73",
+      "bytes": 232097
+    },
+    "final-A2/manifest.json": {
+      "sha256": "abe54568686e81a33b9735e4c88f20b6d63372ba57038af099ab54e26cf53aa8",
+      "bytes": 165855
+    },
+    "final-A2/props_desktop.chrome.log": {
+      "sha256": "4bbe0ef2804222c79778a74094dc45301bd339860d5953041797611426b305c9",
+      "bytes": 5113
+    },
+    "final-A2/props_desktop.png": {
+      "sha256": "7769b295f680e8ac5f0707324c20b13765c7d410085ad66ac908cc61a659ffad",
+      "bytes": 755690
+    },
+    "final-A2/props_desktop.scene.json": {
+      "sha256": "b5b414768582dda30815aad3db86a56a05d8139a8fcca05b5e60e9b83d01188a",
+      "bytes": 263598
+    },
+    "final-A2/props_phone.chrome.log": {
+      "sha256": "0372aca2f8df9b1c24b3344286eb0adb247696aca19867e6a378546ef0b5605d",
+      "bytes": 4964
+    },
+    "final-A2/props_phone.png": {
+      "sha256": "c049d7e65489c629b41e88404b96582e59079e61f74423a6b5056d6122dfe35f",
+      "bytes": 210828
+    },
+    "final-A2/props_phone.scene.json": {
+      "sha256": "b5b414768582dda30815aad3db86a56a05d8139a8fcca05b5e60e9b83d01188a",
+      "bytes": 263598
+    },
+    "final-A2.log": {
+      "sha256": "60ae659f77535420f93e8d0ec5002069978efd988bf3f54319af77aa8a1dc6ad",
+      "bytes": 148
+    },
+    "final-B1/empty_desktop.chrome.log": {
+      "sha256": "a7d31f49661cf440fc75a340664eea688f5a362c91867177c65bbcd56e698060",
+      "bytes": 5426
+    },
+    "final-B1/empty_desktop.png": {
+      "sha256": "adee085ebd8a4a31371e1ca4e1359caa373103962d32928bdd4996d7743170a8",
+      "bytes": 150643
+    },
+    "final-B1/empty_desktop.scene.json": {
+      "sha256": "b253fb85040617f71a026b55f94b37f19609d1f47b1c3409ebff9489ba7a104b",
+      "bytes": 232788
+    },
+    "final-B1/empty_phone.chrome.log": {
+      "sha256": "25116862013e02c731b703cc0badd888578d25ca6ff5e04e0b166ff6ed2dcc1e",
+      "bytes": 5707
+    },
+    "final-B1/empty_phone.png": {
+      "sha256": "a7ea0dbf5266bbe09663658d2da09213bcd92e3b3e99cba97a6df0346fc6b9aa",
+      "bytes": 47149
+    },
+    "final-B1/empty_phone.scene.json": {
+      "sha256": "b253fb85040617f71a026b55f94b37f19609d1f47b1c3409ebff9489ba7a104b",
+      "bytes": 232788
+    },
+    "final-B1/manifest.json": {
+      "sha256": "35f25d0c413972a918941862104d1cc250fbde5092729047845ce989a3861955",
+      "bytes": 170371
+    },
+    "final-B1/props_desktop.chrome.log": {
+      "sha256": "6ec7836fae226ff00249312e86994d46130009ecbfb7a728b41cbbedf4aa7d4e",
+      "bytes": 5707
+    },
+    "final-B1/props_desktop.png": {
+      "sha256": "d446dc25dc0ecb82ea334361b949d2ea08b81884cd211982ba98cb0bf514d5f5",
+      "bytes": 751535
+    },
+    "final-B1/props_desktop.scene.json": {
+      "sha256": "5830ec2eb96b6949c4b637be425d4957ee2f06e17f45c74527c5bfcd5ceef9e1",
+      "bytes": 264289
+    },
+    "final-B1/props_phone.chrome.log": {
+      "sha256": "6696141576316ac14e0ba20f67c2e5546a4d2727181698e886c5c78bdaa988c0",
+      "bytes": 5707
+    },
+    "final-B1/props_phone.png": {
+      "sha256": "c049d7e65489c629b41e88404b96582e59079e61f74423a6b5056d6122dfe35f",
+      "bytes": 210828
+    },
+    "final-B1/props_phone.scene.json": {
+      "sha256": "5830ec2eb96b6949c4b637be425d4957ee2f06e17f45c74527c5bfcd5ceef9e1",
+      "bytes": 264289
+    },
+    "final-B1.log": {
+      "sha256": "60ae659f77535420f93e8d0ec5002069978efd988bf3f54319af77aa8a1dc6ad",
+      "bytes": 148
+    },
+    "final-B2/empty_desktop.chrome.log": {
+      "sha256": "663976a8304a5b4a67737434ea784141a96b283338de8d59768cf457e397b896",
+      "bytes": 4833
+    },
+    "final-B2/empty_desktop.png": {
+      "sha256": "adee085ebd8a4a31371e1ca4e1359caa373103962d32928bdd4996d7743170a8",
+      "bytes": 150643
+    },
+    "final-B2/empty_desktop.scene.json": {
+      "sha256": "b253fb85040617f71a026b55f94b37f19609d1f47b1c3409ebff9489ba7a104b",
+      "bytes": 232788
+    },
+    "final-B2/empty_phone.chrome.log": {
+      "sha256": "bf03490d91ee7942945a9997d194b42ba4e509f49eaa8e5ce94b782cd7827075",
+      "bytes": 5128
+    },
+    "final-B2/empty_phone.png": {
+      "sha256": "a7ea0dbf5266bbe09663658d2da09213bcd92e3b3e99cba97a6df0346fc6b9aa",
+      "bytes": 47149
+    },
+    "final-B2/empty_phone.scene.json": {
+      "sha256": "b253fb85040617f71a026b55f94b37f19609d1f47b1c3409ebff9489ba7a104b",
+      "bytes": 232788
+    },
+    "final-B2/manifest.json": {
+      "sha256": "a971a5dbfc0b08d7b5e3affa8bc9f17f60770d9ff4142227a2d4d9b0b181c0e3",
+      "bytes": 170283
+    },
+    "final-B2/props_desktop.chrome.log": {
+      "sha256": "a763d519c33c37c6c6189ffc9286d1f63c789bc99a4e95d330ef9c8c01c71181",
+      "bytes": 5427
+    },
+    "final-B2/props_desktop.png": {
+      "sha256": "d446dc25dc0ecb82ea334361b949d2ea08b81884cd211982ba98cb0bf514d5f5",
+      "bytes": 751535
+    },
+    "final-B2/props_desktop.scene.json": {
+      "sha256": "5830ec2eb96b6949c4b637be425d4957ee2f06e17f45c74527c5bfcd5ceef9e1",
+      "bytes": 264289
+    },
+    "final-B2/props_phone.chrome.log": {
+      "sha256": "95082d99751d6286461e30f8aa369e1adfd9b82e8a51cf591e0d38313a7c9e41",
+      "bytes": 5409
+    },
+    "final-B2/props_phone.png": {
+      "sha256": "52cc0d8e1f1420baf4aa32203625025f4074d85cfb4ba4af8bfebb87619c7b87",
+      "bytes": 210857
+    },
+    "final-B2/props_phone.scene.json": {
+      "sha256": "5830ec2eb96b6949c4b637be425d4957ee2f06e17f45c74527c5bfcd5ceef9e1",
+      "bytes": 264289
+    },
+    "final-B2.log": {
+      "sha256": "60ae659f77535420f93e8d0ec5002069978efd988bf3f54319af77aa8a1dc6ad",
+      "bytes": 148
+    },
+    "final-comparison.json": {
+      "sha256": "f533a4f4f63d40884cf4333b808c289c29492ffc837ae889d4fa3570f78bcc1c",
+      "bytes": 25521
+    },
+    "final-run-order.json": {
+      "sha256": "b5dbd9f7766042f9868d1b89737944bb4f7f327d36d783f795ec849cdf79a1fa",
+      "bytes": 5230
+    },
+    "frozen/empty.initial.json": {
+      "sha256": "2d03cd573f377774c22cfd318aa7c342ed951aa5303ffb73ff9be15a0ec423e8",
+      "bytes": 94
+    },
+    "frozen/empty.world.json": {
+      "sha256": "a7ffca821561f4cc30434cdf6a8a6935cfcd617b643af04b9456993984a4dd74",
+      "bytes": 183
+    },
+    "frozen/props.initial.json": {
+      "sha256": "38b913be0c15ac43189845c99396fd5187854eb4c35dbf9855c4368003b3033f",
+      "bytes": 1499
+    },
+    "frozen/props.world.json": {
+      "sha256": "b919ffacfc70e1d2d13ed21b0cade4a73b8b57c8f13477358aff59f096160258",
+      "bytes": 1685
+    },
+    "native-final/desktop.chrome.log": {
+      "sha256": "8be28dccbd272d4b95ce37631a18c2e5f3eaf00a498df5a2f284b9d1761b0391",
+      "bytes": 14077
+    },
+    "native-final/desktop.mp4": {
+      "sha256": "c00e7a7ef0e3e94fb7ce0257b99ed855aa1a258583d576fd198add3543592bb2",
+      "bytes": 8414888
+    },
+    "native-final/desktop_arm_control.png": {
+      "sha256": "b3245b7a2272d783c2af53381adcb7ec7e2a2c0491a5bc3b5181456612f9dfb2",
+      "bytes": 721715
+    },
+    "native-final/desktop_barrier_retry.png": {
+      "sha256": "07e264777eef9388d4f4c09bebf70172c169d756ebea33770963f446ff488fff",
+      "bytes": 658790
+    },
+    "native-final/desktop_desk_map.png": {
+      "sha256": "3987d0aad91790cca99c500f028344d8dfac0855a7c738895ed6fd7176f6e991",
+      "bytes": 561089
+    },
+    "native-final/desktop_initial.png": {
+      "sha256": "7b38b55b753e84266fdb99e2847de273054a7a44c21da1e8f826ef25c37b76fa",
+      "bytes": 404571
+    },
+    "native-final/desktop_occupied_refused.png": {
+      "sha256": "2fa4193de0dbbaa4d08a7d972da81d8ed2601526c3425e1b9b3a4b096fba42cc",
+      "bytes": 435948
+    },
+    "native-final/desktop_palette_ball.png": {
+      "sha256": "462958189317cffd917d5b0eb35677ddda6c302253cedffc84abe4b9c16ac859",
+      "bytes": 602136
+    },
+    "native-final/desktop_palette_barrier.png": {
+      "sha256": "1e4bebcacd846b0c959cd26170480c17d1973f8b13d2d2b667da2531c2cfa5c3",
+      "bytes": 620946
+    },
+    "native-final/desktop_palette_block.png": {
+      "sha256": "593e69b9af8b0a8eca5dcaab1228bc5b614061dcdd9571ea2c78c9fc5dd25122",
+      "bytes": 697166
+    },
+    "native-final/desktop_palette_pin.png": {
+      "sha256": "98b99a0e1a9ab94b731471f0c4a36844d7ff0248c6b44b5672a31950999e7eab",
+      "bytes": 615153
+    },
+    "native-final/desktop_palette_table.png": {
+      "sha256": "33e0ccffdc8ad788453c3c4170096bb10f8374cfbdcd9bc6b59eda0207e6c7e2",
+      "bytes": 615287
+    },
+    "native-final/desktop_placed_arm.png": {
+      "sha256": "94daca4659e5cebb9c664600d6ee0d0e23e3fc6398e90bff1acd913d91d995d7",
+      "bytes": 684184
+    },
+    "native-final/desktop_placed_ball.png": {
+      "sha256": "88d936a705464fd3d1d08e20a8bbbd088dcd2938e780f1a59decb1b07e13c6b6",
+      "bytes": 620867
+    },
+    "native-final/desktop_placed_barrier.png": {
+      "sha256": "07e264777eef9388d4f4c09bebf70172c169d756ebea33770963f446ff488fff",
+      "bytes": 658790
+    },
+    "native-final/desktop_placed_block.png": {
+      "sha256": "d320bcf56e557c668f209aa920530efb903f051cc57ce06ace25c58e3b09627b",
+      "bytes": 678605
+    },
+    "native-final/desktop_placed_block_2.png": {
+      "sha256": "2f0dd0e74bead4a9189f31da7acd99afa55177f26f9b9d791aedbc7f98630620",
+      "bytes": 715245
+    },
+    "native-final/desktop_placed_block_3.png": {
+      "sha256": "f0008a20f6dfaf4f769dbee299997b527f63f8f8af91b1006db2a30741bdd491",
+      "bytes": 728280
+    },
+    "native-final/desktop_placed_pin.png": {
+      "sha256": "1c4cf548384e11ac8d21b5845cdcf1840e6de8a841e01acb95cc862cde58329f",
+      "bytes": 628849
+    },
+    "native-final/desktop_placed_rover.png": {
+      "sha256": "b7b7454e81a3f42ffb6865529248585c81331665357233640304033925c070de",
+      "bytes": 368974
+    },
+    "native-final/desktop_placed_rover_2.png": {
+      "sha256": "2a709dffe0f565e5f92b36660dfc7106b13066cfb67b6af26b44acb187d047db",
+      "bytes": 433107
+    },
+    "native-final/desktop_placed_table.png": {
+      "sha256": "6d9cf8a3d1f17310c179acc4e06e1c8390ff4f1363d80e07f1d051d1a5bb7e09",
+      "bytes": 648070
+    },
+    "native-final/desktop_preview_ball_normal_0.png": {
+      "sha256": "7c0f1ac89722a4f25228ae72f977d9b3076f4f8a0cf55f1bc57a2014ff89cabc",
+      "bytes": 601706
+    },
+    "native-final/desktop_preview_barrier_large_90.png": {
+      "sha256": "dd191de76b84d227a0b45688023b8e5662544c6bafcf6b127cb658a933fa2fec",
+      "bytes": 645526
+    },
+    "native-final/desktop_preview_block_large_0.png": {
+      "sha256": "e24e112a0ba846aa7052efa8c3e61eaf92937496975aa471ae9cae20f67de770",
+      "bytes": 666701
+    },
+    "native-final/desktop_preview_block_small_0.png": {
+      "sha256": "4880cdd7e1933d3a14c39a6faf8d3e9011b2a5ce57faeb3e33b59aa6e6afe6f4",
+      "bytes": 705142
+    },
+    "native-final/desktop_preview_pin_normal_0.png": {
+      "sha256": "7088b551721f201448853be5bcd17fe8310d1a39a6a478be6b6c2fc9fc3bf38b",
+      "bytes": 615372
+    },
+    "native-final/desktop_preview_table_large_0.png": {
+      "sha256": "c3a4d2814eca059fc4189de22955f18844bed2654f589a8ac7bd650dd7e8df0e",
+      "bytes": 633413
+    },
+    "native-final/desktop_push_ball.png": {
+      "sha256": "05539b05fa473a0000ebc81b7508244787306f370ad664b2c42a021688a84d7b",
+      "bytes": 666113
+    },
+    "native-final/desktop_push_pin.png": {
+      "sha256": "ca50bcc90275812f64a61c591f5f332ce481c3403ea0b9558502a45f40ff8b80",
+      "bytes": 673153
+    },
+    "native-final/desktop_reset_controls.png": {
+      "sha256": "9f57b9193d5f107495743e7b37e84f96e948530380f9d189d20e9f1b3a8e5298",
+      "bytes": 563780
+    },
+    "native-final/desktop_terrain_flat.png": {
+      "sha256": "d801d0344ed81567a9bb503ec060e868981a8919ae54dbf1521318a0e689ddcb",
+      "bytes": 676390
+    },
+    "native-final/desktop_terrain_stairs.png": {
+      "sha256": "c960801065b1bc179303b902ac70840cb12c81802333999f59a529741c46cf40",
+      "bytes": 683879
+    },
+    "native-final/desktop_undo_once.png": {
+      "sha256": "f409d3c4a135e14a2ee2471f4ee3ab6cfaac7f8442b7d5621ca37fb47946984b",
+      "bytes": 654869
+    },
+    "native-final/desktop_wood_floor.png": {
+      "sha256": "d953c3b568cae91f8a6100554c653ae20b17a665694a5b2f0fea5ac6071d9df1",
+      "bytes": 1080417
+    },
+    "native-final/manifest.json": {
+      "sha256": "fd81ed405ef7ccd235afa69d6e8059eb1f333f7b5cd80eff966815e123fb5289",
+      "bytes": 3509071
+    },
+    "native-final/phone-partial.mp4": {
+      "sha256": "00ef46502039571c9675baa2886abc1a05a45d7b614676f1a4c73b101b88d58e",
+      "bytes": 2243074
+    },
+    "native-final/phone.chrome.log": {
+      "sha256": "cccf084e63b91bdb8bc5cda2deb2e325e7994de1eb780d3fcc2fd8382e32f651",
+      "bytes": 13353
+    },
+    "native-final/phone.partial.json": {
+      "sha256": "fbd6f99aafdbc47cc7a9af0f1bb170589ab3796af90410e7d480d2c66a204727",
+      "bytes": 1447160
+    },
+    "native-final/phone_arm_control.png": {
+      "sha256": "18170a0f2018b9ef34d50faa0946dddf84fbf53e2d4c355726e42eca15f3384c",
+      "bytes": 132880
+    },
+    "native-final/phone_barrier_retry.png": {
+      "sha256": "62016658d2828b601d4d56dcdf5ba8ee9a1a71f62a842b39d85093dd5cf81fb0",
+      "bytes": 181014
+    },
+    "native-final/phone_failure.png": {
+      "sha256": "c54b892b77901a17ea66002be45ac513ceb1ee93f8c0bfccfdd34f1c7c4c140d",
+      "bytes": 186958
+    },
+    "native-final/phone_initial.png": {
+      "sha256": "c8ef8c443bf11e1a04fd68f17043ab0a7735656643a2e18552cbd7d6a29ff4fb",
+      "bytes": 144780
+    },
+    "native-final/phone_occupied_refused.png": {
+      "sha256": "a199353363fde1da5acb12632e637e12f63399f993e9560a1c6937f238467b0a",
+      "bytes": 132079
+    },
+    "native-final/phone_palette_ball.png": {
+      "sha256": "c6d93b39ab5b90e6ca572b2cfa6386bb5dd04676a7cb53bff4306ca14cff15f0",
+      "bytes": 142705
+    },
+    "native-final/phone_palette_barrier.png": {
+      "sha256": "4fa40e66685d8f68c777e1f4d395f44b5bcc4912e3cdfd33622862b9f130aee9",
+      "bytes": 139674
+    },
+    "native-final/phone_palette_block.png": {
+      "sha256": "859d0925c1544466e752e5332aa9fae84b13ef3a4221fc9e688aa1e818c74c5a",
+      "bytes": 144534
+    },
+    "native-final/phone_palette_pin.png": {
+      "sha256": "d973ff8dc2806f657a640d3f801510eac7345b37bd648ce190e0f947a49853b8",
+      "bytes": 143703
+    },
+    "native-final/phone_palette_table.png": {
+      "sha256": "43c4565150a1578ddcd8f31a78c7fff9879da396c90b7af78050e9b0b44aa506",
+      "bytes": 138829
+    },
+    "native-final/phone_placed_arm.png": {
+      "sha256": "abed7b63d891a11fd7e606ce99e085070a61096dd4e8fbcbb5cdba0bd90fa2da",
+      "bytes": 211250
+    },
+    "native-final/phone_placed_ball.png": {
+      "sha256": "a884db1bae5d8ba079fa44b6e2f69bd1baf0bdf67c86cea2477961ee63577a6d",
+      "bytes": 178249
+    },
+    "native-final/phone_placed_barrier.png": {
+      "sha256": "62016658d2828b601d4d56dcdf5ba8ee9a1a71f62a842b39d85093dd5cf81fb0",
+      "bytes": 181014
+    },
+    "native-final/phone_placed_block.png": {
+      "sha256": "3c672559ab51b9e3351589d7170c16ff7ea38c420dfab8ca8ba81d8c576793bf",
+      "bytes": 180836
+    },
+    "native-final/phone_placed_block_2.png": {
+      "sha256": "7d702b8080a90df853083e546b0e589ee9d7ce80c8655345e29bfa8cf3b1c618",
+      "bytes": 188748
+    },
+    "native-final/phone_placed_block_3.png": {
+      "sha256": "a81b079b136715336a8f18a74ffd62bc1f646ac4126ad970bfb162c6cbb4e51f",
+      "bytes": 192402
+    },
+    "native-final/phone_placed_pin.png": {
+      "sha256": "3e1c7ea357e8fe36c27bb48fb46622d7334b4a6db9d3f033da884adf07b153f9",
+      "bytes": 180006
+    },
+    "native-final/phone_placed_rover.png": {
+      "sha256": "307dfdd23b311f45f04f42b4956d4de86441a89add61e3b22be43a03a0a6cc4d",
+      "bytes": 117505
+    },
+    "native-final/phone_placed_rover_2.png": {
+      "sha256": "d4bf7f49fc0747ab9c9158b5f6c50f70cc5c15fbd5c52c3a32a5c855b6b15a16",
+      "bytes": 164928
+    },
+    "native-final/phone_placed_table.png": {
+      "sha256": "1c1a30a0b2ede63dea7331378aa35c6b3d039a09203d2fb1c3185dfc1f2ac6c2",
+      "bytes": 172092
+    },
+    "native-final/phone_preview_ball_normal_0.png": {
+      "sha256": "b1b69e82a0cf46a676e59d439f341a2044fa682f3c3121bce26defe08a0b2631",
+      "bytes": 167845
+    },
+    "native-final/phone_preview_barrier_large_90.png": {
+      "sha256": "fcfbef0720233c47fe198696ac7acbf2f3062380eefe91950af55aec974c6f06",
+      "bytes": 172667
+    },
+    "native-final/phone_preview_block_large_0.png": {
+      "sha256": "7731fb6a114bad1cf05dadd138ec266f651305ff19eef4a474793d8420f700b6",
+      "bytes": 173598
+    },
+    "native-final/phone_preview_block_small_0.png": {
+      "sha256": "bdd17d2fa8a392e41f42195794a7338e619e4faaab5fbe8c4fbe6f85110b933a",
+      "bytes": 176723
+    },
+    "native-final/phone_preview_pin_normal_0.png": {
+      "sha256": "7eac83bfda48515f25d100f2bcccf22eb9b21c3e6d21ae52b6c411a546b9069a",
+      "bytes": 170192
+    },
+    "native-final/phone_preview_table_large_0.png": {
+      "sha256": "9b9ec6fac0b3968da38751c2f2101547dafb2a545c8f18762ac16353862c1846",
+      "bytes": 170184
+    },
+    "native-final/phone_push_ball.png": {
+      "sha256": "c54b892b77901a17ea66002be45ac513ceb1ee93f8c0bfccfdd34f1c7c4c140d",
+      "bytes": 186958
+    },
+    "native-final/phone_undo_once.png": {
+      "sha256": "39b7d832cf85b91fc91750ef08e44496418da6b0ec39b34d30fe5d4a7dd28c38",
+      "bytes": 179079
+    },
+    "native-final/source-after.json": {
+      "sha256": "3876d33025bfcbe99a75e43975fcd11d86d5d6b49be7e8844b5a395254f1b8e6",
+      "bytes": 466
+    },
+    "native-final-phone/manifest.json": {
+      "sha256": "89684f2dafb01c952a7db6042b39aa390b1ce62668373d254a530f8ba32fb93c",
+      "bytes": 3516846
+    },
+    "native-final-phone/phone.chrome.log": {
+      "sha256": "0324527ea3818017e9739241d25da85cdc37ad384236c628e7bd76b6deb912ff",
+      "bytes": 13643
+    },
+    "native-final-phone/phone.mp4": {
+      "sha256": "20bc1e0f86acd2d6363a733672fd2813a6c72f7fdde366b7b80f3ab38b4cacca",
+      "bytes": 3016426
+    },
+    "native-final-phone/phone_arm_control.png": {
+      "sha256": "1771304e0e688773f6afb7648e5bd6906dd18041cb76d3d2568e407619578111",
+      "bytes": 132876
+    },
+    "native-final-phone/phone_barrier_retry.png": {
+      "sha256": "2179bd32fe53b6820fe204082ae3b59856b4bc0e36686b3288f289271962766a",
+      "bytes": 181012
+    },
+    "native-final-phone/phone_desk_map.png": {
+      "sha256": "5cff8242337ec039e0bcc6f36010ae08fb0e7dd6df4c2967259a9e6744d6ec6e",
+      "bytes": 149306
+    },
+    "native-final-phone/phone_initial.png": {
+      "sha256": "2d03b91ba16052c5a039e7dce2b347edff6aaae958198f46a1241c3d30acd7fe",
+      "bytes": 144606
+    },
+    "native-final-phone/phone_occupied_refused.png": {
+      "sha256": "d86634d4de9fcaaa0b814b64d32d43691cc941ee58120fccbb3042c6b85257e1",
+      "bytes": 151380
+    },
+    "native-final-phone/phone_palette_ball.png": {
+      "sha256": "606804f825b52ee62695983125c7fa8e8134e94dc91b0d78f28a551127df4eed",
+      "bytes": 143365
+    },
+    "native-final-phone/phone_palette_barrier.png": {
+      "sha256": "7fd2ba9c9b999901c1f361ee51f74339fa86c57f02feba01b610ee615cbf05b4",
+      "bytes": 139993
+    },
+    "native-final-phone/phone_palette_block.png": {
+      "sha256": "1bea7409f0275838c1e60ac8009228bec980e5f4d37e7966ddf51ae5ca9473f0",
+      "bytes": 144365
+    },
+    "native-final-phone/phone_palette_pin.png": {
+      "sha256": "b95fb8d5fb0599511d4db196bbb80e1aa39f8c5736fea8f1d6eed083d6ff3e43",
+      "bytes": 143657
+    },
+    "native-final-phone/phone_palette_table.png": {
+      "sha256": "7e644bb0266fd0d132f8784a2c19db224284a9079b8a87a556c345b9fb44d79c",
+      "bytes": 139178
+    },
+    "native-final-phone/phone_placed_arm.png": {
+      "sha256": "3af6e24c8b7cb64df044cb29b21d898d8262bc0b32a30c8df3ef1e3412822aa7",
+      "bytes": 210286
+    },
+    "native-final-phone/phone_placed_ball.png": {
+      "sha256": "0ff26ca5f4815ad02a9deaea526faee3456e7a621978a4d8d4b392b64e7f05b9",
+      "bytes": 179360
+    },
+    "native-final-phone/phone_placed_barrier.png": {
+      "sha256": "2179bd32fe53b6820fe204082ae3b59856b4bc0e36686b3288f289271962766a",
+      "bytes": 181012
+    },
+    "native-final-phone/phone_placed_block.png": {
+      "sha256": "1bda9476ec80a0d64ed4b0ceb77207a1c11b20eb81314311cbef535c8de5591e",
+      "bytes": 180278
+    },
+    "native-final-phone/phone_placed_block_2.png": {
+      "sha256": "f8218572973208593cd9a4b93c75c99cd477de74f7b50fcb7365e3ac716ef123",
+      "bytes": 188812
+    },
+    "native-final-phone/phone_placed_block_3.png": {
+      "sha256": "551409d141f373dbec842bd6390ebf81ec2efbf2b3de9b31d73e94ca43510363",
+      "bytes": 192228
+    },
+    "native-final-phone/phone_placed_pin.png": {
+      "sha256": "b71f103fb1b7a8b8c38a2ec03dc0aa86b52ee232b0a3915af1f82dffde899979",
+      "bytes": 180059
+    },
+    "native-final-phone/phone_placed_rover.png": {
+      "sha256": "1f156a171a51d3b9d79869083e3937f31cf5bf2ccfcbacd3f42dc6136b49e78d",
+      "bytes": 115621
+    },
+    "native-final-phone/phone_placed_rover_2.png": {
+      "sha256": "91fbed73349598502eb54343675d6f65d33557364bf38e4ac6c6b12193daa74d",
+      "bytes": 163172
+    },
+    "native-final-phone/phone_placed_table.png": {
+      "sha256": "4bd532cc993b96ef034046195c1e9286e8c3a6b6576fe2efe8d749e525a2a344",
+      "bytes": 171999
+    },
+    "native-final-phone/phone_preview_ball_normal_0.png": {
+      "sha256": "e757f0aa21004061baeaad16e273ec90a995417641841efcfa387080e5e1103a",
+      "bytes": 168766
+    },
+    "native-final-phone/phone_preview_barrier_large_90.png": {
+      "sha256": "2c17f8ae486edfdc9208eeac7cecc97ab53dd3d05a7e65157f9b0b8b1d44ee82",
+      "bytes": 172895
+    },
+    "native-final-phone/phone_preview_block_large_0.png": {
+      "sha256": "35c773788976d729e0b0731c451edb81084b1f141f084b81dbcd2d3282e843c6",
+      "bytes": 173503
+    },
+    "native-final-phone/phone_preview_block_small_0.png": {
+      "sha256": "dd89ffd7f5a40f3e512bc8dd82b8f73d0bb30bc91dc73137cc7b69ece97c75b1",
+      "bytes": 176373
+    },
+    "native-final-phone/phone_preview_pin_normal_0.png": {
+      "sha256": "caa4bdf596ff845152912655f592d5ab9cc15fdb748c4c98dbef4eefd7af73a8",
+      "bytes": 170366
+    },
+    "native-final-phone/phone_preview_table_large_0.png": {
+      "sha256": "27195c569b651d202b92038f808bd83201ea939182d76354fcc2364f08fb3d30",
+      "bytes": 170397
+    },
+    "native-final-phone/phone_push_ball.png": {
+      "sha256": "0921e8f1932621f30be2498f2cd14a0ba19e36a808ca2c65f5f9f10f03cb3360",
+      "bytes": 187150
+    },
+    "native-final-phone/phone_push_pin.png": {
+      "sha256": "c6cf101fc634358668262dbe9581557551bbf25e0d18ecd5e6d5ba46500bc099",
+      "bytes": 189987
+    },
+    "native-final-phone/phone_reset_controls.png": {
+      "sha256": "f7d7dc858326b2296c489c224ea150f36649b600793895c7dc4b4f8489462a3a",
+      "bytes": 149654
+    },
+    "native-final-phone/phone_terrain_flat.png": {
+      "sha256": "f67251fd220d8e858cd1d99737080ccb223efa63cfda8957d9bbd8c4e5d50d5b",
+      "bytes": 158753
+    },
+    "native-final-phone/phone_terrain_stairs.png": {
+      "sha256": "c3e443bfadbfd52b909bf5d128ba267782db0ee60c57e3bfff6ad1ecc12efab6",
+      "bytes": 153223
+    },
+    "native-final-phone/phone_undo_once.png": {
+      "sha256": "61804dc90cce99b8ad06f7966e55c455128564dfc2e201f41a9ee16fa3ae3f1e",
+      "bytes": 179663
+    },
+    "native-final-phone/phone_wood_floor.png": {
+      "sha256": "f28b8c72090555d81f91587721d734109ffe76c974bea144152df3c619a34c7d",
+      "bytes": 181519
+    },
+    "native-final-phone.log": {
+      "sha256": "8327093f03f5159ba9e055c7055a4f187bcc416588188000bf81be20e5467129",
+      "bytes": 46
+    },
+    "native-final-validation.json": {
+      "sha256": "692d91c904fd887d1b2f4590f4ef6b7cb90e53e0a0fd5eb63f25ad5e71ee8bb4",
+      "bytes": 5408
+    },
+    "native-final.log": {
+      "sha256": "f5d4af5c22668e7b7e71a178f07e343169b96d9cbd7a7c85c597a4d36344b5a6",
+      "bytes": 1580
+    },
+    "summarize_pairs.py": {
+      "sha256": "985e1fd6d0c409f31358a19f130c954a8f021936b6bee9bb77ffff3c07ae5a10",
+      "bytes": 3981
+    },
+    "video-qa.json": {
+      "sha256": "0631e60946900bcced4f4cfeca30810da5d852da290a171d9e723dc60c6a53e9",
+      "bytes": 14204
+    },
+    "root-phone-decoded-1.png": {
+      "sha256": "211d800d7e9f6adcc084dfb366d0c928c12738c54e03029ad511a88f96e1ee7c",
+      "bytes": 147655
+    },
+    "root-desktop-decoded-2.png": {
+      "sha256": "321c8ed141bfe06056976c83a61b2b037b721d9666b4cc2feeb94c6b5c77ccae",
+      "bytes": 558909
+    },
+    "root-phone-decoded-0.png": {
+      "sha256": "2e78572b91375301f5b8270e8074fca6d2a25c3be2f77c2830e358ebb2fbacda",
+      "bytes": 124725
+    },
+    "root-desktop-decoded-contact.png": {
+      "sha256": "432b70c3c0bbe8f61b4e81f896e66ea1bd4bdd575985a4aeabc6650033d8a9b8",
+      "bytes": 472415
+    },
+    "root-phone-decoded-2.png": {
+      "sha256": "2d9b1e03ff9e6986d851258e1243bca90a613b5d5d1b68b46ddad7a8f7e92447",
+      "bytes": 149803
+    },
+    "root-desktop-decoded-1.png": {
+      "sha256": "3ac521ddc73710aa13116178dbb3b51d45e3d0b98cd6a023944bd2165eb41536",
+      "bytes": 671513
+    },
+    "root-phone-decoded-contact.png": {
+      "sha256": "e1b86ec183f100611d6e9cc0fc7a30f044a3e087684a2b5876ac93dc8126d3a3",
+      "bytes": 340027
+    },
+    "root-desktop-decoded-0.png": {
+      "sha256": "bd31773750aab33eb8715478cc3346824b2cc48d5e845e85a5d179fd0a376ec0",
+      "bytes": 326197
+    },
+    "final-artifacts.json": {
+      "sha256": "cab5ad8c832a7a12b9698e869605c2cfa8c27cfb7072a09f73cb5d8c8beae9dc",
+      "bytes": 1525142
+    },
+    "candidate-source.patch": {
+      "sha256": "bd9f78340b0f3b46c6e7d90c2c9a7ec1f14fc4f4d7b6afebbb79085aa3d88680",
+      "bytes": 68437
+    },
+    "finalize_record.py": {
+      "sha256": "dfd9b6d64b2e986c334b10752c04065d0ecbec657e54886fdc9d2e249a9ccfe0",
+      "bytes": 8797
+    },
+    "verification-logs/framework.log": {
+      "sha256": "382629dd69da4c9c22c555fbe52329eedfc6333d16f5bbfacdd36fb086e61dcb",
+      "bytes": 446
+    },
+    "verification-logs/budget.log": {
+      "sha256": "74411bbdcb93b10c6a3b75afdd59c53212f14df2472642b38365fd9b6f42f821",
+      "bytes": 1397
+    },
+    "verification-logs/full-default.log": {
+      "sha256": "176acdbc325624c2a176c9398bfb6d99fe2b1e08201d745bc0b77deae289f44b",
+      "bytes": 3982
+    },
+    "verification-logs/smoke.log": {
+      "sha256": "68bad2a72af33dd5bd394a04b4664e42476b51505eda16c6b91e19ca2045f84a",
+      "bytes": 772
+    },
+    "verification-logs/full-default.xml": {
+      "sha256": "daf00edd3629fe3caf1816e1b5ba84d5d44bcce7cbbf60a699d2238467db8da0",
+      "bytes": 487428
+    },
+    "verification-logs/objects-browser-final.json": {
+      "sha256": "4115c520b8f6a6e22ee875f4b9ba987b249c56b2de1ae149331a67cf8129d16e",
+      "bytes": 339
+    },
+    "verification-logs/browser-prefixed-source.json": {
+      "sha256": "c7e1dbc91b243e9bc7fa6d7e7a229d42eb61aa14e6c2abc54d6f709ecbb159e5",
+      "bytes": 946
+    },
+    "verification-logs/browser-existing.log": {
+      "sha256": "5b4bd5b3011797f976ef77f50d2cdc89e048433657d728e89d53239af01222b8",
+      "bytes": 110
+    },
+    "budget-final/2026-10-23-86305fb-dirty-partial.json": {
+      "sha256": "7d833a1968b43fa6e445f17085ce88029f8bff200866cbc480fb6d065df87080",
+      "bytes": 5025
+    },
+    "framework-final/report.json": {
+      "sha256": "618725a89d3e0c9a2288d3fe1fc08c9cba9077de07d7d8a79e16632cf7d1702f",
+      "bytes": 371
+    },
+    "framework-final/manifest.json": {
+      "sha256": "576f370fb159d1e7709873923cc59ecb7fd61080b5dba7956bdd022ccda93c25",
+      "bytes": 21018
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/design/store.py": {
+      "sha256": "180371417a9897f31bd73449e793d7f1fbc309ecd675d29af23195b1a681d48c",
+      "bytes": 6814
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/playground.py": {
+      "sha256": "f0d026cc14bb5f6d6a4bca1ac3bdb59c4272393e2b197adf6eafbf7dfa8ec31c",
+      "bytes": 95666
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/creation.py": {
+      "sha256": "7601a51d72c1113930744a673686ef527c21093f857ec88b328f957fba38b38b",
+      "bytes": 12137
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/app.js": {
+      "sha256": "edfe5e56b3870eb33f4441956dd8324f992c44f75aba246005d75b5643a49c8c",
+      "bytes": 105634
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/creation.js": {
+      "sha256": "09c89acd9dda45275969801fdce91aeeeebbcebae6a36af03eb34deaef7ab0a1",
+      "bytes": 4821
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/i18n.js": {
+      "sha256": "d4bf7a6ff98e663c19b6710582e72d7bd87144af387d1d5da910a7b19c004a64",
+      "bytes": 29002
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/index.html": {
+      "sha256": "be0999ee9dd6ba0eadfee209b142a2b4a3495b9a1b06cb3f0a5f34f6999fea2d",
+      "bytes": 17274
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/style.css": {
+      "sha256": "db04ad3fbd6b14a325de54a94e034b359d374e89ad50e9af472053907c9077e3",
+      "bytes": 49478
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/placement-preview.js": {
+      "sha256": "0f56a6e6a62df22f81329e5bcc116f1e0af8a21c29949215be4bb66dac807695",
+      "bytes": 1301
+    },
+    "/Users/yusenthebot/dev/robotforge/tests/test_viewer_creation.py": {
+      "sha256": "8f307e036547b3edc9431995d057db21fcf6cf814213d92f0144627d03be04d6",
+      "bytes": 8603
+    },
+    "/Users/yusenthebot/dev/robotforge/tests/test_viewer_objects.py": {
+      "sha256": "e454d6780a3487bfd29e998f2e1e7f83873cecb7471f9f42ed0ca77184c267f7",
+      "bytes": 10755
+    },
+    "/Users/yusenthebot/dev/robotforge/tests/test_viewer_objects_browser.py": {
+      "sha256": "d7de498fd0bf3421d05b5f4e915abd20e06e1f4544ebeb3ba77dc046f2deaa44",
+      "bytes": 7804
+    },
+    "/Users/yusenthebot/dev/robotforge/docs/CREATIVE_PLAY.md": {
+      "sha256": "270fc7413ef8fa4f7489782ea508dbb706cdc1506a5f83498bbbe11b56554cc4",
+      "bytes": 2557
+    },
+    "/Users/yusenthebot/dev/robotforge/docs/bench/2026-10-23-prop-playground.md": {
+      "sha256": "a40eab320b23371a737bea2ec6d64811be6b332424357baf985dc503214d81fe",
+      "bytes": 11813
+    }
+  },
+  "verification_record": {
+    "path": "verification/c7fd332d-c8d3-4fbb-bc71-8b028523b52a/experiment.json",
+    "id": "c7fd332d-c8d3-4fbb-bc71-8b028523b52a",
+    "status": "completed",
+    "artifacts_verified": 213,
+    "sha256": "d0164207013a5f7b36ef24f2a2457637c7812469cf75e18f182c9b7db45c21e4"
+  }
+}

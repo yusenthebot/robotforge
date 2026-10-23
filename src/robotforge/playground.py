@@ -56,6 +56,7 @@ from robotforge.viewer.server import ViewerHub
 
 if TYPE_CHECKING:
     from robotforge.design import generator
+    from robotforge.viewer.creation import Addition
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
 MAX_SIM_SECONDS = 60.0
@@ -120,6 +121,7 @@ class Playground:
     # from the model, for the model they were made for (design/tasks/live.py)
     _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
+    _play_addition: Addition | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.behaviors = BehaviorManager(
@@ -222,6 +224,8 @@ class Playground:
             action = msg.get("action")
             if action == "add_robot":
                 return self.add_robot_for_play(msg)
+            if action in {"add_object", "undo_add"}:
+                return self.object_for_play(msg)
             if action == "scene":
                 if msg.get("preset") == "empty":
                     return _short(self.clear_scene())
@@ -418,6 +422,13 @@ class Playground:
         from robotforge.viewer.creation import place
 
         return place(self, message)
+
+    @_one_edit_at_a_time
+    def object_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Place a local prop or undo the exact latest viewer addition."""
+        from robotforge.viewer.creation import place_object, undo_addition
+
+        return undo_addition(self, message) if message.get("action") == "undo_add" else place_object(self, message)
 
     @_one_edit_at_a_time
     def add_robot(
@@ -1020,7 +1031,7 @@ class Playground:
         store = self.store
         return {"world_dir": str(store.dir), "world_yaml": store.file.read_text(encoding="utf-8")}
 
-    def _edit(self, change, snapshot: bool = True) -> dict[str, Any]:
+    def _edit(self, change, snapshot: bool = True, *, exact_carry: bool = False) -> dict[str, Any]:
         """Apply `change` to the open world and load it; snapshot=False finishes the edit before it (one undo)."""
         store = self._require_store()
         before = store.load()
@@ -1039,7 +1050,13 @@ class Playground:
             unchanged = [r.name for r in after.robots if without_sensors(r) in kept]
             unchanged += [o.name for o in after.objects if o in before.objects]
             with self.session.lock:
-                carried = carry.restore(self.session.model, self.session.data, live, unchanged)
+                if exact_carry:
+                    keep = set(unchanged)
+                    carry._apply(self.session.model, self.session.data, live, lambda name: carry.owner(name) in keep)
+                    mujoco.mj_forward(self.session.model, self.session.data)
+                    carried = unchanged
+                else:
+                    carried = carry.restore(self.session.model, self.session.data, live, unchanged)
                 self.behaviors.let_go(hands_off.intersection(carried))  # legs set by hand stay set
                 # First samples from where the robots now are; their sensors' estimates carry on (odometry).
                 self.sensors.rebuild(kept=carried)
@@ -1866,10 +1883,11 @@ def _limit_dict(d: dict) -> dict:
 
 def viewer_catalog() -> dict[str, Any]:
     """What the viewer's World panel offers: scene presets, ground styles with their colors, terrain types."""
-    from robotforge.viewer.creation import catalog
+    from robotforge.viewer.creation import catalog, object_catalog
 
     return {
         "robot_templates": catalog(),
+        "object_presets": object_catalog(),
         "scenes": [{"name": s["name"], "title": s["title"], "summary": s["summary"]} for s in scenes.catalog()],
         "grounds": {name: [round(c, 3) for c in style.rgba[:3]] for name, style in terrain.STYLES.items()},
         "terrains": ["flat", *(t for t in terrain.TYPES if t != "basin")],  # a hollow needs water: the lake scene
