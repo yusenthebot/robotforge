@@ -383,6 +383,14 @@ kbd {
 .note.lead { margin-bottom: 10px; }
 .section-title.spaced { margin-top: 16px; }
 
+.layout-save { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.layout-save label { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
+.layout-save input { min-width: 0; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-solid); }
+.layout-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; align-items: center; margin: 5px 0; }
+.layout-row span { overflow-wrap: anywhere; font-size: 12px; }
+.layout-row button, .layout-tools .section-title button { font-size: 11px; }
+.layout-confirm { margin-top: 8px; padding: 8px; border: 1px solid var(--amber); border-radius: 8px; }
+
 .swatches {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

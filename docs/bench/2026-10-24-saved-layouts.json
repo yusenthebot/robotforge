@@ -1,0 +1,141 @@
+{
+  "runtime_sha256": "6ba2cec5161cc5afdb05dce2addc0a6a471071a793906da8b59eded0dcdfbaf7",
+  "baseline_commit": "9b110b041b66de57b701ecdb7f478776be029090",
+  "baseline_runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+  "counts": {
+    "focused-default": {
+      "passed": 735,
+      "skipped": 1
+    },
+    "browser-full": {
+      "passed": 120,
+      "skipped": 0
+    },
+    "slow-assets-sensors": {
+      "passed": 8,
+      "skipped": 0
+    }
+  },
+  "distinct_pytest_cases": 863,
+  "framework_cases": 7,
+  "package": {
+    "wheel_bytes": 3756943,
+    "baseline_wheel_bytes": 3745663,
+    "delta_bytes": 11280,
+    "wheel_sha256": "f61e9290f281ed1c48ffe190ca3c24213ffc64b28b61e42678c205d6d2a1daaa",
+    "changed_members": [
+      "robotforge/design/layouts.py",
+      "robotforge/playground.py",
+      "robotforge/viewer/layout_state.py",
+      "robotforge/viewer/layouts.py",
+      "robotforge/viewer/server.py",
+      "robotforge/viewer/static/app.js",
+      "robotforge/viewer/static/i18n.js",
+      "robotforge/viewer/static/index.html",
+      "robotforge/viewer/static/style.css"
+    ]
+  },
+  "control_images": 17,
+  "layout_reply_latencies": {
+    "workflow-after": [
+      {
+        "action": "layout_save",
+        "reply_ms": 11.020000005373731,
+        "ok": true
+      },
+      {
+        "action": "layout_restore",
+        "reply_ms": 74.29399999091402,
+        "ok": true
+      },
+      {
+        "action": "layout_remove",
+        "reply_ms": 16.172000003280118,
+        "ok": true
+      }
+    ],
+    "workflow-phone-zh": [
+      {
+        "action": "layout_save",
+        "reply_ms": 16.388999996706843,
+        "ok": true
+      },
+      {
+        "action": "layout_restore",
+        "reply_ms": 42.87800000747666,
+        "ok": true
+      },
+      {
+        "action": "layout_remove",
+        "reply_ms": 16.36899998993613,
+        "ok": true
+      }
+    ]
+  },
+  "optional_tools": {
+    "mypy": null,
+    "pyright": null,
+    "bandit": null,
+    "pip-audit": null
+  },
+  "limits": "Scoped cases; complete default suite not rerun. Paired control timings use retained previous-round baseline, not simultaneous ABBA. Phone viewport uses emulated touch for controls and keyboard drive. No Windows or physical-phone verification. Authored references only, not asset archive/live state.",
+  "checks": {
+    "count": 110,
+    "passed": true
+  },
+  "budget": {
+    "checks": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "metrics": {
+      "install": {
+        "wheel_kb": 3668.8896,
+        "installed_mb": 163.2361,
+        "packages": 42.0,
+        "download_mb": 52.5149
+      },
+      "viewer": {
+        "cold_start_s": 0.4978,
+        "fps": 60.0989,
+        "frame_ms": 2.5,
+        "assets_fps": 60.0611,
+        "assets_frame_ms": 3.7,
+        "server_peak_mb": 133.0,
+        "idle_cpu_pct": 5.2
+      }
+    }
+  },
+  "media": {
+    "workflow-before": {
+      "duration_seconds": 4.6,
+      "decoded_frame_count": 138,
+      "raw_frame_count": 231,
+      "decode_exit_code": 0,
+      "video_sha256": "1e5e361a3347804c67ac651d674640f1cb8dbd8f9968ca8a25a4886e11ddae8e"
+    },
+    "workflow-after": {
+      "duration_seconds": 8.666016,
+      "decoded_frame_count": 260,
+      "raw_frame_count": 405,
+      "decode_exit_code": 0,
+      "video_sha256": "d73639e52372299db82b1a8749b15de87119fc48e2197b404f7ea37572b54dfc"
+    },
+    "workflow-phone-zh": {
+      "duration_seconds": 8.5,
+      "decoded_frame_count": 255,
+      "raw_frame_count": 423,
+      "decode_exit_code": 0,
+      "video_sha256": "11199c952130deb017626450e64cdffcc8a8f1c760dc5384294f1c46df19c86a"
+    }
+  }
+}

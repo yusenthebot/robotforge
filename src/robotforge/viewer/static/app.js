@@ -357,6 +357,8 @@ function disposeWorld() {
 let sceneRequest = 0;
 let loadingScene = false;
 let pendingRobotInfo = null;
+let layoutCatalog = null, layoutConfirmation = null, layoutMutating = false, layoutLoading = false;
+let layoutRequest = 0, layoutError = "";
 
 async function applyScene(desc) {
   const request = ++sceneRequest;
@@ -744,7 +746,9 @@ function applyPoses(buffer) {
     fitWhenPosed = null;
     pendingFit = null;
   }
+  const firstPoses = posedVersion !== sceneDesc.version;
   posedVersion = sceneDesc.version;
+  if (firstPoses) renderLayouts();
   resolveCreatedRobot();
 }
 
@@ -1107,6 +1111,8 @@ function connect() {
     setConnected(false);
     for (const p of pending.values()) p.reject(new Error(t("disconnected")));
     pending.clear();
+    layoutCatalog = layoutConfirmation = null;
+    renderLayouts();
     creationSelection?.reject(new Error(t("disconnected")));
     lastAddition = lastObjectEdit = null; updateUndo();
     cancelCreation(true);
@@ -1156,6 +1162,11 @@ let worldName = "";
 const robotByName = (name) => robots.find((r) => r.name === name) ?? null;
 
 function onScene(desc) {
+  if (!layoutMutating && layoutCatalog?.version !== desc.version) {
+    layoutCatalog = null;
+    layoutConfirmation = null;
+    if (!$("world-panel").hidden) refreshLayouts();
+  }
   clearObjectSelection();
   if (lastObjectEdit?.version !== desc.version) lastObjectEdit = null;
   if (lastAddition?.version !== desc.version) lastAddition = null;
@@ -1413,10 +1424,20 @@ let stateGeneration = null;
 
 function applyState(s) {
   if (Number.isInteger(s.generation)) {
+    const changed = stateGeneration !== s.generation;
     if (stateGeneration !== null && stateGeneration !== s.generation && !busy) {
       lastAddition = lastObjectEdit = null; cancelCreation(true);
     }
     stateGeneration = s.generation; // retain changes during our own edit, then reconcile against its reply
+    if (changed && !layoutMutating) {
+      layoutConfirmation = null;
+      if (layoutCatalog?.generation !== stateGeneration) {
+        ++layoutRequest; layoutLoading = false;
+        layoutCatalog = null;
+        if (!$("world-panel").hidden) refreshLayouts();
+      }
+      renderLayouts();
+    }
     if (creator.active() && !busy && placementGeneration === null) placementGeneration = s.generation;
     resolveCreatedRobot();
   }
@@ -1676,6 +1697,8 @@ function setDrawer(open) {
 function setWorldPanel(open) {
   setOpen("world-toggle", "world-panel", open);
   if (open) renderGround();
+  if (open) refreshLayouts();
+  else layoutConfirmation = null;
   if (open) setOpen("help-toggle", "help", false);
   if (open && narrow()) setOpen("drawer-toggle", "drawer", false);
   storageSet("robotforge.world", open ? "1" : "0");
@@ -1909,6 +1932,9 @@ $("show-shadows").addEventListener("change", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && layoutConfirmation) {
+    cancelLayoutConfirmation(); e.preventDefault(); return;
+  }
   if (e.defaultPrevented) return;
   if (selectingObjects && e.key === "Escape") { finishObjectSelection(); e.preventDefault(); return; }
   if (creator.active() && e.key === "Escape") { cancelCreation(); canvas.focus(); e.preventDefault(); return; }
@@ -1968,7 +1994,11 @@ function onReply(msg) {
   if (!waiting) return;
   pending.delete(msg.id);
   if (msg.ok) waiting.resolve(msg.data);
-  else waiting.reject(new Error(msg.message));
+  else {
+    const error = new Error(msg.code?.startsWith("layout_") ? tOr(msg.code, msg.message) : msg.message);
+    error.code = msg.code;
+    waiting.reject(error);
+  }
 }
 
 let busy = false;
@@ -2001,6 +2031,7 @@ function setPanelBusy(on) {
   for (const b of document.querySelectorAll("#world-panel .choice, #world-panel .swatch, #world-panel .object-card, #build-add-robot, #drawer .choice, #drawer .create-card")) b.disabled = on || b.dataset.off === "1";
   updateUndo();
   renderEditableObjects();
+  renderLayouts();
   for (const id of ["object-move", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
 }
 
@@ -2299,6 +2330,102 @@ $("build-pick-map").addEventListener("click", () => selectTab("maps", true));
 selectTab(storageGet("robotforge.tab") || "maps");
 
 let lastMap = null; // the map picked here; a world does not remember which preset it came from
+
+function layoutReady() {
+  return layoutCatalog?.available && layoutCatalog.version === sceneDesc?.version
+    && layoutCatalog.generation === stateGeneration && !sceneDesc?.lesson && sceneReadyToDraw()
+    && ws?.readyState === WebSocket.OPEN;
+}
+
+function layoutGuard() {
+  return { version: layoutCatalog.version, generation: layoutCatalog.generation, world_sha256: layoutCatalog.world_sha256 };
+}
+
+function renderLayouts() {
+  const ready = layoutReady(), blocked = busy || layoutLoading || layoutMutating;
+  $("layout-name").disabled = !ready || blocked;
+  $("layout-save").disabled = !ready || blocked || layoutCatalog.entries.length >= layoutCatalog.limit;
+  $("layout-refresh").disabled = blocked || !sceneDesc;
+  $("layout-status").textContent = layoutMutating ? t("layout_working") : layoutLoading ? t("layout_loading")
+    : layoutError || (!ready ? t(layoutCatalog?.reason || "layout_refresh_hint")
+      : layoutCatalog.entries.length >= layoutCatalog.limit ? t("layout_full")
+      : layoutCatalog.entries.length ? t("layout_count", { count: layoutCatalog.entries.length, limit: layoutCatalog.limit }) : t("layout_empty"));
+  $("layout-list").replaceChildren(...(layoutCatalog?.entries || []).map((entry) => {
+    const row = el("div", "layout-row"); row.dataset.layout = entry.id;
+    row.append(el("span", "", entry.name));
+    for (const action of ["restore", "remove"]) {
+      const button = el("button", "pill", t(`layout_${action}`));
+      button.type = "button"; button.dataset.layoutAction = action; button.disabled = !ready || blocked;
+      button.setAttribute("aria-label", `${t(`layout_${action}`)} ${entry.name}`);
+      button.addEventListener("click", () => {
+        layoutConfirmation = { action, entry, ...layoutGuard() }; renderLayouts(); $("layout-cancel").focus();
+      });
+      row.append(button);
+    }
+    return row;
+  }));
+  $("layout-confirm").hidden = !layoutConfirmation;
+  if (layoutConfirmation) {
+    $("layout-confirm-text").textContent = t(`layout_${layoutConfirmation.action}_confirm`, { name: layoutConfirmation.entry.name });
+    $("layout-apply").textContent = t(`layout_${layoutConfirmation.action}`);
+    $("layout-apply").disabled = blocked || !ready || layoutConfirmation.version !== layoutCatalog.version
+      || layoutConfirmation.generation !== layoutCatalog.generation || layoutConfirmation.world_sha256 !== layoutCatalog.world_sha256;
+    $("layout-cancel").disabled = blocked;
+  }
+}
+
+async function refreshLayouts() {
+  if (layoutMutating || !sceneDesc || ws?.readyState !== WebSocket.OPEN) return;
+  const serial = ++layoutRequest;
+  layoutLoading = true; layoutError = ""; layoutConfirmation = null; renderLayouts();
+  try {
+    const data = await request({ type: "world", action: "layout_list" });
+    if (serial !== layoutRequest) return;
+    layoutCatalog = data.version === sceneDesc?.version && data.generation === stateGeneration ? data : null;
+  } catch (error) {
+    if (serial === layoutRequest) { layoutCatalog = null; layoutError = error.message; }
+  } finally {
+    if (serial === layoutRequest) { layoutLoading = false; renderLayouts(); }
+  }
+}
+
+function cancelLayoutConfirmation() {
+  const identity = layoutConfirmation?.entry.id;
+  layoutConfirmation = null; renderLayouts();
+  $("layout-list").querySelector(`[data-layout="${identity}"] button`)?.focus();
+}
+
+async function mutateLayout(button, action, payload) {
+  if (!layoutReady() || busy || layoutMutating) return;
+  ++layoutRequest; layoutLoading = false; layoutError = ""; layoutMutating = true;
+  await runChoice(button, { type: "world", action: `layout_${action}`, ...payload }, {
+    frame: action === "restore", done: (data) => {
+      layoutCatalog = data; layoutConfirmation = null;
+      if (action === "save") $("layout-name").value = "";
+      if (action === "restore") lastMap = null;
+      toast(t(action === "save" ? "layout_saved" : action === "restore" ? "layout_restored" : "layout_removed", { name: data.name }));
+    },
+  });
+  layoutMutating = false;
+  if (layoutCatalog && (layoutCatalog.version !== sceneDesc?.version || layoutCatalog.generation !== stateGeneration)) {
+    layoutCatalog = null; layoutConfirmation = null;
+    if (!$("world-panel").hidden) refreshLayouts();
+  }
+  renderLayouts();
+}
+
+$("layout-refresh").addEventListener("click", refreshLayouts);
+$("layout-save-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (layoutReady()) mutateLayout($("layout-save"), "save", { ...layoutGuard(), name: $("layout-name").value });
+});
+$("layout-cancel").addEventListener("click", cancelLayoutConfirmation);
+$("layout-apply").addEventListener("click", () => {
+  const pending = layoutConfirmation;
+  if (!pending || $("layout-apply").disabled) return;
+  mutateLayout($("layout-apply"), pending.action, { version: pending.version, generation: pending.generation,
+    world_sha256: pending.world_sha256, layout_id: pending.entry.id, sha256: pending.entry.sha256 });
+});
 
 function renderWorldPanel() {
   renderMaps();
