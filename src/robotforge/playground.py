@@ -245,7 +245,7 @@ class Playground:
                 return self.layouts_for_play(msg)
             if action == "add_robot":
                 return self.add_robot_for_play(msg)
-            if action in {"edit_object", "remove_object", "undo_object_edit"}:
+            if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object"}:
                 return self.edit_object_for_play(msg)
             if action in {"add_object", "undo_add"}:
                 return self.object_for_play(msg)
@@ -464,10 +464,13 @@ class Playground:
 
     @_one_edit_at_a_time
     def edit_object_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
-        """Reposition/remove an exact existing rigid prop, or undo that one edit."""
-        from robotforge.viewer.object_edit import edit, undo
+        """Reposition/copy/remove an exact existing rigid prop, or undo that one edit."""
+        from robotforge.viewer.object_edit import duplicate, edit, undo
 
-        return undo(self, message) if message.get("action") == "undo_object_edit" else edit(self, message)
+        action = message.get("action")
+        if action == "duplicate_object":
+            return duplicate(self, message)
+        return undo(self, message) if action == "undo_object_edit" else edit(self, message)
 
     @_one_edit_at_a_time
     def add_robot(

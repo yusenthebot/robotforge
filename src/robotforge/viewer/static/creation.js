@@ -74,14 +74,17 @@ export function initCreation({ start, submit, cancel, change }) {
     $("place-rotate").textContent = t("rotate_place", { angle: yaw }); change();
   });
   function begin(entry, kind, title) {
-    item = { ...entry, kind }; point = null; sending = false; size = "normal"; yaw = kind === "edit" ? entry.yaw : 0; session++;
+    item = { ...entry, kind }; point = null; sending = false; size = "normal";
+    // Authored worlds may contain many full turns; copy the same heading within the request's angle bounds.
+    yaw = kind === "edit" ? entry.yaw : kind === "copy" ? entry.yaw % 360 : 0; session++;
     repeat.checked = false; syncRepeat();
-    $("placement-hint").textContent = t(kind === "edit" ? "edit_place_hint" : "place_hint");
+    $("placement-hint").textContent = t(kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     $("place-rotate").textContent = t("rotate_place", { angle: yaw });
     $("object-placement-controls").hidden = kind === "robot";
-    for (const node of document.querySelectorAll(".prop-size-control, .repeat-placement")) node.hidden = kind === "edit";
-    $("placement-title").textContent = t(kind === "edit" ? "move_named_prop" : "place_robot", { name: title });
+    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy";
+    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit";
+    $("placement-title").textContent = t(kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
     start();
@@ -108,9 +111,11 @@ export function initCreation({ start, submit, cancel, change }) {
     active: () => item !== null,
     editing: () => item?.kind === "edit" ? item : null,
     edit: (entry) => begin(entry, "edit", entry.name),
+    duplicate: (entry) => begin(entry, "copy", entry.name),
     session: () => session,
-    repeating: () => item?.kind === "object" && repeat.checked,
-    next() {
+    repeating: () => (item?.kind === "object" || item?.kind === "copy") && repeat.checked,
+    next(guard = {}) {
+      item = { ...item, ...guard };
       point = null; $("place-here").disabled = true;
       $("placement-hint").textContent = t("place_next_hint");
     },

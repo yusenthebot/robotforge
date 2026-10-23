@@ -2032,7 +2032,7 @@ function setPanelBusy(on) {
   updateUndo();
   renderEditableObjects();
   renderLayouts();
-  for (const id of ["object-move", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
+  for (const id of ["object-move", "object-copy", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
 }
 
 // ------------------------------------------------------------ pick a local robot, click to place
@@ -2141,7 +2141,7 @@ function beginObjectSelection(entry = null) {
   setWorldPanel(false); setDrawer(false); setHelp(false); canvas.focus();
   $("object-edit-title").textContent = entry?.name || t("select_prop");
   $("object-edit-bar").hidden = false;
-  $("object-move").disabled = $("object-remove").disabled = !entry;
+  $("object-move").disabled = $("object-copy").disabled = $("object-remove").disabled = !entry;
   if (entry) {
     objectHighlight = new THREE.Box3Helper(new THREE.Box3(), theme.amber);
     objectHighlight.name = "object-edit-highlight"; objectHighlight.material.depthTest = false;
@@ -2171,6 +2171,9 @@ function finishObjectSelection() {
 }
 $("object-edit-done").addEventListener("click", finishObjectSelection);
 $("object-move").addEventListener("click", () => { if (!busy && objectSelection) creator.edit(objectSelection); });
+$("object-copy").addEventListener("click", () => {
+  if (!busy && objectSelection) creator.duplicate({ ...objectSelection, world_sha256: sceneDesc.object_edit.world_sha256 });
+});
 
 async function removeSelectedObject() {
   if (busy || !objectSelection || creationGesture.active()) return;
@@ -2191,7 +2194,7 @@ $("undo-edit").addEventListener("click", async () => {
   await runChoice($("undo-edit"), { type: "world", action: "undo_object_edit", ...lastObjectEdit }, {
     done: async (data) => {
       await waitForCreation(data, true); lastObjectEdit = null; updateUndo();
-      toast(t("prop_edit_undone", { name: data.object })); canvas.focus();
+      toast(t(data.removed ? "prop_removed" : "prop_edit_undone", { name: data.object || data.removed })); canvas.focus();
     },
   });
 });
@@ -2236,6 +2239,7 @@ async function placeEntity(item, pos) {
   creator.busy(true);
   const payload = item.kind === "robot" ? { action: "add_robot", template: item.name }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
+      : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw };
   await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
     frame: item.kind === "robot",
@@ -2243,17 +2247,21 @@ async function placeEntity(item, pos) {
       if (creator.repeating() && !Number.isInteger(data.generation)) {
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
-      await waitForCreation(data, creator.repeating() || item.kind === "edit");
+      await waitForCreation(data, creator.repeating() || item.kind === "edit" || item.kind === "copy");
       if (placementSession !== creator.session()) return;
       lastAddition = data.undo || null;
       lastObjectEdit = data.undo_edit || null;
       creationClickUntil = performance.now() + 500;
       if (creator.repeating()) {
+        if (item.kind === "copy" && (!editableObjects().some((o) => o.name === item.name) || !sceneDesc.object_edit.world_sha256)) {
+          cancelCreation(true); throw new Error(t("create_scene_changed"));
+        }
         creationGesture.invalidate();
         placementVersion = data.version; placementGeneration = data.generation ?? stateGeneration;
-        creator.next(); creationSurface = null; creationMarker.visible = false; placementPreview.clear();
+        creator.next(item.kind === "copy" ? { world_sha256: sceneDesc.object_edit.world_sha256 } : {});
+        creationSurface = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
-      toast(t(item.kind === "edit" ? "prop_edited" : "robot_added", { name: data.robot || data.object }));
+      toast(t(item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object }));
       canvas.focus();
     },
   });
