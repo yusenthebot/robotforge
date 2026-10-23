@@ -6,63 +6,89 @@ const paths = {
   quadruped: "M12 13h25v13H12z M14 26l-6 10h9 M33 26l7 10h-9 M16 26l4 10m10-10-4 10 M37 15l7 3v7h-7",
   arm: "M8 37h30 M17 37v-9l9-11-7-9 M14 7h9v7h-9z M23 16h7v7h-7z M28 22l8 4v7m0-7 6 1v6",
   humanoid: "M20 4h10v10H20z M18 17h14v13H18z M18 19 10 29m22-10 8 10 M21 30l-4 11h-5 M29 30l4 11h5",
+  ball: "M25 7a16 16 0 1 0 0 32 16 16 0 0 0 0-32 M12 13l26 20 M25 7c-9 10-9 22 0 32",
+  block: "M9 15l16-8 16 8v20l-16 8-16-8z M9 15l16 8 16-8 M25 23v20",
+  pin: "M17 11c0-5 16-5 16 0v24c0 6-16 6-16 0z M17 11c0 5 16 5 16 0",
+  barrier: "M5 19l32-8 8 5v15l-32 8-8-5z M5 19l8 5 32-8 M13 24v15",
+  table: "M6 15l26-7 13 8-27 8z M8 18v19m10-13v19m24-24v17 M32 10v17",
 };
 
-export function initCreation({ start, submit, cancel }) {
+export function initCreation({ start, submit, cancel, change }) {
   const $ = (id) => document.getElementById(id);
-  let template = null, point = null, sending = false;
+  let item = null, point = null, sending = false, size = "normal", yaw = 0;
+  const scales = { small: 0.75, normal: 1, large: 1.5 };
+  const send = () => {
+    if (point && !sending && item) submit({ ...item, scale: size, yaw }, point);
+  };
   const setOpen = (open) => {
     $("create-options").hidden = !open;
     $("create-toggle").setAttribute("aria-expanded", String(open));
   };
   $("create-toggle").addEventListener("click", () => setOpen($("create-options").hidden));
-  $("place-here").addEventListener("click", () => {
-    if (point && !sending) submit(template, point);
-  });
+  $("place-here").addEventListener("click", send);
   $("place-cancel").addEventListener("click", () => { if (!sending) cancel(); });
+  const sizeButtons = $("object-placement-controls").querySelectorAll("[data-size]");
+  function setSize(value) {
+    size = value;
+    for (const b of sizeButtons) b.setAttribute("aria-pressed", String(b.dataset.size === size));
+  }
+  for (const b of sizeButtons) b.addEventListener("click", () => { setSize(b.dataset.size); change(); });
+  $("place-rotate").addEventListener("click", () => {
+    yaw = (yaw + 90) % 360;
+    $("place-rotate").textContent = t("rotate_place", { angle: yaw }); change();
+  });
+  function card(entry, kind, busy) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = kind === "robot" ? "create-card" : "object-card";
+    button.dataset[kind === "robot" ? "template" : "object"] = entry.name;
+    button.disabled = busy;
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("viewBox", "0 0 50 46"); icon.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS(icon.namespaceURI, "path");
+    path.setAttribute("d", paths[entry.name] || paths.block); icon.append(path);
+    const copy = document.createElement("span"), title = document.createElement("strong"), desc = document.createElement("span");
+    const key = kind === "robot" ? "starter" : "prop";
+    title.textContent = tOr(`${key}_${entry.name}`, entry.name);
+    desc.textContent = tOr(`${key}_${entry.name}_desc`, entry.summary || "");
+    copy.append(title, desc); button.append(icon, copy);
+    button.addEventListener("click", () => {
+      item = { ...entry, kind }; point = null; sending = false; size = "normal"; yaw = 0;
+      setSize(size);
+      $("place-rotate").textContent = t("rotate_place", { angle: yaw });
+      $("object-placement-controls").hidden = kind !== "object";
+      $("placement-title").textContent = t("place_robot", { name: title.textContent });
+      $("placement-bar").hidden = false;
+      $("place-here").disabled = true;
+      start();
+    });
+    return button;
+  }
   return {
-    active: () => template !== null,
+    active: () => item !== null,
+    preview: () => item?.kind === "object" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
     open() { setOpen(true); $("create-list").querySelector("button")?.focus(); },
-    render(entries, editable, busy) {
+    render(entries, editable, busy, objects = []) {
       $("create-section").hidden = !editable || !entries.length;
-      $("create-list").replaceChildren(...entries.map((entry) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "create-card";
-        button.dataset.template = entry.name;
-        button.disabled = busy;
-        const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        icon.setAttribute("viewBox", "0 0 50 46");
-        icon.setAttribute("aria-hidden", "true");
-        const path = document.createElementNS(icon.namespaceURI, "path");
-        path.setAttribute("d", paths[entry.name] || paths.rover); icon.append(path);
-        const copy = document.createElement("span"), title = document.createElement("strong"), desc = document.createElement("span");
-        title.textContent = tOr(`starter_${entry.name}`, entry.name);
-        desc.textContent = tOr(`starter_${entry.name}_desc`, entry.summary);
-        copy.append(title, desc); button.append(icon, copy);
-        button.addEventListener("click", () => {
-          template = entry.name; point = null; sending = false;
-          $("placement-title").textContent = t("place_robot", { name: title.textContent });
-          $("placement-bar").hidden = false;
-          $("place-here").disabled = true;
-          start(entry.name);
-        });
-        return button;
-      }));
+      $("create-list").replaceChildren(...entries.map((entry) => card(entry, "robot", busy)));
+      $("object-list").replaceChildren(...(editable ? objects : []).map((entry) => card(entry, "object", busy)));
+      $("objects-note").hidden = editable;
     },
     point(value) { point = value; $("place-here").disabled = !value || sending; },
     busy(value) {
       sending = value;
       $("place-here").disabled = !point || value;
       $("place-cancel").disabled = value;
+      for (const b of sizeButtons) b.disabled = value;
+      $("place-rotate").disabled = value;
       $("placement-bar").setAttribute("aria-busy", String(value));
     },
     clear() {
-      template = point = null;
+      item = point = null;
       sending = false;
       $("placement-bar").hidden = true;
       $("place-cancel").disabled = false;
     },
-    place() { if (point && !sending) submit(template, point); },
+    place: send,
   };
 }

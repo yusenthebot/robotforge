@@ -39,7 +39,7 @@ def test_surface_height_preserves_each_templates_spawn_height(pg, template, heig
     out = place(pg, template, [0.0, 0.0, height])
     entry = pg.store.load().robots[0]
     assert entry.pos == ([0.0, 0.0] if height == 0 else [0.0, 0.0, expected])
-    assert out == {"robot": entry.name, "version": pg.session.version, "notes": out["notes"]}
+    assert out == {"robot": entry.name, "version": pg.session.version, "notes": out["notes"], "undo": out["undo"]}
     assert pg.session.data.xpos[1, 2] == pytest.approx(expected)
     pg.session.step(20)
     assert np.all(np.isfinite(pg.session.data.qpos))

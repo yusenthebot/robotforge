@@ -114,6 +114,7 @@
     <div class="tabs" role="tablist">
       <button type="button" role="tab" data-tab="maps" aria-selected="true" data-i18n="tab_maps">Maps</button>
       <button type="button" role="tab" data-tab="terrain" aria-selected="false" data-i18n="tab_terrain">Terrain</button>
+      <button type="button" role="tab" data-tab="objects" aria-selected="false" data-i18n="tab_objects">Build</button>
       <button type="button" role="tab" data-tab="modes" aria-selected="false" data-i18n="tab_modes">Modes</button>
     </div>
     <section class="tab-body" data-body="maps">
@@ -126,6 +127,11 @@
       <h2 class="section-title spaced"><span data-i18n="terrain">Terrain</span></h2>
       <div class="choices" id="terrain-list"></div>
       <p class="note" id="terrain-note" hidden data-i18n="terrain_needs_world">This is a model file, not a world. Pick a map first to change the ground.</p>
+    </section>
+    <section class="tab-body" data-body="objects" hidden>
+      <p class="note lead" data-i18n="objects_lead">Place a ball, blocks or barriers, then drive and experiment. Undo add removes your latest addition.</p>
+      <div class="create-list" id="object-list"></div>
+      <p class="note" id="objects-note" hidden data-i18n="objects_need_world">Pick a map first to build with objects.</p>
     </section>
     <section class="tab-body" data-body="modes" hidden>
       <div class="chips" id="mode-robots"></div>
@@ -205,9 +211,15 @@
 
   <div class="placement-bar" id="placement-bar" role="status" hidden>
     <div><strong id="placement-title"></strong><p class="note" data-i18n="place_hint">Click an open surface. Enter places at the marker; Escape cancels.</p></div>
+    <div class="placement-options" id="object-placement-controls" hidden>
+      <span id="prop-size-label" data-i18n="prop_size">Size</span>
+      <div class="size-choices" role="group" aria-labelledby="prop-size-label"><button class="pill" type="button" data-size="small" aria-pressed="false" data-i18n="prop_small">Small</button><button class="pill" type="button" data-size="normal" aria-pressed="true" data-i18n="prop_normal">Normal</button><button class="pill" type="button" data-size="large" aria-pressed="false" data-i18n="prop_large">Large</button></div>
+      <button class="pill" id="place-rotate" type="button">Rotate · 0°</button>
+    </div>
     <button class="pill" id="place-here" type="button" data-i18n="place_here">Place here</button>
     <button class="pill" id="place-cancel" type="button" data-i18n="cancel_place">Cancel</button>
   </div>
+  <button class="pill undo-add" id="undo-add" type="button" hidden data-i18n="undo_add">Undo add</button>
   <div class="banner" id="banner" role="status" hidden data-i18n="disconnected">Lost the connection to the simulator. Reconnecting.</div>
   <div class="toast" id="toast" role="alert"></div>
   <div class="coach" id="coach" hidden data-i18n="coach">Drag a robot to push it. Drag empty space to look around.</div>

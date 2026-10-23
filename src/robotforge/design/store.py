@@ -108,11 +108,14 @@ class WorldStore:
     def apply(self, change: Callable[[World], None], snapshot: bool = True) -> tuple[World, CompiledWorld]:
         """Run `change` on a copy, validate and compile it, then save. Raises without saving on error. snapshot=False
         saves no undo step: the change finishes the one before it (undo takes back both)."""
+        original = self.file.read_bytes()
         current = self.load()
         candidate = current.model_copy(deep=True)
         change(candidate)
         candidate = World.model_validate(candidate.model_dump())  # re-run validators after mutation
         compiled = compile_world(candidate, self.dir)
+        if self.file.read_bytes() != original:
+            raise ValueError("world.yaml changed during compilation; reload the world and retry")
         if snapshot:
             self._snapshot()
         self._write(candidate, compiled)
