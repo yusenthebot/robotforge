@@ -193,6 +193,7 @@ class ViewerHub:
         return {
             "type": "state",
             "paused": s.paused,
+            "generation": s.generation,
             "speed": s.speed,
             "time": float(s.data.time),
             "rtf": round(s.realtime_factor, 3),

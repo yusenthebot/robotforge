@@ -27,8 +27,8 @@
         <span data-i18n="learn">Learn</span>
       </button>
       <button class="pill" id="world-toggle" type="button" aria-expanded="false" aria-controls="world-panel">
-        <span class="long" data-i18n="world_button">Maps, terrain, modes</span>
-        <span class="short" data-i18n="world_button_short">World</span>
+        <span class="long" data-i18n="world_button">Scene &amp; build</span>
+        <span class="short" data-i18n="world_button_short">Scene</span>
         <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg>
       </button>
     </div>
@@ -111,29 +111,31 @@
   <aside class="lesson-plots" id="lesson-plots" hidden></aside>
 
   <aside class="drawer left" id="world-panel" hidden>
-    <div class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="maps" aria-selected="true" data-i18n="tab_maps">Maps</button>
-      <button type="button" role="tab" data-tab="terrain" aria-selected="false" data-i18n="tab_terrain">Terrain</button>
-      <button type="button" role="tab" data-tab="objects" aria-selected="false" data-i18n="tab_objects">Build</button>
-      <button type="button" role="tab" data-tab="modes" aria-selected="false" data-i18n="tab_modes">Modes</button>
+    <div class="tabs" role="tablist" aria-label="Scene" data-i18n-label="scene_tabs">
+      <button type="button" role="tab" id="world-tab-maps" aria-controls="world-body-maps" tabindex="0" data-tab="maps" aria-selected="true" data-i18n="tab_maps">Maps</button>
+      <button type="button" role="tab" id="world-tab-terrain" aria-controls="world-body-terrain" tabindex="-1" data-tab="terrain" aria-selected="false" data-i18n="tab_terrain">Terrain</button>
+      <button type="button" role="tab" id="world-tab-objects" aria-controls="world-body-objects" tabindex="-1" data-tab="objects" aria-selected="false" data-i18n="tab_objects">Build</button>
+      <button type="button" role="tab" id="world-tab-modes" aria-controls="world-body-modes" tabindex="-1" data-tab="modes" aria-selected="false" data-i18n="tab_modes">Modes</button>
     </div>
-    <section class="tab-body" data-body="maps">
+    <section class="tab-body" id="world-body-maps" role="tabpanel" aria-labelledby="world-tab-maps" data-body="maps">
       <p class="note lead" data-i18n="maps_lead">Pick a place for your robots. They come along.</p>
       <div class="choices" id="map-list"></div>
     </section>
-    <section class="tab-body" data-body="terrain" hidden>
+    <section class="tab-body" id="world-body-terrain" role="tabpanel" aria-labelledby="world-tab-terrain" data-body="terrain" hidden>
       <h2 class="section-title"><span data-i18n="ground">Ground</span></h2>
       <div class="swatches" id="ground-list"></div>
       <h2 class="section-title spaced"><span data-i18n="terrain">Terrain</span></h2>
       <div class="choices" id="terrain-list"></div>
       <p class="note" id="terrain-note" hidden data-i18n="terrain_needs_world">This is a model file, not a world. Pick a map first to change the ground.</p>
     </section>
-    <section class="tab-body" data-body="objects" hidden>
+    <section class="tab-body" id="world-body-objects" role="tabpanel" aria-labelledby="world-tab-objects" data-body="objects" hidden>
       <p class="note lead" data-i18n="objects_lead">Place a ball, blocks or barriers, then drive and experiment. Undo add removes your latest addition.</p>
+      <button class="create-toggle" id="build-add-robot" type="button" data-i18n="add_robot">Add robot</button>
       <div class="create-list" id="object-list"></div>
       <p class="note" id="objects-note" hidden data-i18n="objects_need_world">Pick a map first to build with objects.</p>
+      <button class="pill" id="build-pick-map" type="button" hidden data-i18n="pick_map">Choose a map</button>
     </section>
-    <section class="tab-body" data-body="modes" hidden>
+    <section class="tab-body" id="world-body-modes" role="tabpanel" aria-labelledby="world-tab-modes" data-body="modes" hidden>
       <div class="chips" id="mode-robots"></div>
       <p class="note lead" id="mode-lead"></p>
       <div class="choices" id="mode-list"></div>
@@ -210,11 +212,12 @@
   </div>
 
   <div class="placement-bar" id="placement-bar" role="status" hidden>
-    <div><strong id="placement-title"></strong><p class="note" data-i18n="place_hint">Click an open surface. Enter places at the marker; Escape cancels.</p></div>
+    <div><strong id="placement-title"></strong><p class="note" id="placement-hint" data-i18n="place_hint">Click an open surface. Enter places at the marker; Escape cancels.</p></div>
     <div class="placement-options" id="object-placement-controls" hidden>
       <span id="prop-size-label" data-i18n="prop_size">Size</span>
       <div class="size-choices" role="group" aria-labelledby="prop-size-label"><button class="pill" type="button" data-size="small" aria-pressed="false" data-i18n="prop_small">Small</button><button class="pill" type="button" data-size="normal" aria-pressed="true" data-i18n="prop_normal">Normal</button><button class="pill" type="button" data-size="large" aria-pressed="false" data-i18n="prop_large">Large</button></div>
       <button class="pill" id="place-rotate" type="button">Rotate · 0°</button>
+      <label class="check repeat-placement"><input type="checkbox" id="place-repeat"><span data-i18n="keep_placing">Keep placing</span></label>
     </div>
     <button class="pill" id="place-here" type="button" data-i18n="place_here">Place here</button>
     <button class="pill" id="place-cancel" type="button" data-i18n="cancel_place">Cancel</button>
