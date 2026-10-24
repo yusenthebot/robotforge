@@ -1,0 +1,2749 @@
+{
+  "frame_gl_inspection": {
+    "path": "frame-gl-state/report.json",
+    "sha256": "2fc4759df615338956a43f729bf6ab79d7737618ad910e29d3653e2caae6b88b",
+    "samples": [
+      {
+        "mode": "baseline",
+        "median_ms": 12.200000017881393,
+        "counts": {
+          "texImage2D": 0,
+          "texSubImage2D": 0,
+          "generateMipmap": 0,
+          "createProgram": 0,
+          "linkProgram": 0,
+          "bindFramebuffer": 80,
+          "drawElements": 600,
+          "drawArrays": 11200
+        }
+      },
+      {
+        "mode": "final",
+        "median_ms": 7.600000023841858,
+        "counts": {
+          "texImage2D": 0,
+          "texSubImage2D": 0,
+          "generateMipmap": 0,
+          "createProgram": 0,
+          "linkProgram": 0,
+          "bindFramebuffer": 80,
+          "drawElements": 600,
+          "drawArrays": 11200
+        }
+      }
+    ]
+  },
+  "frame_gl_comparison": {
+    "state_equal": {
+      "materials": false,
+      "textures": true,
+      "lights": true,
+      "shadow": true,
+      "camera": true,
+      "target": true,
+      "counts": true,
+      "uniforms": false
+    },
+    "timing": {
+      "baseline": {
+        "render_ms": 0.9000000059604645,
+        "readback_ms": 11.25,
+        "total_ms": 12.200000002980232
+      },
+      "final": {
+        "render_ms": 0.9000000059604645,
+        "readback_ms": 6.699999988079071,
+        "total_ms": 7.600000008940697
+      }
+    },
+    "uniform_mismatches": [
+      {
+        "program": 4,
+        "name": "modelMatrix",
+        "before": [
+          1,
+          1.6370166669704006e-13,
+          -2.828678784261296e-11,
+          0,
+          -1.6370166669704006e-13,
+          1,
+          -6.287229851326126e-12,
+          0,
+          2.828678784261296e-11,
+          6.287229851326126e-12,
+          1,
+          0,
+          -2.5999999046325684,
+          1.4800000190734863,
+          0.8518922328948975,
+          1
+        ],
+        "after": [
+          1,
+          1.729715681667368e-13,
+          -1.4672731779574733e-11,
+          0,
+          -1.729715681667368e-13,
+          1,
+          -3.2612851221663908e-12,
+          0,
+          1.4672731779574733e-11,
+          3.2612851221663908e-12,
+          1,
+          0,
+          -2.5999999046325684,
+          1.4800000190734863,
+          0.8518922328948975,
+          1
+        ]
+      },
+      {
+        "program": 4,
+        "name": "modelViewMatrix",
+        "before": [
+          0.7926239967346191,
+          -0.2672955393791199,
+          0.5479966402053833,
+          0,
+          0.6097107529640198,
+          0.3474842309951782,
+          -0.7123956084251404,
+          0,
+          2.6254260918068262e-11,
+          0.8987812995910645,
+          0.43839728832244873,
+          0,
+          -2.703988790512085,
+          1.9402974843978882,
+          -17.31601333618164,
+          1
+        ],
+        "after": [
+          0.7926239967346191,
+          -0.2672955393791199,
+          0.5479966402053833,
+          0,
+          0.6097107529640198,
+          0.3474842309951782,
+          -0.7123956084251404,
+          0,
+          1.361848307734892e-11,
+          0.8987812995910645,
+          0.43839728832244873,
+          0,
+          -2.703988790512085,
+          1.9402974843978882,
+          -17.31601333618164,
+          1
+        ]
+      },
+      {
+        "program": 4,
+        "name": "normalMatrix",
+        "before": [
+          0.7926239967346191,
+          -0.2672955393791199,
+          0.5479966402053833,
+          0.6097107529640198,
+          0.3474842309951782,
+          -0.7123956084251404,
+          2.6254109997125852e-11,
+          0.8987812995910645,
+          0.43839728832244873
+        ],
+        "after": [
+          0.7926239967346191,
+          -0.2672955393791199,
+          0.5479966402053833,
+          0.6097107529640198,
+          0.3474842309951782,
+          -0.7123956084251404,
+          1.3618273175808326e-11,
+          0.8987812995910645,
+          0.43839728832244873
+        ]
+      },
+      {
+        "program": 6,
+        "name": "modelMatrix",
+        "before": [
+          -7.453570106008556e-06,
+          2.1909994757152162e-05,
+          1,
+          0,
+          2.62647431581442e-10,
+          -1,
+          2.1909994757152162e-05,
+          0,
+          1,
+          4.2595510452159147e-10,
+          7.453570106008556e-06,
+          0,
+          -1.1000021696090698,
+          -1.2999998331069946,
+          0.2938924729824066,
+          1
+        ],
+        "after": [
+          -7.453570106008556e-06,
+          2.1909996576141566e-05,
+          1,
+          0,
+          2.6653729223724554e-10,
+          -1,
+          2.1909996576141566e-05,
+          0,
+          1,
+          4.2984499293297063e-10,
+          7.453570106008556e-06,
+          0,
+          -1.1000021696090698,
+          -1.2999998331069946,
+          0.2938924729824066,
+          1
+        ]
+      },
+      {
+        "program": 6,
+        "name": "modelViewMatrix",
+        "before": [
+          7.450881184922764e-06,
+          0.8987908959388733,
+          0.43837761878967285,
+          0,
+          -0.6097107529640198,
+          -0.34746453166007996,
+          0.7124052047729492,
+          0,
+          0.7926239967346191,
+          -0.26728886365890503,
+          0.547999918460846,
+          0,
+          -3.210050582885742,
+          0.0718289464712143,
+          -14.758185386657715,
+          1
+        ],
+        "after": [
+          7.450882094417466e-06,
+          0.8987908959388733,
+          0.43837761878967285,
+          0,
+          -0.6097107529640198,
+          -0.34746453166007996,
+          0.7124052047729492,
+          0,
+          0.7926239967346191,
+          -0.26728886365890503,
+          0.547999918460846,
+          0,
+          -3.210050582885742,
+          0.0718289464712143,
+          -14.758185386657715,
+          1
+        ]
+      },
+      {
+        "program": 6,
+        "name": "normalMatrix",
+        "before": [
+          7.450881184922764e-06,
+          0.8987908959388733,
+          0.43837761878967285,
+          -0.6097107529640198,
+          -0.34746453166007996,
+          0.7124052047729492,
+          0.7926239967346191,
+          -0.26728886365890503,
+          0.547999918460846
+        ],
+        "after": [
+          7.450882094417466e-06,
+          0.8987908959388733,
+          0.43837761878967285,
+          -0.6097107529640198,
+          -0.34746453166007996,
+          0.7124052047729492,
+          0.7926239967346191,
+          -0.26728886365890503,
+          0.547999918460846
+        ]
+      },
+      {
+        "program": 7,
+        "name": "modelMatrix",
+        "before": [
+          0.443663626909256,
+          4.579734280696357e-08,
+          0,
+          0,
+          -4.579734280696357e-08,
+          0.443663626909256,
+          0,
+          0,
+          0,
+          0,
+          0.443663626909256,
+          0,
+          -5.546044826507568,
+          2.5999999046325684,
+          0.006000000052154064,
+          1
+        ],
+        "after": [
+          0.44351688027381897,
+          4.5889205324556315e-08,
+          0,
+          0,
+          -4.5889205324556315e-08,
+          0.44351688027381897,
+          0,
+          0,
+          0,
+          0,
+          0.44351688027381897,
+          0,
+          -5.546045303344727,
+          2.5999999046325684,
+          0.006000000052154064,
+          1
+        ]
+      },
+      {
+        "program": 7,
+        "name": "modelViewMatrix",
+        "before": [
+          0.3516584634780884,
+          -0.11858929693698883,
+          0.24312612414360046,
+          0,
+          0.27050644159317017,
+          0.154166117310524,
+          -0.3160640299320221,
+          0,
+          3.694241555221025e-17,
+          0.39875656366348267,
+          0.19450093805789948,
+          0,
+          -4.3562188148498535,
+          2.356672525405884,
+          -20.09915542602539,
+          1
+        ],
+        "after": [
+          0.3515421450138092,
+          -0.11855007708072662,
+          0.24304573237895966,
+          0,
+          0.2704169750213623,
+          0.15411512553691864,
+          -0.31595951318740845,
+          0,
+          3.6930199748924067e-17,
+          0.3986246883869171,
+          0.19443660974502563,
+          0,
+          -4.356219291687012,
+          2.356672525405884,
+          -20.09915542602539,
+          1
+        ]
+      },
+      {
+        "program": 8,
+        "name": "modelMatrix",
+        "before": [
+          0.443663626909256,
+          4.579734280696357e-08,
+          0,
+          0,
+          -4.579734280696357e-08,
+          0.443663626909256,
+          0,
+          0,
+          0,
+          0,
+          0.443663626909256,
+          0,
+          -5.546044826507568,
+          2.5999999046325684,
+          0.006000000052154064,
+          1
+        ],
+        "after": [
+          0.44351688027381897,
+          4.5889205324556315e-08,
+          0,
+          0,
+          -4.5889205324556315e-08,
+          0.44351688027381897,
+          0,
+          0,
+          0,
+          0,
+          0.44351688027381897,
+          0,
+          -5.546045303344727,
+          2.5999999046325684,
+          0.006000000052154064,
+          1
+        ]
+      },
+      {
+        "program": 8,
+        "name": "modelViewMatrix",
+        "before": [
+          0.3516584634780884,
+          -0.11858929693698883,
+          0.24312612414360046,
+          0,
+          0.27050644159317017,
+          0.154166117310524,
+          -0.3160640299320221,
+          0,
+          3.694241555221025e-17,
+          0.39875656366348267,
+          0.19450093805789948,
+          0,
+          -4.3562188148498535,
+          2.356672525405884,
+          -20.09915542602539,
+          1
+        ],
+        "after": [
+          0.3515421450138092,
+          -0.11855007708072662,
+          0.24304573237895966,
+          0,
+          0.2704169750213623,
+          0.15411512553691864,
+          -0.31595951318740845,
+          0,
+          3.6930199748924067e-17,
+          0.3986246883869171,
+          0.19443660974502563,
+          0,
+          -4.356219291687012,
+          2.356672525405884,
+          -20.09915542602539,
+          1
+        ]
+      }
+    ]
+  },
+  "frame_isolation": {
+    "path": "frame-isolation/report.json",
+    "sha256": "77a2f657c252a0b53e8ab8eacea2cce3d313f66f0b5fa5929a3a218b257805b2",
+    "order": [
+      "baseline",
+      "old-app",
+      "old-ground",
+      "final"
+    ],
+    "samples": [
+      {
+        "mode": "baseline",
+        "runtime_sha256": "eab1c5dd1335f11d71c0d3a1e6a5bbb355fb1b730c57e61af553d83974f43b0c",
+        "median_ms": 12.799999982118607,
+        "fps": 60.16687165544523,
+        "shader_sha256": [
+          "1381fb4c83defeeca80697c7c148caa406a36872e26b4ebe5c22474b19a85680",
+          "1d68c54f439b4a0448e9b1187583cbf4032c5affddd16bd94b0cc217791886c8",
+          "1e9ae8dcab2a3036e25fb6affb8c27afb11439d015432ce067a476a7e3dfa4a3",
+          "4716bc12a6d6ef967070bc77771463c0791ee096d90b5a9efd10fe84d1b6c4e2",
+          "4c304cb1627d93023fd5f8c5ef90a16a7c6194888d7f10530b041fcc5f52ac94",
+          "62f59d61fc2d34d47f0c2d27af55611e3a0843c9b8cd561d0cdfd5682b997ffe",
+          "775dd06d6eb464da2f16bf126a71049475dbbf06aa4257168ca3410898a1dea1",
+          "8051bea8ffcf8295700d230b9c2040a48751ce79bd89e9e2cb868d6e8029df0a",
+          "8051bea8ffcf8295700d230b9c2040a48751ce79bd89e9e2cb868d6e8029df0a",
+          "823b14e072f282574acabdf35aa32cff0c5bc2d236099da8072ef076450a2c8d",
+          "8871055b9e922d6ff71d2bf86e98c3891e3b0967e72c19e466f40c04b6facdca",
+          "8a474999192cf31f9c2055417dc1a09196eeabdcb63fe80058a213659cf457a3",
+          "8aa56fca72f46e985537aa799a563d8575f272e4eaff02e91fd91baad13fac19",
+          "8f31de6feada6dac2d55b836e33f02da7ec753eb3d868239a4a9e7a1def7c12c",
+          "90d544bd8876a3f029d142eafb08eee57a1db53e9ac263a70ecc928c96b6bf8e",
+          "ab89d3faa8ec92d5832ef3efcf0b61784a052f7276a1271bea51bf9a639f39bd",
+          "d7d4a85ae36afaa238232d64eb4e3a5bfaa1cc3fb271fc2a807196593f566b7c",
+          "f8a2ba2129e9f5fcf2618632e64b29c49413977acf2bf6af1cccaf6d17892dfb"
+        ],
+        "memory": {
+          "geometries": 132,
+          "textures": 5
+        },
+        "context": {
+          "alpha": true,
+          "antialias": true,
+          "depth": true,
+          "desynchronized": false,
+          "failIfMajorPerformanceCaveat": false,
+          "powerPreference": "default",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false,
+          "xrCompatible": false
+        }
+      },
+      {
+        "mode": "old-app",
+        "runtime_sha256": "28f7f4e2910e85a1cb0ece85ef4205bbf1eec9b9bb90490ae9d35ba5b8d593b2",
+        "median_ms": 11.399999976158142,
+        "fps": 60.03715006018025,
+        "shader_sha256": [
+          "1381fb4c83defeeca80697c7c148caa406a36872e26b4ebe5c22474b19a85680",
+          "1d68c54f439b4a0448e9b1187583cbf4032c5affddd16bd94b0cc217791886c8",
+          "1e9ae8dcab2a3036e25fb6affb8c27afb11439d015432ce067a476a7e3dfa4a3",
+          "4716bc12a6d6ef967070bc77771463c0791ee096d90b5a9efd10fe84d1b6c4e2",
+          "4c304cb1627d93023fd5f8c5ef90a16a7c6194888d7f10530b041fcc5f52ac94",
+          "62f59d61fc2d34d47f0c2d27af55611e3a0843c9b8cd561d0cdfd5682b997ffe",
+          "775dd06d6eb464da2f16bf126a71049475dbbf06aa4257168ca3410898a1dea1",
+          "8051bea8ffcf8295700d230b9c2040a48751ce79bd89e9e2cb868d6e8029df0a",
+          "8051bea8ffcf8295700d230b9c2040a48751ce79bd89e9e2cb868d6e8029df0a",
+          "823b14e072f282574acabdf35aa32cff0c5bc2d236099da8072ef076450a2c8d",
+          "8871055b9e922d6ff71d2bf86e98c3891e3b0967e72c19e466f40c04b6facdca",
+          "8a474999192cf31f9c2055417dc1a09196eeabdcb63fe80058a213659cf457a3",
+          "8aa56fca72f46e985537aa799a563d8575f272e4eaff02e91fd91baad13fac19",
+          "8f31de6feada6dac2d55b836e33f02da7ec753eb3d868239a4a9e7a1def7c12c",
+          "90d544bd8876a3f029d142eafb08eee57a1db53e9ac263a70ecc928c96b6bf8e",
+          "ab89d3faa8ec92d5832ef3efcf0b61784a052f7276a1271bea51bf9a639f39bd",
+          "d7d4a85ae36afaa238232d64eb4e3a5bfaa1cc3fb271fc2a807196593f566b7c",
+          "f8a2ba2129e9f5fcf2618632e64b29c49413977acf2bf6af1cccaf6d17892dfb"
+        ],
+        "memory": {
+          "geometries": 132,
+          "textures": 5
+        },
+        "context": {
+          "alpha": true,
+          "antialias": true,
+          "depth": true,
+          "desynchronized": false,
+          "failIfMajorPerformanceCaveat": false,
+          "powerPreference": "default",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false,
+          "xrCompatible": false
+        }
+      },
+      {
+        "mode": "old-ground",
+        "runtime_sha256": "506d03612e3686b0536eb212f6479a6a85bfcc697aa4b0a4ef1359efb87afa17",
+        "median_ms": 11.599999994039536,
+        "fps": 60.0889715159545,
+        "shader_sha256": [
+          "1381fb4c83defeeca80697c7c148caa406a36872e26b4ebe5c22474b19a85680",
+          "1d68c54f439b4a0448e9b1187583cbf4032c5affddd16bd94b0cc217791886c8",
+          "1e9ae8dcab2a3036e25fb6affb8c27afb11439d015432ce067a476a7e3dfa4a3",
+          "4716bc12a6d6ef967070bc77771463c0791ee096d90b5a9efd10fe84d1b6c4e2",
+          "4c304cb1627d93023fd5f8c5ef90a16a7c6194888d7f10530b041fcc5f52ac94",
+          "62f59d61fc2d34d47f0c2d27af55611e3a0843c9b8cd561d0cdfd5682b997ffe",
+          "775dd06d6eb464da2f16bf126a71049475dbbf06aa4257168ca3410898a1dea1",
+          "8051bea8ffcf8295700d230b9c2040a48751ce79bd89e9e2cb868d6e8029df0a",
+          "8051bea8ffcf8295700d230b9c2040a48751ce79bd89e9e2cb868d6e8029df0a",
+          "823b14e072f282574acabdf35aa32cff0c5bc2d236099da8072ef076450a2c8d",
+          "8871055b9e922d6ff71d2bf86e98c3891e3b0967e72c19e466f40c04b6facdca",
+          "8a474999192cf31f9c2055417dc1a09196eeabdcb63fe80058a213659cf457a3",
+          "8aa56fca72f46e985537aa799a563d8575f272e4eaff02e91fd91baad13fac19",
+          "8f31de6feada6dac2d55b836e33f02da7ec753eb3d868239a4a9e7a1def7c12c",
+          "90d544bd8876a3f029d142eafb08eee57a1db53e9ac263a70ecc928c96b6bf8e",
+          "ab89d3faa8ec92d5832ef3efcf0b61784a052f7276a1271bea51bf9a639f39bd",
+          "d7d4a85ae36afaa238232d64eb4e3a5bfaa1cc3fb271fc2a807196593f566b7c",
+          "f8a2ba2129e9f5fcf2618632e64b29c49413977acf2bf6af1cccaf6d17892dfb"
+        ],
+        "memory": {
+          "geometries": 132,
+          "textures": 5
+        },
+        "context": {
+          "alpha": true,
+          "antialias": true,
+          "depth": true,
+          "desynchronized": false,
+          "failIfMajorPerformanceCaveat": false,
+          "powerPreference": "default",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false,
+          "xrCompatible": false
+        }
+      },
+      {
+        "mode": "final",
+        "runtime_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+        "median_ms": 11.300000011920929,
+        "fps": 60.098947438323876,
+        "shader_sha256": [
+          "1381fb4c83defeeca80697c7c148caa406a36872e26b4ebe5c22474b19a85680",
+          "1d68c54f439b4a0448e9b1187583cbf4032c5affddd16bd94b0cc217791886c8",
+          "1e9ae8dcab2a3036e25fb6affb8c27afb11439d015432ce067a476a7e3dfa4a3",
+          "4716bc12a6d6ef967070bc77771463c0791ee096d90b5a9efd10fe84d1b6c4e2",
+          "4c304cb1627d93023fd5f8c5ef90a16a7c6194888d7f10530b041fcc5f52ac94",
+          "62f59d61fc2d34d47f0c2d27af55611e3a0843c9b8cd561d0cdfd5682b997ffe",
+          "775dd06d6eb464da2f16bf126a71049475dbbf06aa4257168ca3410898a1dea1",
+          "8051bea8ffcf8295700d230b9c2040a48751ce79bd89e9e2cb868d6e8029df0a",
+          "8051bea8ffcf8295700d230b9c2040a48751ce79bd89e9e2cb868d6e8029df0a",
+          "823b14e072f282574acabdf35aa32cff0c5bc2d236099da8072ef076450a2c8d",
+          "8871055b9e922d6ff71d2bf86e98c3891e3b0967e72c19e466f40c04b6facdca",
+          "8a474999192cf31f9c2055417dc1a09196eeabdcb63fe80058a213659cf457a3",
+          "8aa56fca72f46e985537aa799a563d8575f272e4eaff02e91fd91baad13fac19",
+          "8f31de6feada6dac2d55b836e33f02da7ec753eb3d868239a4a9e7a1def7c12c",
+          "90d544bd8876a3f029d142eafb08eee57a1db53e9ac263a70ecc928c96b6bf8e",
+          "ab89d3faa8ec92d5832ef3efcf0b61784a052f7276a1271bea51bf9a639f39bd",
+          "d7d4a85ae36afaa238232d64eb4e3a5bfaa1cc3fb271fc2a807196593f566b7c",
+          "f8a2ba2129e9f5fcf2618632e64b29c49413977acf2bf6af1cccaf6d17892dfb"
+        ],
+        "memory": {
+          "geometries": 132,
+          "textures": 5
+        },
+        "context": {
+          "alpha": true,
+          "antialias": true,
+          "depth": true,
+          "desynchronized": false,
+          "failIfMajorPerformanceCaveat": false,
+          "powerPreference": "default",
+          "premultipliedAlpha": true,
+          "preserveDrawingBuffer": false,
+          "stencil": false,
+          "xrCompatible": false
+        }
+      }
+    ]
+  },
+  "frame_diagnosis": {
+    "scope": "Supplemental ABBA diagnosis only. Original failed14.7ms official sample remains over8ms; these samples do not replace the budget or authorize merge. Original frame loop and median rank unchanged; only extra output fields added.",
+    "parent_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "db0f4f1c95144adeed423f45e2af01696fd885a0",
+      "git_dirty": true,
+      "active_source_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "original_frame_loop_sha256": "9e12e431a3dc63428dc902a2e27ce53d13a7047a90a76edeb4a4200782b0ef79",
+    "order": [
+      "baseline",
+      "final",
+      "final",
+      "baseline"
+    ],
+    "samples": [
+      {
+        "fps": 60.08697672862659,
+        "frame": {
+          "samples_sorted_ms": [
+            2.199999988079071,
+            2.199999988079071,
+            2.199999988079071,
+            2.2000000178813934,
+            2.2999999821186066,
+            2.300000011920929,
+            2.300000011920929,
+            2.399999976158142,
+            2.4000000059604645,
+            2.4000000059604645,
+            2.4000000059604645,
+            2.4000000059604645,
+            2.4000000059604645,
+            2.5,
+            2.5999999940395355,
+            2.7000000178813934,
+            3,
+            3,
+            3,
+            3,
+            3.0999999940395355,
+            3.199999988079071,
+            3.2000000178813934,
+            3.2999999821186066,
+            3.399999976158142,
+            3.4000000059604645,
+            3.5,
+            3.5,
+            3.600000023841858,
+            4,
+            4.199999988079071,
+            4.200000017881393,
+            4.4000000059604645,
+            4.5999999940395355,
+            5.4000000059604645,
+            5.4000000059604645,
+            6.0999999940395355,
+            7,
+            9.400000005960464,
+            15
+          ],
+          "camera": [
+            9.550996161804065,
+            -9.881423408314378,
+            6.699282562280289
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804235,
+            1.4534866173362684
+          ],
+          "wood_requests": 0,
+          "grounds": {
+            "ground_concrete": {
+              "pattern": "speckle",
+              "tile": 1
+            }
+          },
+          "gl_error": 0,
+          "median": 3.0999999940395355,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "server_peak_mb": 566.6,
+        "source": {
+          "package": "robotforge",
+          "package_version": "0.0.1",
+          "python": "3.12.13",
+          "platform": "macOS-26.3.2-arm64-arm-64bit",
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "git_commit": null,
+          "git_dirty": false,
+          "active_source_sha256": "eab1c5dd1335f11d71c0d3a1e6a5bbb355fb1b730c57e61af553d83974f43b0c",
+          "plugins": [],
+          "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+        },
+        "mode": "baseline",
+        "selected_source": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-natural-wood/baseline-code/src",
+        "seconds": 6.946167957998114
+      },
+      {
+        "fps": 60.09695198872495,
+        "frame": {
+          "samples_sorted_ms": [
+            3.7000000178813934,
+            5.800000011920929,
+            6.5,
+            7.0999999940395355,
+            7.200000017881393,
+            8.099999994039536,
+            8.099999994039536,
+            9.299999982118607,
+            9.300000011920929,
+            9.800000011920929,
+            10.599999994039536,
+            10.900000005960464,
+            11.099999994039536,
+            11.599999994039536,
+            11.599999994039536,
+            13.199999988079071,
+            14.099999994039536,
+            14.5,
+            14.5,
+            14.699999988079071,
+            14.900000005960464,
+            15,
+            15.199999988079071,
+            15.299999982118607,
+            15.5,
+            15.900000005960464,
+            16,
+            16.100000023841858,
+            16.400000005960464,
+            16.400000005960464,
+            17,
+            17.400000005960464,
+            17.80000001192093,
+            19,
+            19.400000005960464,
+            19.5,
+            20.400000005960464,
+            20.599999994039536,
+            22.69999998807907,
+            23.69999998807907
+          ],
+          "camera": [
+            9.550996161804065,
+            -9.881423408314378,
+            6.699282562280289
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804235,
+            1.4534866173362684
+          ],
+          "wood_requests": 0,
+          "grounds": {
+            "ground_concrete": {
+              "pattern": "speckle",
+              "tile": 1
+            }
+          },
+          "gl_error": 0,
+          "median": 14.900000005960464,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "server_peak_mb": 559.2,
+        "source": {
+          "package": "robotforge",
+          "package_version": "0.0.1",
+          "python": "3.12.13",
+          "platform": "macOS-26.3.2-arm64-arm-64bit",
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "git_commit": "db0f4f1c95144adeed423f45e2af01696fd885a0",
+          "git_dirty": true,
+          "active_source_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+          "plugins": [],
+          "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+        },
+        "mode": "final",
+        "selected_source": "/Users/yusenthebot/dev/robotforge/src",
+        "seconds": 7.2223027080181055
+      },
+      {
+        "fps": 60.09495667174933,
+        "frame": {
+          "samples_sorted_ms": [
+            6.199999988079071,
+            8.199999988079071,
+            8.599999994039536,
+            8.900000005960464,
+            10.099999994039536,
+            10.099999994039536,
+            10.100000023841858,
+            10.400000005960464,
+            10.5,
+            11.099999994039536,
+            11.199999988079071,
+            11.599999994039536,
+            12.099999994039536,
+            12.099999994039536,
+            12.400000005960464,
+            12.5,
+            13,
+            13.099999994039536,
+            13.300000011920929,
+            13.799999982118607,
+            14.400000005960464,
+            14.400000005960464,
+            15.699999988079071,
+            16,
+            16.099999994039536,
+            16.900000005960464,
+            16.900000005960464,
+            17,
+            17.19999998807907,
+            17.900000005960464,
+            17.900000005960464,
+            18,
+            18.099999994039536,
+            18.5,
+            18.900000005960464,
+            19.400000005960464,
+            19.600000023841858,
+            19.799999982118607,
+            20.400000005960464,
+            39.60000002384186
+          ],
+          "camera": [
+            9.550996161804065,
+            -9.881423408314378,
+            6.699282562280289
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804235,
+            1.4534866173362684
+          ],
+          "wood_requests": 0,
+          "grounds": {
+            "ground_concrete": {
+              "pattern": "speckle",
+              "tile": 1
+            }
+          },
+          "gl_error": 0,
+          "median": 14.400000005960464,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "server_peak_mb": 557.1,
+        "source": {
+          "package": "robotforge",
+          "package_version": "0.0.1",
+          "python": "3.12.13",
+          "platform": "macOS-26.3.2-arm64-arm-64bit",
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "git_commit": "db0f4f1c95144adeed423f45e2af01696fd885a0",
+          "git_dirty": true,
+          "active_source_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+          "plugins": [],
+          "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+        },
+        "mode": "final",
+        "selected_source": "/Users/yusenthebot/dev/robotforge/src",
+        "seconds": 6.771082459017634
+      },
+      {
+        "fps": 60.10493458156514,
+        "frame": {
+          "samples_sorted_ms": [
+            2.699999988079071,
+            2.699999988079071,
+            2.7999999821186066,
+            2.7999999821186066,
+            2.7999999821186066,
+            2.800000011920929,
+            2.800000011920929,
+            2.800000011920929,
+            2.800000011920929,
+            2.800000011920929,
+            2.899999976158142,
+            2.899999976158142,
+            2.9000000059604645,
+            2.9000000059604645,
+            2.9000000059604645,
+            2.9000000059604645,
+            2.9000000059604645,
+            2.9000000059604645,
+            2.9000000059604645,
+            2.9000000059604645,
+            2.9000000059604645,
+            3,
+            3,
+            3,
+            3.0999999940395355,
+            3.100000023841858,
+            3.2000000178813934,
+            3.300000011920929,
+            3.399999976158142,
+            3.4000000059604645,
+            3.5,
+            3.5999999940395355,
+            3.7999999821186066,
+            3.800000011920929,
+            3.9000000059604645,
+            4,
+            4.0999999940395355,
+            4.0999999940395355,
+            4.0999999940395355,
+            4.300000011920929
+          ],
+          "camera": [
+            9.550996161804065,
+            -9.881423408314378,
+            6.699282562280289
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804235,
+            1.4534866173362684
+          ],
+          "wood_requests": 0,
+          "grounds": {
+            "ground_concrete": {
+              "pattern": "speckle",
+              "tile": 1
+            }
+          },
+          "gl_error": 0,
+          "median": 2.9000000059604645,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "server_peak_mb": 566.9,
+        "source": {
+          "package": "robotforge",
+          "package_version": "0.0.1",
+          "python": "3.12.13",
+          "platform": "macOS-26.3.2-arm64-arm-64bit",
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "git_commit": null,
+          "git_dirty": false,
+          "active_source_sha256": "eab1c5dd1335f11d71c0d3a1e6a5bbb355fb1b730c57e61af553d83974f43b0c",
+          "plugins": [],
+          "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+        },
+        "mode": "baseline",
+        "selected_source": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-natural-wood/baseline-code/src",
+        "seconds": 6.613796291989274
+      }
+    ]
+  },
+  "baseline_commit": "db0f4f1c95144adeed423f45e2af01696fd885a0",
+  "baseline_runtime_sha256": "eab1c5dd1335f11d71c0d3a1e6a5bbb355fb1b730c57e61af553d83974f43b0c",
+  "runtime_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+  "checks": {
+    "runtime": true,
+    "frozen_inputs": true,
+    "capture_helpers": true,
+    "external_helpers": true,
+    "verification-stages:complete": true,
+    "verification-stages:build": true,
+    "verification-stages:tool-availability": true,
+    "verification-stages:ruff-check": true,
+    "verification-stages:ruff-format": true,
+    "verification-stages:javascript-parse": true,
+    "verification-stages:focused-default": true,
+    "verification-stages:browser-full": true,
+    "verification-stages:slow-assets-sensors": true,
+    "verification-stages:models-candidate": true,
+    "verification-stages:framework": true,
+    "verification-stages:smoke": true,
+    "verification-stages:installed-smoke": true,
+    "verification-stages:budget": false,
+    "post-stages:complete": true,
+    "post-stages:recipe-reproduce": true,
+    "post-stages:baseline-wheel": true,
+    "post-stages:models-baseline": true,
+    "post-stages:fixed-baseline": false,
+    "post-stages:model-comparison": true,
+    "post-stages:fixed-baseline-resume": true,
+    "post-stages:fixed-final": true,
+    "post-stages:dynamic-video": true,
+    "post-stages:media-decode": true,
+    "post-stages:frame-diagnosis": true,
+    "model:gallery_all_model_arrays": true,
+    "model:gallery_scalars": true,
+    "model:gallery_physics": true,
+    "model:gallery_payload_layout": true,
+    "model:gallery_all_mesh_bytes": true,
+    "model:kitchen_all_model_arrays": true,
+    "model:kitchen_scalars": true,
+    "model:kitchen_physics": true,
+    "model:kitchen_payload_layout": true,
+    "model:kitchen_all_mesh_bytes": true,
+    "model:wood_props_all_model_arrays": true,
+    "model:wood_props_scalars": true,
+    "model:wood_props_physics": true,
+    "model:wood_props_payload_layout": true,
+    "model:wood_props_all_mesh_bytes": true,
+    "model:park_all_model_arrays": true,
+    "model:park_scalars": true,
+    "model:park_physics": true,
+    "model:park_payload_layout": true,
+    "model:park_all_mesh_bytes": true,
+    "model:wood_terrain_all_model_arrays": true,
+    "model:wood_terrain_scalars": true,
+    "model:wood_terrain_physics": true,
+    "model:wood_terrain_payload_layout": true,
+    "model:wood_terrain_all_mesh_bytes": true,
+    "models:source": true,
+    "models:five": true,
+    "models:baseline:source_after": true,
+    "models:final:source_after": true,
+    "focused-default:distinct": true,
+    "focused-default:pass": true,
+    "browser-full:distinct": true,
+    "browser-full:pass": true,
+    "slow-assets-sensors:distinct": true,
+    "slow-assets-sensors:pass": true,
+    "new_browser11": true,
+    "framework7": true,
+    "one_budget11": false,
+    "wheel_all_source_bytes": true,
+    "wheel_file_set": true,
+    "offline_recipe_exact": true,
+    "asset_caps": true,
+    "fixed:baseline:source": true,
+    "fixed:final:source": true,
+    "fixed:five": true,
+    "fixed:22": true,
+    "gallery:scene": true,
+    "gallery:physics": true,
+    "gallery:console": true,
+    "gallery:fresh_profile:wood_request": true,
+    "gallery:warm_navigation:wood_request": true,
+    "gallery_far:render_counts": true,
+    "gallery_far:camera": true,
+    "gallery_far:gl": true,
+    "gallery_far:after_shot_camera": true,
+    "gallery_far:source": true,
+    "gallery_near:render_counts": true,
+    "gallery_near:camera": true,
+    "gallery_near:gl": true,
+    "gallery_near:after_shot_camera": true,
+    "gallery_near:source": true,
+    "gallery_low:render_counts": true,
+    "gallery_low:camera": true,
+    "gallery_low:gl": true,
+    "gallery_low:after_shot_camera": true,
+    "gallery_low:source": true,
+    "kitchen:scene": true,
+    "kitchen:physics": true,
+    "kitchen:console": true,
+    "kitchen:fresh_profile:wood_request": true,
+    "kitchen:warm_navigation:wood_request": true,
+    "kitchen_far:render_counts": true,
+    "kitchen_far:camera": true,
+    "kitchen_far:gl": true,
+    "kitchen_far:after_shot_camera": true,
+    "kitchen_far:source": true,
+    "kitchen_near:render_counts": true,
+    "kitchen_near:camera": true,
+    "kitchen_near:gl": true,
+    "kitchen_near:after_shot_camera": true,
+    "kitchen_near:source": true,
+    "kitchen_low:render_counts": true,
+    "kitchen_low:camera": true,
+    "kitchen_low:gl": true,
+    "kitchen_low:after_shot_camera": true,
+    "kitchen_low:source": true,
+    "wood_props:scene": true,
+    "wood_props:physics": true,
+    "wood_props:console": true,
+    "wood_props:fresh_profile:wood_request": true,
+    "wood_props:warm_navigation:wood_request": true,
+    "wood_props_near:render_counts": true,
+    "wood_props_near:camera": true,
+    "wood_props_near:gl": true,
+    "wood_props_near:after_shot_camera": true,
+    "wood_props_near:source": true,
+    "wood_props_table_top:render_counts": true,
+    "wood_props_table_top:camera": true,
+    "wood_props_table_top:gl": true,
+    "wood_props_table_top:after_shot_camera": true,
+    "wood_props_table_top:source": true,
+    "wood_props_table_detail:render_counts": true,
+    "wood_props_table_detail:camera": true,
+    "wood_props_table_detail:gl": true,
+    "wood_props_table_detail:after_shot_camera": true,
+    "wood_props_table_detail:source": true,
+    "wood_props_table_grazing:render_counts": true,
+    "wood_props_table_grazing:camera": true,
+    "wood_props_table_grazing:gl": true,
+    "wood_props_table_grazing:after_shot_camera": true,
+    "wood_props_table_grazing:source": true,
+    "wood_props_floor_detail:render_counts": true,
+    "wood_props_floor_detail:camera": true,
+    "wood_props_floor_detail:gl": true,
+    "wood_props_floor_detail:after_shot_camera": true,
+    "wood_props_floor_detail:source": true,
+    "wood_props_floor_grazing:render_counts": true,
+    "wood_props_floor_grazing:camera": true,
+    "wood_props_floor_grazing:gl": true,
+    "wood_props_floor_grazing:after_shot_camera": true,
+    "wood_props_floor_grazing:source": true,
+    "park:scene": true,
+    "park:physics": true,
+    "park:console": true,
+    "park:fresh_profile:wood_request": true,
+    "park:warm_navigation:wood_request": true,
+    "park_far:render_counts": true,
+    "park_far:camera": true,
+    "park_far:gl": true,
+    "park_far:after_shot_camera": true,
+    "park_far:source": true,
+    "park_near:render_counts": true,
+    "park_near:camera": true,
+    "park_near:gl": true,
+    "park_near:after_shot_camera": true,
+    "park_near:source": true,
+    "park_low:render_counts": true,
+    "park_low:camera": true,
+    "park_low:gl": true,
+    "park_low:after_shot_camera": true,
+    "park_low:source": true,
+    "park_bench_detail:render_counts": true,
+    "park_bench_detail:camera": true,
+    "park_bench_detail:gl": true,
+    "park_bench_detail:after_shot_camera": true,
+    "park_bench_detail:source": true,
+    "park_bench_grazing:render_counts": true,
+    "park_bench_grazing:camera": true,
+    "park_bench_grazing:gl": true,
+    "park_bench_grazing:after_shot_camera": true,
+    "park_bench_grazing:source": true,
+    "wood_terrain:scene": true,
+    "wood_terrain:physics": true,
+    "wood_terrain:console": true,
+    "wood_terrain:fresh_profile:wood_request": true,
+    "wood_terrain:warm_navigation:wood_request": true,
+    "wood_terrain_near:render_counts": true,
+    "wood_terrain_near:camera": true,
+    "wood_terrain_near:gl": true,
+    "wood_terrain_near:after_shot_camera": true,
+    "wood_terrain_near:source": true,
+    "wood_terrain_low:render_counts": true,
+    "wood_terrain_low:camera": true,
+    "wood_terrain_low:gl": true,
+    "wood_terrain_low:after_shot_camera": true,
+    "wood_terrain_low:source": true,
+    "wood_terrain_ramp_detail:render_counts": true,
+    "wood_terrain_ramp_detail:camera": true,
+    "wood_terrain_ramp_detail:gl": true,
+    "wood_terrain_ramp_detail:after_shot_camera": true,
+    "wood_terrain_ramp_detail:source": true,
+    "wood_terrain_stair_detail:render_counts": true,
+    "wood_terrain_stair_detail:camera": true,
+    "wood_terrain_stair_detail:gl": true,
+    "wood_terrain_stair_detail:after_shot_camera": true,
+    "wood_terrain_stair_detail:source": true,
+    "wood_terrain_hfield_detail:render_counts": true,
+    "wood_terrain_hfield_detail:camera": true,
+    "wood_terrain_hfield_detail:gl": true,
+    "wood_terrain_hfield_detail:after_shot_camera": true,
+    "wood_terrain_hfield_detail:source": true,
+    "terrain_all_positions_uv_repeat": true,
+    "terrain:baseline:metric_pitch": true,
+    "terrain:final:metric_pitch": true,
+    "fixed-baseline/gallery_motion.mp4:decode": true,
+    "fixed-baseline/kitchen_motion.mp4:decode": true,
+    "fixed-baseline/wood_terrain_motion.mp4:decode": true,
+    "fixed-final/gallery_motion.mp4:decode": true,
+    "fixed-final/kitchen_motion.mp4:decode": true,
+    "fixed-final/wood_terrain_motion.mp4:decode": true,
+    "dynamic:source": true,
+    "dynamic:images": true,
+    "dynamic:native": true,
+    "dynamic:contact": true,
+    "dynamic:decode": true,
+    "diagnosis:four": true,
+    "diagnosis:source": true,
+    "isolation:four": true,
+    "isolation:compiled_shaders": true,
+    "gl:counts": true
+  },
+  "counts": {
+    "focused-default": {
+      "passed": 1280,
+      "skipped": 1,
+      "failures": 0
+    },
+    "browser-full": {
+      "passed": 162,
+      "skipped": 0,
+      "failures": 0
+    },
+    "slow-assets-sensors": {
+      "passed": 8,
+      "skipped": 0,
+      "failures": 0
+    }
+  },
+  "distinct_pytest_cases": 1450,
+  "new_tests": 11,
+  "frozen_files": 619,
+  "model": {
+    "gallery": {
+      "arrays": 480,
+      "changed_arrays": [],
+      "mesh_bytes": 29197296
+    },
+    "kitchen": {
+      "arrays": 480,
+      "changed_arrays": [],
+      "mesh_bytes": 2807424
+    },
+    "wood_props": {
+      "arrays": 480,
+      "changed_arrays": [],
+      "mesh_bytes": 175104
+    },
+    "park": {
+      "arrays": 480,
+      "changed_arrays": [],
+      "mesh_bytes": 17407980
+    },
+    "wood_terrain": {
+      "arrays": 480,
+      "changed_arrays": [],
+      "mesh_bytes": 6724
+    }
+  },
+  "packaging": {
+    "files": 394,
+    "wheel_bytes": 3853599,
+    "baseline_wheel_bytes": 3763628,
+    "wheel_delta_bytes": 89971,
+    "module_bytes": 116493
+  },
+  "budget": {
+    "started": "2026-10-24T12:00:10+08:00",
+    "sha": "db0f4f1-dirty",
+    "quick": false,
+    "partial": true,
+    "covers": [
+      "install",
+      "viewer"
+    ],
+    "machine": {
+      "system": "Darwin",
+      "release": "26.3.2",
+      "machine": "arm64",
+      "cpus": 18,
+      "python": "3.12.13",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "load": [
+        5.5,
+        6.2,
+        7.6
+      ]
+    },
+    "load_after": [
+      5.4,
+      6.1,
+      7.5
+    ],
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3763.2803,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.3734,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.3
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5495,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.351
+        },
+        "fps": {
+          "value": 60.1009,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 14.7,
+          "unit": "ms",
+          "better": "lower",
+          "median": 14.699999988079071,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 56.4784,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 7.7,
+          "unit": "ms",
+          "better": "lower",
+          "median": 7.699999988079071,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 133.3,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 560.0
+        },
+        "idle_cpu_pct": {
+          "value": 4.2,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "budgets": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "imports.robotforge_cpu_ms": "not run",
+      "imports.cli_cpu_ms": "not run",
+      "imports.mcp_server_cpu_ms": "not run",
+      "imports.robotforge_heavy": "not run",
+      "imports.cli_heavy": "not run",
+      "imports.mcp_server_heavy": "not run",
+      "physics.dog_idle.steps_per_s": "not run",
+      "physics.dog_idle.controllers_share": "not run",
+      "physics.dog_walk.steps_per_s": "not run",
+      "physics.go2_idle.steps_per_s": "not run",
+      "physics.go2_idle.controllers_share": "not run",
+      "physics.go2_walk.steps_per_s": "not run",
+      "physics.go2_rl_idle.steps_per_s": "not run",
+      "physics.go2_rl_idle.controllers_share": "not run",
+      "physics.humanoid_idle.steps_per_s": "not run",
+      "physics.humanoid_idle.controllers_share": "not run",
+      "physics.arm_pick.steps_per_s": "not run",
+      "physics.warehouse_nav.steps_per_s": "not run",
+      "physics.objects_20.steps_per_s": "not run",
+      "physics.machine.steps_per_s": "not run",
+      "physics.dog_idle.peak_mb": "not run",
+      "physics.go2_walk.peak_mb": "not run",
+      "physics.warehouse_nav.peak_mb": "not run",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "over",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok",
+      "mcp.start_s": "not run",
+      "mcp.new_world_ms": "not run",
+      "mcp.add_robot_ms": "not run",
+      "mcp.move_ms": "not run",
+      "mcp.observe_ms": "not run",
+      "mcp.server_rss_mb": "not run",
+      "mcp.idle_cpu_pct": "not run"
+    }
+  },
+  "fixed_observations": {
+    "gallery": {
+      "chrome_rss_mib": [
+        2031.28125,
+        2008.109375
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            512.9000000059605,
+            691.2999999821186
+          ],
+          "http_bytes": [
+            30511132,
+            30630011
+          ],
+          "requests": [
+            29,
+            32
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            30
+          ],
+          "data_image_responses": [
+            0,
+            2
+          ],
+          "wood_module_requests": [
+            0,
+            1
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            212.2000000178814,
+            251
+          ],
+          "http_bytes": [
+            29224581,
+            29224731
+          ],
+          "requests": [
+            29,
+            32
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            30
+          ],
+          "data_image_responses": [
+            0,
+            2
+          ],
+          "wood_module_requests": [
+            0,
+            1
+          ]
+        }
+      },
+      "views": {
+        "far": {
+          "draw_true_median_ms": [
+            3.9000000059604645,
+            12.399999991059303
+          ],
+          "fps": [
+            59.02026362384418,
+            60.00393468424159
+          ]
+        },
+        "near": {
+          "draw_true_median_ms": [
+            4.049999997019768,
+            13.099999994039536
+          ],
+          "fps": [
+            60.00393468424162,
+            60
+          ]
+        },
+        "low": {
+          "draw_true_median_ms": [
+            11.5,
+            14.450000002980232
+          ],
+          "fps": [
+            60,
+            55.0855793822546
+          ]
+        }
+      },
+      "flicker": [
+        null,
+        null
+      ]
+    },
+    "kitchen": {
+      "chrome_rss_mib": [
+        1915.8125,
+        1902.921875
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            512.4000000059605,
+            640.5
+          ],
+          "http_bytes": [
+            4121259,
+            4240138
+          ],
+          "requests": [
+            29,
+            32
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            30
+          ],
+          "data_image_responses": [
+            0,
+            2
+          ],
+          "wood_module_requests": [
+            0,
+            1
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            194.5,
+            224.5
+          ],
+          "http_bytes": [
+            2834708,
+            2834858
+          ],
+          "requests": [
+            29,
+            32
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            30
+          ],
+          "data_image_responses": [
+            0,
+            2
+          ],
+          "wood_module_requests": [
+            0,
+            1
+          ]
+        }
+      },
+      "views": {
+        "far": {
+          "draw_true_median_ms": [
+            3.5999999940395355,
+            2.300000011920929
+          ],
+          "fps": [
+            59.99400059994001,
+            60
+          ]
+        },
+        "near": {
+          "draw_true_median_ms": [
+            2.3999999910593033,
+            1.1000000089406967
+          ],
+          "fps": [
+            60.009837678307946,
+            60
+          ]
+        },
+        "low": {
+          "draw_true_median_ms": [
+            3.2000000029802322,
+            3.4000000059604645
+          ],
+          "fps": [
+            60.00393468424162,
+            60
+          ]
+        }
+      },
+      "flicker": [
+        null,
+        null
+      ]
+    },
+    "wood_props": {
+      "chrome_rss_mib": [
+        1868.921875,
+        1872.5625
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            468.5,
+            455.2999999821186
+          ],
+          "http_bytes": [
+            1488938,
+            1607817
+          ],
+          "requests": [
+            29,
+            32
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            30
+          ],
+          "data_image_responses": [
+            0,
+            2
+          ],
+          "wood_module_requests": [
+            0,
+            1
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            117.59999999403954,
+            125.60000002384186
+          ],
+          "http_bytes": [
+            202387,
+            202537
+          ],
+          "requests": [
+            29,
+            32
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            30
+          ],
+          "data_image_responses": [
+            0,
+            2
+          ],
+          "wood_module_requests": [
+            0,
+            1
+          ]
+        }
+      },
+      "views": {
+        "near": {
+          "draw_true_median_ms": [
+            6.5,
+            5.3499999940395355
+          ],
+          "fps": [
+            60.00983767830792,
+            60.00393468424158
+          ]
+        },
+        "table_top": {
+          "draw_true_median_ms": [
+            2.1500000059604645,
+            3.7000000029802322
+          ],
+          "fps": [
+            60.00393468424159,
+            59.99999999999997
+          ]
+        },
+        "table_detail": {
+          "draw_true_median_ms": [
+            2.050000011920929,
+            3.1499999910593033
+          ],
+          "fps": [
+            60.00983767830792,
+            60
+          ]
+        },
+        "table_grazing": {
+          "draw_true_median_ms": [
+            2.25,
+            0.7999999821186066
+          ],
+          "fps": [
+            60.00393468424157,
+            59.998032851381936
+          ]
+        },
+        "floor_detail": {
+          "draw_true_median_ms": [
+            1.0,
+            0.5
+          ],
+          "fps": [
+            60,
+            60.00393468424157
+          ]
+        },
+        "floor_grazing": {
+          "draw_true_median_ms": [
+            1.8500000089406967,
+            0.9500000029802322
+          ],
+          "fps": [
+            60,
+            60.00983767830792
+          ]
+        }
+      },
+      "flicker": [
+        {
+          "table_detail": {
+            "flips": 1991,
+            "perMegapixel": 139
+          },
+          "floor_grazing": {
+            "flips": 19193,
+            "perMegapixel": 1339
+          }
+        },
+        {
+          "table_detail": {
+            "flips": 2939,
+            "perMegapixel": 205
+          },
+          "floor_grazing": {
+            "flips": 19380,
+            "perMegapixel": 1352
+          }
+        }
+      ]
+    },
+    "park": {
+      "chrome_rss_mib": [
+        1997.359375,
+        2001.5625
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            686.6999999880791,
+            537.5
+          ],
+          "http_bytes": [
+            18721816,
+            18723924
+          ],
+          "requests": [
+            29,
+            29
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            29
+          ],
+          "data_image_responses": [
+            0,
+            0
+          ],
+          "wood_module_requests": [
+            0,
+            0
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            328.40000000596046,
+            262.69999998807907
+          ],
+          "http_bytes": [
+            17435265,
+            17435265
+          ],
+          "requests": [
+            29,
+            29
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            29
+          ],
+          "data_image_responses": [
+            0,
+            0
+          ],
+          "wood_module_requests": [
+            0,
+            0
+          ]
+        }
+      },
+      "views": {
+        "far": {
+          "draw_true_median_ms": [
+            15.299999997019768,
+            9.800000011920929
+          ],
+          "fps": [
+            59,
+            60.00393468424159
+          ]
+        },
+        "near": {
+          "draw_true_median_ms": [
+            14.5,
+            9.299999997019768
+          ],
+          "fps": [
+            60,
+            59.99999999999997
+          ]
+        },
+        "low": {
+          "draw_true_median_ms": [
+            10.200000002980232,
+            6.350000008940697
+          ],
+          "fps": [
+            60,
+            59.99400059994004
+          ]
+        },
+        "bench_detail": {
+          "draw_true_median_ms": [
+            4.649999991059303,
+            6.799999997019768
+          ],
+          "fps": [
+            59.99999999999994,
+            60.00393468424157
+          ]
+        },
+        "bench_grazing": {
+          "draw_true_median_ms": [
+            3.7999999970197678,
+            5.899999991059303
+          ],
+          "fps": [
+            60.00393468424157,
+            60
+          ]
+        }
+      },
+      "flicker": [
+        null,
+        null
+      ]
+    },
+    "wood_terrain": {
+      "chrome_rss_mib": [
+        1881.203125,
+        1876.734375
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            544.1000000238419,
+            433.7000000178814
+          ],
+          "http_bytes": [
+            1320556,
+            1439435
+          ],
+          "requests": [
+            29,
+            32
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            30
+          ],
+          "data_image_responses": [
+            0,
+            2
+          ],
+          "wood_module_requests": [
+            0,
+            1
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            144.2000000178814,
+            145.90000000596046
+          ],
+          "http_bytes": [
+            34005,
+            34155
+          ],
+          "requests": [
+            29,
+            32
+          ],
+          "request_count_note": "Original helper labels every resource response as HTTP, including two data images; use actual_http_requests for HTTP only.",
+          "actual_http_requests": [
+            29,
+            30
+          ],
+          "data_image_responses": [
+            0,
+            2
+          ],
+          "wood_module_requests": [
+            0,
+            1
+          ]
+        }
+      },
+      "views": {
+        "near": {
+          "draw_true_median_ms": [
+            3.4000000059604645,
+            7.3499999940395355
+          ],
+          "fps": [
+            59.999999999999986,
+            60
+          ]
+        },
+        "low": {
+          "draw_true_median_ms": [
+            6.299999997019768,
+            3.0
+          ],
+          "fps": [
+            59.99803285138191,
+            60.00393468424159
+          ]
+        },
+        "ramp_detail": {
+          "draw_true_median_ms": [
+            2.5999999940395355,
+            0.5999999940395355
+          ],
+          "fps": [
+            60.00393468424162,
+            60
+          ]
+        },
+        "stair_detail": {
+          "draw_true_median_ms": [
+            4.100000008940697,
+            1.1499999910593033
+          ],
+          "fps": [
+            60.00393468424157,
+            60
+          ]
+        },
+        "hfield_detail": {
+          "draw_true_median_ms": [
+            3.2999999970197678,
+            1.7000000029802322
+          ],
+          "fps": [
+            60.00393468424157,
+            60.00393468424157
+          ]
+        }
+      },
+      "flicker": [
+        null,
+        null
+      ]
+    }
+  },
+  "fixed_pixel_differences": {
+    "gallery_far": {
+      "mean_byte": 2.9196608072916668,
+      "max_byte": 33,
+      "exact": false
+    },
+    "gallery_near": {
+      "mean_byte": 3.2065589192708335,
+      "max_byte": 35,
+      "exact": false
+    },
+    "gallery_low": {
+      "mean_byte": 2.0547275390625,
+      "max_byte": 32,
+      "exact": false
+    },
+    "kitchen_far": {
+      "mean_byte": 2.3741497395833333,
+      "max_byte": 28,
+      "exact": false
+    },
+    "kitchen_near": {
+      "mean_byte": 1.2730283203125,
+      "max_byte": 35,
+      "exact": false
+    },
+    "kitchen_low": {
+      "mean_byte": 2.009692057291667,
+      "max_byte": 33,
+      "exact": false
+    },
+    "wood_props_near": {
+      "mean_byte": 2.6369052734375,
+      "max_byte": 37,
+      "exact": false
+    },
+    "wood_props_table_top": {
+      "mean_byte": 1.48194921875,
+      "max_byte": 32,
+      "exact": false
+    },
+    "wood_props_table_detail": {
+      "mean_byte": 0.5467190755208333,
+      "max_byte": 30,
+      "exact": false
+    },
+    "wood_props_table_grazing": {
+      "mean_byte": 1.2703180338541666,
+      "max_byte": 29,
+      "exact": false
+    },
+    "wood_props_floor_detail": {
+      "mean_byte": 3.9796396484375,
+      "max_byte": 36,
+      "exact": false
+    },
+    "wood_props_floor_grazing": {
+      "mean_byte": 2.102935546875,
+      "max_byte": 32,
+      "exact": false
+    },
+    "park_far": {
+      "mean_byte": 0.0,
+      "max_byte": 0,
+      "exact": true
+    },
+    "park_near": {
+      "mean_byte": 0.0,
+      "max_byte": 0,
+      "exact": true
+    },
+    "park_low": {
+      "mean_byte": 0.0,
+      "max_byte": 0,
+      "exact": true
+    },
+    "park_bench_detail": {
+      "mean_byte": 0.0,
+      "max_byte": 0,
+      "exact": true
+    },
+    "park_bench_grazing": {
+      "mean_byte": 0.0,
+      "max_byte": 0,
+      "exact": true
+    },
+    "wood_terrain_near": {
+      "mean_byte": 3.276376627604167,
+      "max_byte": 35,
+      "exact": false
+    },
+    "wood_terrain_low": {
+      "mean_byte": 2.0210654296875,
+      "max_byte": 34,
+      "exact": false
+    },
+    "wood_terrain_ramp_detail": {
+      "mean_byte": 3.161206380208333,
+      "max_byte": 35,
+      "exact": false
+    },
+    "wood_terrain_stair_detail": {
+      "mean_byte": 3.3604300130208333,
+      "max_byte": 36,
+      "exact": false
+    },
+    "wood_terrain_hfield_detail": {
+      "mean_byte": 3.9871533203125,
+      "max_byte": 37,
+      "exact": false
+    }
+  },
+  "terrain_pitches": {
+    "baseline": {
+      "meters_per_tile": [
+        1.1999999965815014,
+        1.1999999965815014,
+        1.2000000573351306,
+        1.1999999821186071,
+        1.2000000573351306,
+        1.1999999821186071,
+        1.1999999821186071,
+        1.1999999491181021,
+        1.1999999821186071,
+        1.1999999491181021,
+        1.2000000573351306,
+        1.1999999491181021,
+        1.2000000573351306,
+        1.1999999491181021,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000573351306,
+        1.1999999821186071,
+        1.2000000573351306,
+        1.1999999821186071,
+        1.1999999821186071,
+        1.1999999491181021,
+        1.1999999821186071,
+        1.1999999491181021,
+        1.2000000573351306,
+        1.1999999491181021,
+        1.2000000573351306,
+        1.1999999491181021,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2,
+        1.2
+      ],
+      "geometry_counts": {
+        "PlaneGeometry": 2,
+        "BoxGeometry": 10
+      },
+      "definition": "Box face edge lengths; plane and heightfield projected-XY span per texture repeat."
+    },
+    "final": {
+      "meters_per_tile": [
+        1.1999999965815014,
+        1.1999999965815014,
+        1.2000000573351306,
+        1.1999999821186071,
+        1.2000000573351306,
+        1.1999999821186071,
+        1.1999999821186071,
+        1.1999999491181021,
+        1.1999999821186071,
+        1.1999999491181021,
+        1.2000000573351306,
+        1.1999999491181021,
+        1.2000000573351306,
+        1.1999999491181021,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000573351306,
+        1.1999999821186071,
+        1.2000000573351306,
+        1.1999999821186071,
+        1.1999999821186071,
+        1.1999999491181021,
+        1.1999999821186071,
+        1.1999999491181021,
+        1.2000000573351306,
+        1.1999999491181021,
+        1.2000000573351306,
+        1.1999999491181021,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.199999955296517,
+        1.2000000286102301,
+        1.199999955296517,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2,
+        1.2000000286102301,
+        1.2,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2000000286102301,
+        1.2,
+        1.2
+      ],
+      "geometry_counts": {
+        "PlaneGeometry": 2,
+        "BoxGeometry": 10
+      },
+      "definition": "Box face edge lengths; plane and heightfield projected-XY span per texture repeat."
+    }
+  },
+  "videos": {
+    "fixed-baseline/gallery_motion.mp4": {
+      "source_sha256": "eab1c5dd1335f11d71c0d3a1e6a5bbb355fb1b730c57e61af553d83974f43b0c",
+      "video_sha256": "eed674c46a9628f5da70f0cf0b11465683a78590ac6d8ea25c80bf4e1da292e8",
+      "bytes": 679050,
+      "full_decode_passed": true,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "nb_frames": "99"
+          }
+        ],
+        "format": {
+          "duration": "3.300000"
+        }
+      },
+      "raw_frames": 189,
+      "raw_timestamp_span_seconds": 3.1763229370117188,
+      "sample_times_seconds": [
+        0.066,
+        0.594,
+        1.254,
+        1.815,
+        2.376,
+        3.135
+      ],
+      "sheet": "gallery-media-contact.jpg",
+      "scope": "All encoded frames decoded. Six decoded sample frames retained for visual review; not every-frame visual certification."
+    },
+    "fixed-baseline/kitchen_motion.mp4": {
+      "source_sha256": "eab1c5dd1335f11d71c0d3a1e6a5bbb355fb1b730c57e61af553d83974f43b0c",
+      "video_sha256": "0814f1d8a50050fc88ad2bb9a88aac2d9124352ee810df2cc2b73733146d26b2",
+      "bytes": 654431,
+      "full_decode_passed": true,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "nb_frames": "100"
+          }
+        ],
+        "format": {
+          "duration": "3.333333"
+        }
+      },
+      "raw_frames": 192,
+      "raw_timestamp_span_seconds": 3.1946558952331543,
+      "sample_times_seconds": [
+        0.06666666,
+        0.59999994,
+        1.2666665400000001,
+        1.8333331500000003,
+        2.39999976,
+        3.16666635
+      ],
+      "sheet": "kitchen-media-contact.jpg",
+      "scope": "All encoded frames decoded. Six decoded sample frames retained for visual review; not every-frame visual certification."
+    },
+    "fixed-baseline/wood_terrain_motion.mp4": {
+      "source_sha256": "eab1c5dd1335f11d71c0d3a1e6a5bbb355fb1b730c57e61af553d83974f43b0c",
+      "video_sha256": "c64c9541918f661184fa202bf25091e381a95bd8db6130db8c3d58a0485b86f2",
+      "bytes": 412846,
+      "full_decode_passed": true,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "nb_frames": "98"
+          }
+        ],
+        "format": {
+          "duration": "3.266667"
+        }
+      },
+      "raw_frames": 191,
+      "raw_timestamp_span_seconds": 3.1553280353546143,
+      "sample_times_seconds": [
+        0.06533334,
+        0.5880000599999999,
+        1.24133346,
+        1.79666685,
+        2.3520002399999997,
+        3.1033336499999997
+      ],
+      "sheet": "wood_terrain-media-contact.jpg",
+      "scope": "All encoded frames decoded. Six decoded sample frames retained for visual review; not every-frame visual certification."
+    },
+    "fixed-final/gallery_motion.mp4": {
+      "source_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+      "video_sha256": "aab6bce8f9d41886bee23dacb5da8bc0903487bd91b3b9a091d70e3535f3aae6",
+      "bytes": 932433,
+      "full_decode_passed": true,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "nb_frames": "99"
+          }
+        ],
+        "format": {
+          "duration": "3.300000"
+        }
+      },
+      "raw_frames": 191,
+      "raw_timestamp_span_seconds": 3.16172194480896,
+      "sample_times_seconds": [
+        0.066,
+        0.594,
+        1.254,
+        1.815,
+        2.376,
+        3.135
+      ],
+      "sheet": "gallery-media-contact.jpg",
+      "scope": "All encoded frames decoded. Six decoded sample frames retained for visual review; not every-frame visual certification."
+    },
+    "fixed-final/kitchen_motion.mp4": {
+      "source_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+      "video_sha256": "057130878e6051665092a2d24b6daee8d381178a0620825537beef2c1c181227",
+      "bytes": 903295,
+      "full_decode_passed": true,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "nb_frames": "99"
+          }
+        ],
+        "format": {
+          "duration": "3.300000"
+        }
+      },
+      "raw_frames": 191,
+      "raw_timestamp_span_seconds": 3.184523820877075,
+      "sample_times_seconds": [
+        0.066,
+        0.594,
+        1.254,
+        1.815,
+        2.376,
+        3.135
+      ],
+      "sheet": "kitchen-media-contact.jpg",
+      "scope": "All encoded frames decoded. Six decoded sample frames retained for visual review; not every-frame visual certification."
+    },
+    "fixed-final/wood_terrain_motion.mp4": {
+      "source_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+      "video_sha256": "3e5c927f591d05f0ac69791221f8710bd4178187ffa8f947c71fe2da16832436",
+      "bytes": 604122,
+      "full_decode_passed": true,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "nb_frames": "99"
+          }
+        ],
+        "format": {
+          "duration": "3.300000"
+        }
+      },
+      "raw_frames": 191,
+      "raw_timestamp_span_seconds": 3.1626129150390625,
+      "sample_times_seconds": [
+        0.066,
+        0.594,
+        1.254,
+        1.815,
+        2.376,
+        3.135
+      ],
+      "sheet": "wood_terrain-media-contact.jpg",
+      "scope": "All encoded frames decoded. Six decoded sample frames retained for visual review; not every-frame visual certification."
+    },
+    "video-dynamic/screen-drive.mp4": {
+      "source_sha256": "3b6c8f04601d3dd768c47c759e687a75ea6c342d5efa3e95cad6d268371051b7",
+      "video_sha256": "dec30dd77273a8f3a23ddcb0cc4db084d56ce78f89849d836ad61adfa1f8eb55",
+      "bytes": 1361119,
+      "full_decode_passed": true,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "nb_frames": "244"
+          }
+        ],
+        "format": {
+          "duration": "8.133333"
+        }
+      },
+      "raw_frames": 426,
+      "raw_timestamp_span_seconds": 8.004014015197754,
+      "sample_times_seconds": [
+        0.16266666000000002,
+        1.46399994,
+        3.09066654,
+        4.47333315,
+        5.85599976,
+        7.72666635
+      ],
+      "sheet": "media-contact.jpg",
+      "scope": "All encoded frames decoded. Six decoded sample frames retained for visual review; not every-frame visual certification."
+    }
+  },
+  "validation_status": "failed_budget",
+  "broad_goal": "active",
+  "limits": [
+    "Original official standard frame14.7ms exceeds unchanged8ms budget. Candidate is not approved for merge; supplemental ABBA does not replace this failure.",
+    "Terrain-only pausedtime0 fixture timed out inheritedtime>0 readiness. Original4baseline captures retained; only missing terrain resumed with actual renderedVersion/loading plus2RAF. Original scripts/log/failure retained.",
+    "Ground wood only; authored tint preserved, object wood and other materials unchanged.",
+    "Repeating knots remain; no temporal shimmer elimination claim.",
+    "Sequential baseline then final local samples; not ABBA or a general speed/memory claim.",
+    "All encoded frames decode; six sample frames per video visually reviewed, not every-frame visual certification.",
+    "11 development cases are not counted twice; initial fixture failure and preflight PNG cap failure retained.",
+    "Prior external-preview first park far screenshot differed despite equal camera/resources; cause unproven and not hidden.",
+    "Focused default suite, all browser, additional assets/sensors GPU; complete default suite not rerun.",
+    "Optional mypy/pyright/bandit/pip-audit unavailable; no dependencies installed.",
+    "Official install/viewer budget run once unchanged; other budget groups not run.",
+    "Native desktop pointer driving on wood verifies compatibility; no new playability feature in this increment.",
+    "Physical phones, Windows and other GPU drivers not tested."
+  ],
+  "failed_checks": [
+    "verification-stages:budget",
+    "post-stages:fixed-baseline",
+    "one_budget11"
+  ]
+}

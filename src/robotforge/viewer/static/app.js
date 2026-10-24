@@ -11,7 +11,7 @@ import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { orientWoodGrain, surfaceMaterial } from "./look.js";
 import { createLighting } from "./lighting.js";
-import { groundMaterial, groundPreview, groundStyle } from "./ground-look.js";
+import { groundMaterial, groundPreview, groundStyle, prepareGroundTextures } from "./ground-look.js";
 import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
 import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
@@ -210,8 +210,10 @@ function planeObject(geom, extent, look) {
 
 // ---------------------------------------------------------------- ground surfaces and terrain
 
+let sceneWoodTile = null;
 function groundLook(geom, look) {
-  return groundMaterial(groundStyle(geom.material, look), rgbaColor(geom.rgba), renderer.capabilities.getMaxAnisotropy());
+  return groundMaterial(groundStyle(geom.material, look), rgbaColor(geom.rgba),
+    renderer.capabilities.getMaxAnisotropy(), sceneWoodTile);
 }
 
 function groundMapping(mat, x, y, offset = [0, 0]) {
@@ -402,7 +404,7 @@ async function installScene(desc, request) {
       if (!res.ok) throw new Error(`mesh request returned ${res.status}`);
       return res.arrayBuffer();
     }) : Promise.resolve(buffer);
-  const [meshBuffer, textureData] = await Promise.all([meshLoad, textureLoad]);
+  const [meshBuffer, textureData, preparedWood] = await Promise.all([meshLoad, textureLoad, prepareGroundTextures(desc)]);
   buffer = meshBuffer;
   if (request !== sceneRequest) return; // another scene or connection superseded this mesh fetch
   const textureFor = textureData ? textureData[0].modelTextures(desc.textures, textureData[1], renderer.capabilities.getMaxAnisotropy()) : () => null;
@@ -414,6 +416,7 @@ async function installScene(desc, request) {
   leaveWater(water, scene3);
   water = null;
   disposeWorld();
+  sceneWoodTile = preparedWood;
   sceneDesc = desc;
   worldRoot = new THREE.Group();
   bodyNodes = desc.bodies.map((b) => {

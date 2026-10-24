@@ -1,5 +1,14 @@
 # progress
 
+## Round69: natural wood ground within bounded resource cost (2026-10-24)
+
+Selected shared512colour/256detail oak images after real256/512 gallery/kitchen/park/floor screening.
+Visible natural fibres/knots improve ground wood; repeat remains and this is not a shimmer fix or a new driving feature.
+1450distinct pytest passes,7framework,source/freshlockedwheel60tool smoke,5compiled models/payloads exact,22actual controls,oneunchanged10/11budget: standard frame14.7ms>8ms, candidate remains unmerged.
+Sevenoriginal videos strictlydecode; actual desktop pointer driving/contact retains newwood before/after.
+Recipe/source hashes, caps, original preflight and fixture failures, all slow/mixed samples and raw media retained in [report](docs/bench/2026-10-24-natural-wood.md).
+Broad goal stays active; next shared visuals and free exploration, action-success tuning deferred.
+
 ## Current state
 
 Rounds 1-3 done, 2026-10-14.
