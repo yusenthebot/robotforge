@@ -72,11 +72,17 @@ const GUESSES = [
   [/wood/i, "rf_wood"],
 ];
 
-export function presetFor(materialName) {
-  if (!materialName) return DEFAULT;
+function namedPreset(materialName) {
+  if (!materialName) return null;
   // Robots put into a world get their name as a prefix: "dog/rf_shell".
   const base = materialName.slice(materialName.lastIndexOf("/") + 1);
-  if (PRESETS[base]) return PRESETS[base];
+  return Object.hasOwn(PRESETS, base) ? PRESETS[base] : null;
+}
+
+export function presetFor(materialName) {
+  const named = namedPreset(materialName);
+  if (named) return named;
+  if (!materialName) return DEFAULT;
   for (const [pattern, preset] of GUESSES) if (pattern.test(materialName)) return PRESETS[preset];
   return DEFAULT;
 }
@@ -100,8 +106,21 @@ function presetFromSurface(t) {
   };
 }
 
-export function surfaceMaterial(materialName, color, opacity, surfaces) {
-  const p = surfaces && surfaces[materialName] ? presetFromSurface(surfaces[materialName]) : presetFor(materialName);
+function nativePreset(values) {
+  if (!values) return null;
+  // A partial author definition gets a neutral counterpart, never guessed coat/grain/metal.
+  const p = { roughness: 0.5, metalness: 0 };
+  let found = false;
+  for (const field of ["roughness", "metalness"]) {
+    const value = values[field];
+    if (Number.isFinite(value) && value >= 0 && value <= 1) { p[field] = value; found = true; }
+  }
+  return found ? p : null;
+}
+
+export function surfaceMaterial(materialName, color, opacity, surfaces, native) {
+  const surface = surfaces && Object.hasOwn(surfaces, materialName) ? surfaces[materialName] : null;
+  const p = surface ? presetFromSurface(surface) : namedPreset(materialName) ?? nativePreset(native) ?? presetFor(materialName);
   const transparent = opacity < 1;
   const common = {
     color,

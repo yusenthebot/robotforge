@@ -1,5 +1,14 @@
 # progress
 
+## Round74: preserve original native PBR while keeping shared visual contracts (2026-10-24)
+
+Optional ID-shared native roughness/metalness survives into actual viewer materials; registered/exact RF presets retain priority and legacy API/image/alpha/ground paths remain.
+Original Adam Lite author0/1values produce darker mirrors at three settled views, not a blanket appearance improvement.
+1549distinct pytest passes(17new),7framework,source/freshlockedwheel60tool smoke,6compiled models exact,22oldpixels/projections/resources/draws exact.
+One unchanged11/11budget,3860672Bwheel(+501B),no added dependencies/textures/passes. Sequential load/draw samples stay mixed.
+Two actual paused camera videos strictly decode,12samples inspected;310finalchecks pass. Original278checks/3frontprojection failures and later analysis-path failure retained; local settled pair corrects method without retesting unchanged source/budget.
+[Report](docs/bench/2026-10-24-native-pbr.md). Broad shared-material/lightweight/creative-play goal remains active; single-action success tuning deferred.
+
 ## Round72: reject insufficient object-wood color textures (2026-10-24)
 
 One retained CC0 board crop at256x19/512x39, linear mean-normalized without contrast boost, replaces only color in external static copies.
