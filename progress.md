@@ -1,5 +1,14 @@
 # progress
 
+## Round72: reject insufficient object-wood color textures (2026-10-24)
+
+One retained CC0 board crop at256x19/512x39, linear mean-normalized without contrast boost, replaces only color in external static copies.
+Four actual worlds and17views per cohort,51original stills, show weak close-up curves but insufficient ordinary-view natural fibers; independent visual review agrees. No runtime change or further tuning.
+178offline checks retain171passes/seven literal eye-coordinate residual failures. Initial34cumulative-frame comparison mistakes and four floor-labelled pictures containing changed furniture are corrected offline with original results retained; no recapture/rounding/all-pixel certification.
+Four original paused table/bench camera recordings strictly decode,24sampled decoded frames inspected. Source wrap is a separate risk, not a demonstrated screen seam or shimmer cause.
+PNG3247/12872B and eager module4974/17806B are prototype costs; sequential first-frame/draw observations remain mixed, not budget/install/lifecycle approval. No full candidate suite or smoke after appearance rejection.
+Runtime remains afabb4e3 at86f22f5. [Report](docs/bench/2026-10-24-object-wood-screen.md). Broad shared-material/lightweight/creative-play goal stays active; next use an ordinary-distance material reference and more suitable shared detail representation. Single-action success tuning deferred.
+
 ## Round71: camera intent and shared driving HUD (2026-10-24)
 
 Find/Follow takes one action; manual free view survives sustained controls. Real phone Undo obstruction and stale post-build keyboard hint fixed with normal HUD flow/shared refresh.

@@ -1,0 +1,1073 @@
+{
+  "baseline_commit": "86f22f58744634f5edc050da108d8cdd95d57656",
+  "runtime_sha256": "afabb4e3d7e86a2340472de4177ef8bebcdcb4d95d4c83cb0aa0947c7d06a28e",
+  "decision": "Reject both external color-only object-wood candidates; keep production unchanged.",
+  "quality_gate": {
+    "normal_viewport_multi_scene_natural_fiber_gain": false
+  },
+  "visual_observation": "Root and independent reviewer inspected table/bench/kitchen. Weak curves at close range, little recognizable natural fiber improvement at ordinary scene distance.512 slightly finer but insufficient. No parameter retuning.",
+  "source_seam_risk": "Single-board crop is not periodic. Source wrap statistics are a separate risk; no demonstrated visible screen seam or shimmer-cause claim.",
+  "checks": {
+    "256:source": true,
+    "256:scene_set": true,
+    "256:view_set": true,
+    "256:gallery:scene": true,
+    "256:gallery:physics": true,
+    "256:gallery:errors": true,
+    "256:gallery_far:camera": true,
+    "256:gallery_far:gl": true,
+    "256:gallery_far:render": true,
+    "256:gallery_far:samples": true,
+    "256:gallery_near:camera": false,
+    "256:gallery_near:gl": true,
+    "256:gallery_near:render": true,
+    "256:gallery_near:samples": true,
+    "256:gallery_low:camera": true,
+    "256:gallery_low:gl": true,
+    "256:gallery_low:render": true,
+    "256:gallery_low:samples": true,
+    "256:kitchen:scene": true,
+    "256:kitchen:physics": true,
+    "256:kitchen:errors": true,
+    "256:kitchen_far:camera": true,
+    "256:kitchen_far:gl": true,
+    "256:kitchen_far:render": true,
+    "256:kitchen_far:samples": true,
+    "256:kitchen_near:camera": true,
+    "256:kitchen_near:gl": true,
+    "256:kitchen_near:render": true,
+    "256:kitchen_near:samples": true,
+    "256:kitchen_low:camera": true,
+    "256:kitchen_low:gl": true,
+    "256:kitchen_low:render": true,
+    "256:kitchen_low:samples": true,
+    "256:wood_props:scene": true,
+    "256:wood_props:physics": true,
+    "256:wood_props:errors": true,
+    "256:wood_props_near:camera": true,
+    "256:wood_props_near:gl": true,
+    "256:wood_props_near:render": true,
+    "256:wood_props_near:samples": true,
+    "256:wood_props_table_top:camera": true,
+    "256:wood_props_table_top:gl": true,
+    "256:wood_props_table_top:render": true,
+    "256:wood_props_table_top:samples": true,
+    "256:wood_props_table_detail:camera": true,
+    "256:wood_props_table_detail:gl": true,
+    "256:wood_props_table_detail:render": true,
+    "256:wood_props_table_detail:samples": true,
+    "256:wood_props_table_grazing:camera": true,
+    "256:wood_props_table_grazing:gl": true,
+    "256:wood_props_table_grazing:render": true,
+    "256:wood_props_table_grazing:samples": true,
+    "256:wood_props_floor_detail:camera": true,
+    "256:wood_props_floor_detail:gl": true,
+    "256:wood_props_floor_detail:render": true,
+    "256:wood_props_floor_detail:samples": true,
+    "256:wood_props_floor_detail:ground_source_unchanged": true,
+    "256:wood_props_floor_grazing:camera": true,
+    "256:wood_props_floor_grazing:gl": true,
+    "256:wood_props_floor_grazing:render": true,
+    "256:wood_props_floor_grazing:samples": true,
+    "256:wood_props_floor_grazing:ground_source_unchanged": true,
+    "256:park:scene": true,
+    "256:park:physics": true,
+    "256:park:errors": true,
+    "256:park_far:camera": false,
+    "256:park_far:gl": true,
+    "256:park_far:render": true,
+    "256:park_far:samples": true,
+    "256:park_near:camera": true,
+    "256:park_near:gl": true,
+    "256:park_near:render": true,
+    "256:park_near:samples": true,
+    "256:park_low:camera": true,
+    "256:park_low:gl": true,
+    "256:park_low:render": true,
+    "256:park_low:samples": true,
+    "256:park_bench_detail:camera": true,
+    "256:park_bench_detail:gl": true,
+    "256:park_bench_detail:render": true,
+    "256:park_bench_detail:samples": true,
+    "256:park_bench_grazing:camera": true,
+    "256:park_bench_grazing:gl": true,
+    "256:park_bench_grazing:render": true,
+    "256:park_bench_grazing:samples": true,
+    "256:tone": true,
+    "256:changed_files": true,
+    "256:static_integrity": true,
+    "512:source": true,
+    "512:scene_set": true,
+    "512:view_set": true,
+    "512:gallery:scene": true,
+    "512:gallery:physics": true,
+    "512:gallery:errors": true,
+    "512:gallery_far:camera": true,
+    "512:gallery_far:gl": true,
+    "512:gallery_far:render": true,
+    "512:gallery_far:samples": true,
+    "512:gallery_near:camera": false,
+    "512:gallery_near:gl": true,
+    "512:gallery_near:render": true,
+    "512:gallery_near:samples": true,
+    "512:gallery_low:camera": true,
+    "512:gallery_low:gl": true,
+    "512:gallery_low:render": true,
+    "512:gallery_low:samples": true,
+    "512:kitchen:scene": true,
+    "512:kitchen:physics": true,
+    "512:kitchen:errors": true,
+    "512:kitchen_far:camera": false,
+    "512:kitchen_far:gl": true,
+    "512:kitchen_far:render": true,
+    "512:kitchen_far:samples": true,
+    "512:kitchen_near:camera": true,
+    "512:kitchen_near:gl": true,
+    "512:kitchen_near:render": true,
+    "512:kitchen_near:samples": true,
+    "512:kitchen_low:camera": true,
+    "512:kitchen_low:gl": true,
+    "512:kitchen_low:render": true,
+    "512:kitchen_low:samples": true,
+    "512:wood_props:scene": true,
+    "512:wood_props:physics": true,
+    "512:wood_props:errors": true,
+    "512:wood_props_near:camera": true,
+    "512:wood_props_near:gl": true,
+    "512:wood_props_near:render": true,
+    "512:wood_props_near:samples": true,
+    "512:wood_props_table_top:camera": true,
+    "512:wood_props_table_top:gl": true,
+    "512:wood_props_table_top:render": true,
+    "512:wood_props_table_top:samples": true,
+    "512:wood_props_table_detail:camera": false,
+    "512:wood_props_table_detail:gl": true,
+    "512:wood_props_table_detail:render": true,
+    "512:wood_props_table_detail:samples": true,
+    "512:wood_props_table_grazing:camera": false,
+    "512:wood_props_table_grazing:gl": true,
+    "512:wood_props_table_grazing:render": true,
+    "512:wood_props_table_grazing:samples": true,
+    "512:wood_props_floor_detail:camera": false,
+    "512:wood_props_floor_detail:gl": true,
+    "512:wood_props_floor_detail:render": true,
+    "512:wood_props_floor_detail:samples": true,
+    "512:wood_props_floor_detail:ground_source_unchanged": true,
+    "512:wood_props_floor_grazing:camera": true,
+    "512:wood_props_floor_grazing:gl": true,
+    "512:wood_props_floor_grazing:render": true,
+    "512:wood_props_floor_grazing:samples": true,
+    "512:wood_props_floor_grazing:ground_source_unchanged": true,
+    "512:park:scene": true,
+    "512:park:physics": true,
+    "512:park:errors": true,
+    "512:park_far:camera": true,
+    "512:park_far:gl": true,
+    "512:park_far:render": true,
+    "512:park_far:samples": true,
+    "512:park_near:camera": true,
+    "512:park_near:gl": true,
+    "512:park_near:render": true,
+    "512:park_near:samples": true,
+    "512:park_low:camera": true,
+    "512:park_low:gl": true,
+    "512:park_low:render": true,
+    "512:park_low:samples": true,
+    "512:park_bench_detail:camera": true,
+    "512:park_bench_detail:gl": true,
+    "512:park_bench_detail:render": true,
+    "512:park_bench_detail:samples": true,
+    "512:park_bench_grazing:camera": true,
+    "512:park_bench_grazing:gl": true,
+    "512:park_bench_grazing:render": true,
+    "512:park_bench_grazing:samples": true,
+    "512:tone": true,
+    "512:changed_files": true,
+    "512:static_integrity": true,
+    "baseline_static_integrity": true,
+    "frozen_helpers": true
+  },
+  "failed_checks": [
+    "256:gallery_near:camera",
+    "256:park_far:camera",
+    "512:gallery_near:camera",
+    "512:kitchen_far:camera",
+    "512:wood_props_table_detail:camera",
+    "512:wood_props_table_grazing:camera",
+    "512:wood_props_floor_detail:camera"
+  ],
+  "analysis_correction": "Original analyze-v1.py and analysis-v1.json retained.34 render checks wrongly compared cumulative renderer.frame; corrected to calls/triangles/points/lines. Four whole-image ground checks wrongly expected equality despite a visible changed wooden table; corrected source-retention checks and separate post-hoc floor-region diagnostics, not a new acceptance threshold. Seven literal eye equality failures remain; max differences are reported without recapture or rounding.",
+  "comparisons": {
+    "256": {
+      "asset": {
+        "original": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-natural-wood/originals/robotforge69-oak-diff.jpg",
+        "original_sha256": "f715ed3e4346e94f971ef8dd61221ff6cc774886c20f65381e01e1dc0bb0a634",
+        "crop_xyxy": [
+          128,
+          324,
+          1024,
+          392
+        ],
+        "size": [
+          256,
+          19
+        ],
+        "file": "board-256.png",
+        "sha256": "af85529c235df26f480961aa2258c8fbf9016787e92047ce5bd62fd0c0492a06",
+        "bytes": 3247,
+        "no_srgb_decode": true,
+        "processing": "Single board crop; linear luminance; BOX reduction; mean normalization only; no seam blending, contrast boost or synthesis.",
+        "mean": 0.5750120936532507,
+        "std": 0.06263162256221166,
+        "material_mean_factor": 0.939229323481037,
+        "old_factor": 0.939225,
+        "mean_factor_ratio": 1.000004603243139,
+        "wrap_seam_mean_bytes": [
+          18.789473684210527,
+          18.26953125
+        ],
+        "interior_adjacent_mean_bytes": [
+          6.257378740970072,
+          12.198133680555555
+        ],
+        "physical_repeat_m": [
+          0.896,
+          0.068
+        ],
+        "gpu_rgba_mip_upper_bound_bytes": 26005
+      },
+      "views": {
+        "gallery_far": {
+          "mae_byte": 0.0,
+          "max_byte": 0,
+          "changed_pixels": 0,
+          "baseline_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "baseline_draw_p95_ms": 16.719999988377094,
+          "candidate_draw_p95_ms": 3.8050000116229055,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "gallery_near": {
+          "mae_byte": 0.0,
+          "max_byte": 0,
+          "changed_pixels": 0,
+          "baseline_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "baseline_draw_p95_ms": 20.81000001132488,
+          "candidate_draw_p95_ms": 3.9400000065565086,
+          "camera_max_abs_delta": {
+            "eye": 8.881784197001252e-16,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "gallery_low": {
+          "mae_byte": 0.0,
+          "max_byte": 0,
+          "changed_pixels": 0,
+          "baseline_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "baseline_draw_p95_ms": 2.8150000110268585,
+          "candidate_draw_p95_ms": 3.4100000053644175,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "kitchen_far": {
+          "mae_byte": 0.005681640625,
+          "max_byte": 4,
+          "changed_pixels": 7425,
+          "baseline_resources": {
+            "geometries": 122,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 122,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 2.5049999997019765,
+          "candidate_draw_p95_ms": 10.34999998360872,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "kitchen_near": {
+          "mae_byte": 0.06708040364583333,
+          "max_byte": 11,
+          "changed_pixels": 36084,
+          "baseline_resources": {
+            "geometries": 122,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 122,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 2.215000016987323,
+          "candidate_draw_p95_ms": 10.709999994933598,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "kitchen_low": {
+          "mae_byte": 0.0417158203125,
+          "max_byte": 11,
+          "changed_pixels": 28117,
+          "baseline_resources": {
+            "geometries": 122,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 122,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 12.779999977350213,
+          "candidate_draw_p95_ms": 6.014999999105929,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_near": {
+          "mae_byte": 0.036631184895833335,
+          "max_byte": 10,
+          "changed_pixels": 32141,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 12.410000005364417,
+          "candidate_draw_p95_ms": 6.104999993741512,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_table_top": {
+          "mae_byte": 1.5199091796875,
+          "max_byte": 16,
+          "changed_pixels": 580339,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 11.415000005066394,
+          "candidate_draw_p95_ms": 6.014999999105929,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_table_detail": {
+          "mae_byte": 1.8481380208333333,
+          "max_byte": 16,
+          "changed_pixels": 784830,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 8.239999988675116,
+          "candidate_draw_p95_ms": 24.689999994635578,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_table_grazing": {
+          "mae_byte": 0.2650771484375,
+          "max_byte": 12,
+          "changed_pixels": 159993,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 19.264999988675115,
+          "candidate_draw_p95_ms": 10.349999982118604,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_floor_detail": {
+          "mae_byte": 0.026011393229166666,
+          "max_byte": 9,
+          "changed_pixels": 17407,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 5.0,
+          "candidate_draw_p95_ms": 8.414999978244303,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          },
+          "full_image_identical": false,
+          "supplementary_floor_region_xyxy": [
+            0,
+            450,
+            1280,
+            700
+          ],
+          "supplementary_floor_region_max_delta_byte": 0
+        },
+        "wood_props_floor_grazing": {
+          "mae_byte": 0.028181966145833334,
+          "max_byte": 7,
+          "changed_pixels": 22991,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 9.0,
+          "candidate_draw_p95_ms": 9.524999999999999,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          },
+          "full_image_identical": false,
+          "supplementary_floor_region_xyxy": [
+            0,
+            450,
+            1280,
+            700
+          ],
+          "supplementary_floor_region_max_delta_byte": 0
+        },
+        "park_far": {
+          "mae_byte": 0.0016627604166666668,
+          "max_byte": 3,
+          "changed_pixels": 2253,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 17.064999999105925,
+          "candidate_draw_p95_ms": 3.3150000110268585,
+          "camera_max_abs_delta": {
+            "eye": 7.105427357601002e-15,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "park_near": {
+          "mae_byte": 0.05192708333333333,
+          "max_byte": 10,
+          "changed_pixels": 26247,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 11.915000005066394,
+          "candidate_draw_p95_ms": 3.0049999997019765,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "park_low": {
+          "mae_byte": 0.0129609375,
+          "max_byte": 11,
+          "changed_pixels": 5805,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 16.81000001132488,
+          "candidate_draw_p95_ms": 3.0049999997019765,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "park_bench_detail": {
+          "mae_byte": 2.0233753255208335,
+          "max_byte": 15,
+          "changed_pixels": 690674,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 8.560000005364408,
+          "candidate_draw_p95_ms": 1.9300000056624396,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "park_bench_grazing": {
+          "mae_byte": 0.45065559895833335,
+          "max_byte": 13,
+          "changed_pixels": 175291,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 1.020000000298022,
+          "candidate_draw_p95_ms": 2.614999994635581,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        }
+      },
+      "added_module_bytes": 4974,
+      "fresh_profile_first_frame_ms": {
+        "gallery": 1495.1000000238419,
+        "kitchen": 1004.9000000059605,
+        "wood_props": 542.5999999940395,
+        "park": 548.0999999940395
+      }
+    },
+    "512": {
+      "asset": {
+        "original": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-natural-wood/originals/robotforge69-oak-diff.jpg",
+        "original_sha256": "f715ed3e4346e94f971ef8dd61221ff6cc774886c20f65381e01e1dc0bb0a634",
+        "crop_xyxy": [
+          128,
+          324,
+          1024,
+          392
+        ],
+        "size": [
+          512,
+          39
+        ],
+        "file": "board-512.png",
+        "sha256": "5037ca312433edd7442cb45ea224e3a336e32fb57b52e7364e535bb4557d6e3a",
+        "bytes": 12872,
+        "no_srgb_decode": true,
+        "processing": "Single board crop; linear luminance; BOX reduction; mean normalization only; no seam blending, contrast boost or synthesis.",
+        "mean": 0.574971523064354,
+        "std": 0.0712496377613798,
+        "material_mean_factor": 0.9392148194955064,
+        "old_factor": 0.939225,
+        "mean_factor_ratio": 0.9999891607394463,
+        "wrap_seam_mean_bytes": [
+          20.17948717948718,
+          21.701171875
+        ],
+        "interior_adjacent_mean_bytes": [
+          5.805459380801847,
+          12.478258634868421
+        ],
+        "physical_repeat_m": [
+          0.896,
+          0.068
+        ],
+        "gpu_rgba_mip_upper_bound_bytes": 106560
+      },
+      "views": {
+        "gallery_far": {
+          "mae_byte": 0.0,
+          "max_byte": 0,
+          "changed_pixels": 0,
+          "baseline_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "baseline_draw_p95_ms": 16.719999988377094,
+          "candidate_draw_p95_ms": 16.924999983608714,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "gallery_near": {
+          "mae_byte": 0.0,
+          "max_byte": 0,
+          "changed_pixels": 0,
+          "baseline_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "baseline_draw_p95_ms": 20.81000001132488,
+          "candidate_draw_p95_ms": 2.104999993741512,
+          "camera_max_abs_delta": {
+            "eye": 8.881784197001252e-16,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "gallery_low": {
+          "mae_byte": 0.0,
+          "max_byte": 0,
+          "changed_pixels": 0,
+          "baseline_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 225,
+            "textures": 5
+          },
+          "baseline_draw_p95_ms": 2.8150000110268585,
+          "candidate_draw_p95_ms": 2.199999989569187,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "kitchen_far": {
+          "mae_byte": 0.0057626953125,
+          "max_byte": 4,
+          "changed_pixels": 7512,
+          "baseline_resources": {
+            "geometries": 122,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 122,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 2.5049999997019765,
+          "candidate_draw_p95_ms": 3.304999983310699,
+          "camera_max_abs_delta": {
+            "eye": 1.7763568394002505e-15,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "kitchen_near": {
+          "mae_byte": 0.06730338541666667,
+          "max_byte": 10,
+          "changed_pixels": 36145,
+          "baseline_resources": {
+            "geometries": 122,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 122,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 2.215000016987323,
+          "candidate_draw_p95_ms": 6.3350000113248806,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "kitchen_low": {
+          "mae_byte": 0.042041666666666665,
+          "max_byte": 11,
+          "changed_pixels": 28148,
+          "baseline_resources": {
+            "geometries": 122,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 122,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 12.779999977350213,
+          "candidate_draw_p95_ms": 16.309999983012677,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_near": {
+          "mae_byte": 0.0370166015625,
+          "max_byte": 10,
+          "changed_pixels": 32353,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 12.410000005364417,
+          "candidate_draw_p95_ms": 11.5,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_table_top": {
+          "mae_byte": 1.5597122395833334,
+          "max_byte": 16,
+          "changed_pixels": 581200,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 11.415000005066394,
+          "candidate_draw_p95_ms": 11.679999983310678,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_table_detail": {
+          "mae_byte": 1.9078844401041666,
+          "max_byte": 16,
+          "changed_pixels": 785638,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 8.239999988675116,
+          "candidate_draw_p95_ms": 3.124999994039534,
+          "camera_max_abs_delta": {
+            "eye": 2.7755575615628914e-16,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_table_grazing": {
+          "mae_byte": 0.2702366536458333,
+          "max_byte": 13,
+          "changed_pixels": 160635,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 19.264999988675115,
+          "candidate_draw_p95_ms": 19.194999994337554,
+          "camera_max_abs_delta": {
+            "eye": 4.440892098500626e-16,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "wood_props_floor_detail": {
+          "mae_byte": 0.026390950520833335,
+          "max_byte": 9,
+          "changed_pixels": 17455,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 5.0,
+          "candidate_draw_p95_ms": 13.445000004768369,
+          "camera_max_abs_delta": {
+            "eye": 2.220446049250313e-16,
+            "target": 0.0,
+            "projection": 0.0
+          },
+          "full_image_identical": false,
+          "supplementary_floor_region_xyxy": [
+            0,
+            450,
+            1280,
+            700
+          ],
+          "supplementary_floor_region_max_delta_byte": 0
+        },
+        "wood_props_floor_grazing": {
+          "mae_byte": 0.028308919270833333,
+          "max_byte": 7,
+          "changed_pixels": 23013,
+          "baseline_resources": {
+            "geometries": 5,
+            "textures": 5
+          },
+          "candidate_resources": {
+            "geometries": 5,
+            "textures": 6
+          },
+          "baseline_draw_p95_ms": 9.0,
+          "candidate_draw_p95_ms": 7.495000006258483,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          },
+          "full_image_identical": false,
+          "supplementary_floor_region_xyxy": [
+            0,
+            450,
+            1280,
+            700
+          ],
+          "supplementary_floor_region_max_delta_byte": 0
+        },
+        "park_far": {
+          "mae_byte": 0.0017057291666666666,
+          "max_byte": 3,
+          "changed_pixels": 2305,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 17.064999999105925,
+          "candidate_draw_p95_ms": 14.904999977350235,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "park_near": {
+          "mae_byte": 0.0520390625,
+          "max_byte": 10,
+          "changed_pixels": 26276,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 11.915000005066394,
+          "candidate_draw_p95_ms": 14.7200000166893,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "park_low": {
+          "mae_byte": 0.013029622395833333,
+          "max_byte": 11,
+          "changed_pixels": 5866,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 16.81000001132488,
+          "candidate_draw_p95_ms": 14.009999999403952,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "park_bench_detail": {
+          "mae_byte": 2.057136393229167,
+          "max_byte": 15,
+          "changed_pixels": 691623,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 8.560000005364408,
+          "candidate_draw_p95_ms": 3.229999989271162,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        },
+        "park_bench_grazing": {
+          "mae_byte": 0.456279296875,
+          "max_byte": 14,
+          "changed_pixels": 175360,
+          "baseline_resources": {
+            "geometries": 113,
+            "textures": 7
+          },
+          "candidate_resources": {
+            "geometries": 113,
+            "textures": 8
+          },
+          "baseline_draw_p95_ms": 1.020000000298022,
+          "candidate_draw_p95_ms": 1.5049999997019765,
+          "camera_max_abs_delta": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0
+          }
+        }
+      },
+      "added_module_bytes": 17806,
+      "fresh_profile_first_frame_ms": {
+        "gallery": 500.59999999403954,
+        "kitchen": 352.5,
+        "wood_props": 369.40000000596046,
+        "park": 477.90000000596046
+      }
+    }
+  },
+  "baseline_fresh_profile_first_frame_ms": {
+    "gallery": 1126,
+    "kitchen": 463.5,
+    "wood_props": 459.5,
+    "park": 620.2999999821186
+  },
+  "limits": [
+    "External eagerly decoded texture; no production loading/disposal/late-load acceptance.",
+    "One sequential cohort per variant; draw/loading samples descriptive only, no performance win or formal budget claim.",
+    "Native picture/zero-strength priority reviewed in source only; dedicated runtime lifecycle/robot-motion fixtures deferred because appearance failed.",
+    "No full pytest, wheel/install budget or source/MCP smoke rerun for a rejected external shader; production runtime untouched.",
+    "No physical phone, gamepad, Windows or other GPU-driver verification. No shimmer-fix or new action-success claim."
+  ],
+  "media": {
+    "motion-baseline/wood_props-clip/workflow.mp4": {
+      "sha256": "9cc9b86fd83212e72f8c5592c5cd443b9de539138930df41151ac67551787eb5",
+      "duration_seconds": 5.3,
+      "encoded_frames": 159,
+      "raw_frames": 311,
+      "raw_timestamp_span_seconds": 5.166331052780151,
+      "arrival_inversions": [],
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": "",
+      "pass": true,
+      "contact_sheet": "motion-baseline/wood_props-clip/decoded-contact.jpg"
+    },
+    "motion-baseline/park-clip/workflow.mp4": {
+      "sha256": "cbfe67a8fad1fe618b7fa1bab5d42d04fb5d3bdc497267f7904400ff472ed569",
+      "duration_seconds": 5.333333,
+      "encoded_frames": 160,
+      "raw_frames": 312,
+      "raw_timestamp_span_seconds": 5.189918041229248,
+      "arrival_inversions": [],
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": "",
+      "pass": true,
+      "contact_sheet": "motion-baseline/park-clip/decoded-contact.jpg"
+    },
+    "motion-512/wood_props-clip/workflow.mp4": {
+      "sha256": "c4e541d42f7e292f5f52d8a1fc264b5f0b9c66cdc97ea26c4d505d401fd2d4db",
+      "duration_seconds": 5.3,
+      "encoded_frames": 159,
+      "raw_frames": 311,
+      "raw_timestamp_span_seconds": 5.167644023895264,
+      "arrival_inversions": [],
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": "",
+      "pass": true,
+      "contact_sheet": "motion-512/wood_props-clip/decoded-contact.jpg"
+    },
+    "motion-512/park-clip/workflow.mp4": {
+      "sha256": "62fd413ca5cc6add4c91cf0600193eb840829b825c2fd979e88d369bc2e3f672",
+      "duration_seconds": 5.3,
+      "encoded_frames": 159,
+      "raw_frames": 311,
+      "raw_timestamp_span_seconds": 5.168937921524048,
+      "arrival_inversions": [],
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": "",
+      "pass": true,
+      "contact_sheet": "motion-512/park-clip/decoded-contact.jpg"
+    }
+  }
+}
