@@ -16,21 +16,21 @@ if TYPE_CHECKING:
     from robotforge.playground import Playground
 
 
-def check_supported_restore(pg: Playground) -> None:
+def check_supported_restore(pg: Playground, operation: str = "restoring a layout") -> None:
     if tuple(pg.session.reset_hooks) != pg._layout_reset_hooks:
-        raise LayoutError("runtime", "Stop custom reset hooks before restoring a layout")
+        raise LayoutError("runtime", f"Stop custom reset hooks before {operation}")
     for hook in pg.session.controller_hooks:
         owner = getattr(hook, "__self__", None)
         if type(owner) is not LiveExperiments or getattr(hook, "__func__", None) is not LiveExperiments._changed:
-            raise LayoutError("runtime", "Stop custom controller observers before restoring a layout")
+            raise LayoutError("runtime", f"Stop custom controller observers before {operation}")
         if owner.active:
-            raise LayoutError("runtime", "Finish the active experiment before restoring a layout")
+            raise LayoutError("runtime", f"Finish the active experiment before {operation}")
     if any(not trip.done for trip in pg.behaviors._live_trips.values()) or pg.behaviors._errands:
-        raise LayoutError("runtime", "Stop navigation and errands before restoring a layout")
+        raise LayoutError("runtime", f"Stop navigation and errands before {operation}")
     if any(r.active for r in pg.demonstrations.recordings.values()) or any(
         not r.done for r in pg.demonstrations.replays.values()
     ):
-        raise LayoutError("runtime", "Stop recording and replay before restoring a layout")
+        raise LayoutError("runtime", f"Stop recording and replay before {operation}")
 
 
 # Explicit owned fields; never copy MuJoCo objects, locks, controllers or callback owners.

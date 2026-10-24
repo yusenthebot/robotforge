@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from robotforge.design import generator
     from robotforge.viewer.creation import Addition
     from robotforge.viewer.object_edit import Edit
+    from robotforge.viewer.robot_edit import RobotEdit
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
 MAX_SIM_SECONDS = 60.0
@@ -125,6 +126,7 @@ class Playground:
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
     _play_addition: Addition | None = field(default=None, init=False, repr=False)
     _play_edit: Edit | None = field(default=None, init=False, repr=False)
+    _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
     _play_world_descriptor: str | None = field(default=None, repr=False)
     _layout_reset_hooks: tuple[Any, ...] = field(default=(), init=False, repr=False)
@@ -257,6 +259,7 @@ class Playground:
 
         def extras() -> dict[str, Any]:
             from robotforge.viewer.object_edit import metadata
+            from robotforge.viewer.robot_edit import metadata as robot_metadata
 
             world = self.current_world()
             robots = self.behaviors.robots()
@@ -264,6 +267,7 @@ class Playground:
             return {
                 "robots": robots,
                 "object_edit": metadata(self),
+                "robot_edit": robot_metadata(self),
                 "task_contracts": task_contracts(world),
                 "learned": learned,
                 "world": world.name if world is not None else None,  # the page title; None for a loaded file
@@ -282,6 +286,8 @@ class Playground:
                 return self.layouts_for_play(msg)
             if action == "add_robot":
                 return self.add_robot_for_play(msg)
+            if action in {"edit_robot_start", "undo_robot_start"}:
+                return self.edit_robot_start_for_play(msg)
             if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object"}:
                 return self.edit_object_for_play(msg)
             if action in {"add_object", "undo_add"}:
@@ -508,6 +514,13 @@ class Playground:
         if action == "duplicate_object":
             return duplicate(self, message)
         return undo(self, message) if action == "undo_object_edit" else edit(self, message)
+
+    @_one_edit_at_a_time
+    def edit_robot_start_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Edit an exact authored robot's start without changing its configuration."""
+        from robotforge.viewer.robot_edit import handle
+
+        return handle(self, message)
 
     @_one_edit_at_a_time
     def add_robot(

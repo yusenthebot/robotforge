@@ -1,0 +1,1216 @@
+{
+  "runtime_sha256": "ab532d2ca6ef48cc589d511a7476089e787f6006e7bdf45d0650a8cd0752e3a7",
+  "baseline_commit": "a16ae75658bc862e1d7893db6684114f74e13876",
+  "checks": {
+    "frozen_inputs": true,
+    "focused-default": true,
+    "browser-full": true,
+    "slow-assets-sensors": true,
+    "54_new_cases": true,
+    "verification_stages": true,
+    "verification_command_paths": true,
+    "acceptance_command_paths": true,
+    "acceptance_stages": true,
+    "expected_test_coverage": true,
+    "framework_case_ids": true,
+    "framework_runtime": true,
+    "framework7": true,
+    "original:budget.json": true,
+    "original:framework-regression-v1.json": true,
+    "model_source": true,
+    "five_models": true,
+    "gallery:model:arrays": true,
+    "gallery:model:scalars": true,
+    "gallery:model:physics": true,
+    "gallery:model:payload": true,
+    "kitchen:model:arrays": true,
+    "kitchen:model:scalars": true,
+    "kitchen:model:physics": true,
+    "kitchen:model:payload": true,
+    "wood_props:model:arrays": true,
+    "wood_props:model:scalars": true,
+    "wood_props:model:physics": true,
+    "wood_props:model:payload": true,
+    "park:model:arrays": true,
+    "park:model:scalars": true,
+    "park:model:physics": true,
+    "park:model:payload": true,
+    "wood_terrain:model:arrays": true,
+    "wood_terrain:model:scalars": true,
+    "wood_terrain:model:physics": true,
+    "wood_terrain:model:payload": true,
+    "fixed_source": true,
+    "fixed_world_set": true,
+    "22_fixed_views": true,
+    "gallery_far:pixels": true,
+    "gallery_far:samples": true,
+    "gallery_far:resources": true,
+    "gallery_far:draws": true,
+    "gallery_far:gl": true,
+    "gallery_far:projection": true,
+    "gallery_far:camera_tolerance_1e-10": true,
+    "gallery_near:pixels": true,
+    "gallery_near:samples": true,
+    "gallery_near:resources": true,
+    "gallery_near:draws": true,
+    "gallery_near:gl": true,
+    "gallery_near:projection": true,
+    "gallery_near:camera_tolerance_1e-10": true,
+    "gallery_low:pixels": true,
+    "gallery_low:samples": true,
+    "gallery_low:resources": true,
+    "gallery_low:draws": true,
+    "gallery_low:gl": true,
+    "gallery_low:projection": true,
+    "gallery_low:camera_tolerance_1e-10": true,
+    "kitchen_far:pixels": true,
+    "kitchen_far:samples": true,
+    "kitchen_far:resources": true,
+    "kitchen_far:draws": true,
+    "kitchen_far:gl": true,
+    "kitchen_far:projection": true,
+    "kitchen_far:camera_tolerance_1e-10": true,
+    "kitchen_near:pixels": true,
+    "kitchen_near:samples": true,
+    "kitchen_near:resources": true,
+    "kitchen_near:draws": true,
+    "kitchen_near:gl": true,
+    "kitchen_near:projection": true,
+    "kitchen_near:camera_tolerance_1e-10": true,
+    "kitchen_low:pixels": true,
+    "kitchen_low:samples": true,
+    "kitchen_low:resources": true,
+    "kitchen_low:draws": true,
+    "kitchen_low:gl": true,
+    "kitchen_low:projection": true,
+    "kitchen_low:camera_tolerance_1e-10": true,
+    "wood_props_near:pixels": true,
+    "wood_props_near:samples": true,
+    "wood_props_near:resources": true,
+    "wood_props_near:draws": true,
+    "wood_props_near:gl": true,
+    "wood_props_near:projection": true,
+    "wood_props_near:camera_tolerance_1e-10": true,
+    "wood_props_table_top:pixels": true,
+    "wood_props_table_top:samples": true,
+    "wood_props_table_top:resources": true,
+    "wood_props_table_top:draws": true,
+    "wood_props_table_top:gl": true,
+    "wood_props_table_top:projection": true,
+    "wood_props_table_top:camera_tolerance_1e-10": true,
+    "wood_props_table_detail:pixels": true,
+    "wood_props_table_detail:samples": true,
+    "wood_props_table_detail:resources": true,
+    "wood_props_table_detail:draws": true,
+    "wood_props_table_detail:gl": true,
+    "wood_props_table_detail:projection": true,
+    "wood_props_table_detail:camera_tolerance_1e-10": true,
+    "wood_props_table_grazing:pixels": true,
+    "wood_props_table_grazing:samples": true,
+    "wood_props_table_grazing:resources": true,
+    "wood_props_table_grazing:draws": true,
+    "wood_props_table_grazing:gl": true,
+    "wood_props_table_grazing:projection": true,
+    "wood_props_table_grazing:camera_tolerance_1e-10": true,
+    "wood_props_floor_detail:pixels": true,
+    "wood_props_floor_detail:samples": true,
+    "wood_props_floor_detail:resources": true,
+    "wood_props_floor_detail:draws": true,
+    "wood_props_floor_detail:gl": true,
+    "wood_props_floor_detail:projection": true,
+    "wood_props_floor_detail:camera_tolerance_1e-10": true,
+    "wood_props_floor_grazing:pixels": true,
+    "wood_props_floor_grazing:samples": true,
+    "wood_props_floor_grazing:resources": true,
+    "wood_props_floor_grazing:draws": true,
+    "wood_props_floor_grazing:gl": true,
+    "wood_props_floor_grazing:projection": true,
+    "wood_props_floor_grazing:camera_tolerance_1e-10": true,
+    "park_far:pixels": true,
+    "park_far:samples": true,
+    "park_far:resources": true,
+    "park_far:draws": true,
+    "park_far:gl": true,
+    "park_far:projection": true,
+    "park_far:camera_tolerance_1e-10": true,
+    "park_near:pixels": true,
+    "park_near:samples": true,
+    "park_near:resources": true,
+    "park_near:draws": true,
+    "park_near:gl": true,
+    "park_near:projection": true,
+    "park_near:camera_tolerance_1e-10": true,
+    "park_low:pixels": true,
+    "park_low:samples": true,
+    "park_low:resources": true,
+    "park_low:draws": true,
+    "park_low:gl": true,
+    "park_low:projection": true,
+    "park_low:camera_tolerance_1e-10": true,
+    "park_bench_detail:pixels": true,
+    "park_bench_detail:samples": true,
+    "park_bench_detail:resources": true,
+    "park_bench_detail:draws": true,
+    "park_bench_detail:gl": true,
+    "park_bench_detail:projection": true,
+    "park_bench_detail:camera_tolerance_1e-10": true,
+    "park_bench_grazing:pixels": true,
+    "park_bench_grazing:samples": true,
+    "park_bench_grazing:resources": true,
+    "park_bench_grazing:draws": true,
+    "park_bench_grazing:gl": true,
+    "park_bench_grazing:projection": true,
+    "park_bench_grazing:camera_tolerance_1e-10": true,
+    "wood_terrain_near:pixels": true,
+    "wood_terrain_near:samples": true,
+    "wood_terrain_near:resources": true,
+    "wood_terrain_near:draws": true,
+    "wood_terrain_near:gl": true,
+    "wood_terrain_near:projection": true,
+    "wood_terrain_near:camera_tolerance_1e-10": true,
+    "wood_terrain_low:pixels": true,
+    "wood_terrain_low:samples": true,
+    "wood_terrain_low:resources": true,
+    "wood_terrain_low:draws": true,
+    "wood_terrain_low:gl": true,
+    "wood_terrain_low:projection": true,
+    "wood_terrain_low:camera_tolerance_1e-10": true,
+    "wood_terrain_ramp_detail:pixels": true,
+    "wood_terrain_ramp_detail:samples": true,
+    "wood_terrain_ramp_detail:resources": true,
+    "wood_terrain_ramp_detail:draws": true,
+    "wood_terrain_ramp_detail:gl": true,
+    "wood_terrain_ramp_detail:projection": true,
+    "wood_terrain_ramp_detail:camera_tolerance_1e-10": true,
+    "wood_terrain_stair_detail:pixels": true,
+    "wood_terrain_stair_detail:samples": true,
+    "wood_terrain_stair_detail:resources": true,
+    "wood_terrain_stair_detail:draws": true,
+    "wood_terrain_stair_detail:gl": true,
+    "wood_terrain_stair_detail:projection": true,
+    "wood_terrain_stair_detail:camera_tolerance_1e-10": true,
+    "wood_terrain_hfield_detail:pixels": true,
+    "wood_terrain_hfield_detail:samples": true,
+    "wood_terrain_hfield_detail:resources": true,
+    "wood_terrain_hfield_detail:draws": true,
+    "wood_terrain_hfield_detail:gl": true,
+    "wood_terrain_hfield_detail:projection": true,
+    "wood_terrain_hfield_detail:camera_tolerance_1e-10": true,
+    "gallery:old_scene_fields": true,
+    "gallery:additive_metadata": true,
+    "gallery:frozen": true,
+    "gallery:errors": true,
+    "kitchen:old_scene_fields": true,
+    "kitchen:additive_metadata": true,
+    "kitchen:frozen": true,
+    "kitchen:errors": true,
+    "wood_props:old_scene_fields": true,
+    "wood_props:additive_metadata": true,
+    "wood_props:frozen": true,
+    "wood_props:errors": true,
+    "park:old_scene_fields": true,
+    "park:additive_metadata": true,
+    "park:frozen": true,
+    "park:errors": true,
+    "wood_terrain:old_scene_fields": true,
+    "wood_terrain:additive_metadata": true,
+    "wood_terrain:frozen": true,
+    "wood_terrain:errors": true,
+    "wheel_source_set": true,
+    "wheel_source_bytes": true,
+    "one_original_budget": true,
+    "budget11": true,
+    "before-laptop:source": true,
+    "before-laptop:passed": true,
+    "before-laptop:native": true,
+    "before-laptop:decoded_samples": true,
+    "before-laptop:media_manifest": true,
+    "before-laptop:media": true,
+    "before-laptop:strict_decode": true,
+    "before-laptop:missing_entry": true,
+    "before-phone:source": true,
+    "before-phone:passed": true,
+    "before-phone:native": true,
+    "before-phone:decoded_samples": true,
+    "before-phone:media_manifest": true,
+    "before-phone:media": true,
+    "before-phone:strict_decode": true,
+    "before-phone:missing_entry": true,
+    "workflow-laptop:source": true,
+    "workflow-laptop:passed": true,
+    "workflow-laptop:native": true,
+    "workflow-laptop:decoded_samples": true,
+    "workflow-laptop:media_manifest": true,
+    "workflow-laptop:media": true,
+    "workflow-laptop:strict_decode": true,
+    "workflow-laptop:contacts": true,
+    "workflow-laptop:layout_count": true,
+    "workflow-laptop:layout_bytes": true,
+    "workflow-laptop:config": true,
+    "workflow-laptop:reset": true,
+    "workflow-laptop:home_replay": true,
+    "workflow-phone:source": true,
+    "workflow-phone:passed": true,
+    "workflow-phone:native": true,
+    "workflow-phone:decoded_samples": true,
+    "workflow-phone:media_manifest": true,
+    "workflow-phone:media": true,
+    "workflow-phone:strict_decode": true,
+    "workflow-phone:contacts": true,
+    "workflow-phone:layout_count": true,
+    "workflow-phone:layout_bytes": true,
+    "workflow-phone:config": true,
+    "workflow-phone:reset": true,
+    "workflow-phone:home_replay": true,
+    "workflow-arm:source": true,
+    "workflow-arm:passed": true,
+    "workflow-arm:native": true,
+    "workflow-arm:decoded_samples": true,
+    "workflow-arm:media_manifest": true,
+    "workflow-arm:media": true,
+    "workflow-arm:strict_decode": true,
+    "fresh_interpreter_reopen": true,
+    "reopen:laptop": true,
+    "reopen:phone": true
+  },
+  "failed_checks": [],
+  "test_counts": {
+    "focused-default": {
+      "passed": 1326,
+      "skipped": 1,
+      "failed": 0
+    },
+    "browser-full": {
+      "passed": 198,
+      "skipped": 0,
+      "failed": 0
+    },
+    "slow-assets-sensors": {
+      "passed": 8,
+      "skipped": 0,
+      "failed": 0
+    }
+  },
+  "distinct_pytest_passes": 1532,
+  "frozen_files": 624,
+  "package_files": 395,
+  "wheel_bytes": 3860171,
+  "wheel_delta_bytes": 5485,
+  "models": {
+    "gallery": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "kitchen": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "wood_props": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "park": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "wood_terrain": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    }
+  },
+  "views": {
+    "gallery_far": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 7.3499999940395355,
+      "candidate_ms": 1.7999999821186066,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 225,
+        "textures": 5
+      }
+    },
+    "gallery_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 12.499999985098839,
+      "candidate_ms": 1.7999999821186066,
+      "eye_target_max_abs_delta": 8.881784197001252e-16,
+      "eye_target_literal_exact": false,
+      "resources": {
+        "geometries": 225,
+        "textures": 5
+      }
+    },
+    "gallery_low": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 2.699999988079071,
+      "candidate_ms": 1.9000000059604645,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 225,
+        "textures": 5
+      }
+    },
+    "kitchen_far": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 6.449999988079071,
+      "candidate_ms": 1.2999999821186066,
+      "eye_target_max_abs_delta": 4.440892098500626e-15,
+      "eye_target_literal_exact": false,
+      "resources": {
+        "geometries": 122,
+        "textures": 5
+      }
+    },
+    "kitchen_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 7.800000011920929,
+      "candidate_ms": 1.6500000059604645,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 122,
+        "textures": 5
+      }
+    },
+    "kitchen_low": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 2.0999999940395355,
+      "candidate_ms": 1.2000000178813934,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 122,
+        "textures": 5
+      }
+    },
+    "wood_props_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 0.75,
+      "candidate_ms": 0.7000000029802322,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 5,
+        "textures": 5
+      }
+    },
+    "wood_props_table_top": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 0.5499999970197678,
+      "candidate_ms": 0.699999988079071,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 5,
+        "textures": 5
+      }
+    },
+    "wood_props_table_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 1.5999999940395355,
+      "candidate_ms": 0.6500000059604645,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 5,
+        "textures": 5
+      }
+    },
+    "wood_props_table_grazing": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 0.800000011920929,
+      "candidate_ms": 0.699999988079071,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 5,
+        "textures": 5
+      }
+    },
+    "wood_props_floor_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 2.5,
+      "candidate_ms": 1.0999999940395355,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 5,
+        "textures": 5
+      }
+    },
+    "wood_props_floor_grazing": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 2.4500000029802322,
+      "candidate_ms": 0.9000000059604645,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 5,
+        "textures": 5
+      }
+    },
+    "park_far": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 1.5999999940395355,
+      "candidate_ms": 1.300000011920929,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 113,
+        "textures": 7
+      }
+    },
+    "park_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 5.100000008940697,
+      "candidate_ms": 1.5499999970197678,
+      "eye_target_max_abs_delta": 1.7763568394002505e-15,
+      "eye_target_literal_exact": false,
+      "resources": {
+        "geometries": 113,
+        "textures": 7
+      }
+    },
+    "park_low": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 5.5999999940395355,
+      "candidate_ms": 1.9000000059604645,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 113,
+        "textures": 7
+      }
+    },
+    "park_bench_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 2.9500000029802322,
+      "candidate_ms": 2.0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 113,
+        "textures": 7
+      }
+    },
+    "park_bench_grazing": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 2.5499999970197678,
+      "candidate_ms": 1.0999999940395355,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 113,
+        "textures": 7
+      }
+    },
+    "wood_terrain_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 7.3499999940395355,
+      "candidate_ms": 0.800000011920929,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 13,
+        "textures": 5
+      }
+    },
+    "wood_terrain_low": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 0.5999999940395355,
+      "candidate_ms": 0.75,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 13,
+        "textures": 5
+      }
+    },
+    "wood_terrain_ramp_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 2.4500000029802322,
+      "candidate_ms": 1.5,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 13,
+        "textures": 5
+      }
+    },
+    "wood_terrain_stair_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 5.350000008940697,
+      "candidate_ms": 0.9500000029802322,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 13,
+        "textures": 5
+      }
+    },
+    "wood_terrain_hfield_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "baseline_ms": 4.199999988079071,
+      "candidate_ms": 0.9000000059604645,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "resources": {
+        "geometries": 13,
+        "textures": 5
+      }
+    }
+  },
+  "budget": {
+    "started": "2026-10-24T17:30:16+08:00",
+    "sha": "a16ae75-dirty",
+    "quick": false,
+    "partial": true,
+    "covers": [
+      "install",
+      "viewer"
+    ],
+    "machine": {
+      "system": "Darwin",
+      "release": "26.3.2",
+      "machine": "arm64",
+      "cpus": 18,
+      "python": "3.12.13",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "load": [
+        6.7,
+        5.0,
+        4.8
+      ]
+    },
+    "load_after": [
+      5.5,
+      4.9,
+      4.8
+    ],
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3769.6982,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.3968,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.3
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5291,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.333
+        },
+        "fps": {
+          "value": 60.1009,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.6,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.600000023841858,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.0511,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 4.7,
+          "unit": "ms",
+          "better": "lower",
+          "median": 4.699999988079071,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 133.0,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 557.9
+        },
+        "idle_cpu_pct": {
+          "value": 3.6,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "budgets": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "imports.robotforge_cpu_ms": "not run",
+      "imports.cli_cpu_ms": "not run",
+      "imports.mcp_server_cpu_ms": "not run",
+      "imports.robotforge_heavy": "not run",
+      "imports.cli_heavy": "not run",
+      "imports.mcp_server_heavy": "not run",
+      "physics.dog_idle.steps_per_s": "not run",
+      "physics.dog_idle.controllers_share": "not run",
+      "physics.dog_walk.steps_per_s": "not run",
+      "physics.go2_idle.steps_per_s": "not run",
+      "physics.go2_idle.controllers_share": "not run",
+      "physics.go2_walk.steps_per_s": "not run",
+      "physics.go2_rl_idle.steps_per_s": "not run",
+      "physics.go2_rl_idle.controllers_share": "not run",
+      "physics.humanoid_idle.steps_per_s": "not run",
+      "physics.humanoid_idle.controllers_share": "not run",
+      "physics.arm_pick.steps_per_s": "not run",
+      "physics.warehouse_nav.steps_per_s": "not run",
+      "physics.objects_20.steps_per_s": "not run",
+      "physics.machine.steps_per_s": "not run",
+      "physics.dog_idle.peak_mb": "not run",
+      "physics.go2_walk.peak_mb": "not run",
+      "physics.warehouse_nav.peak_mb": "not run",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok",
+      "mcp.start_s": "not run",
+      "mcp.new_world_ms": "not run",
+      "mcp.add_robot_ms": "not run",
+      "mcp.move_ms": "not run",
+      "mcp.observe_ms": "not run",
+      "mcp.server_rss_mb": "not run",
+      "mcp.idle_cpu_pct": "not run"
+    }
+  },
+  "media": {
+    "before-laptop": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-robot-start/before-laptop/workflow.mp4",
+      "duration_seconds": 2.7,
+      "decoded_frames": 81,
+      "sha256": "867cf20a0dc840507b3c193dd15e3d60c709c7dbf98f9505f394a744dae5095f",
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": ""
+    },
+    "before-phone": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-robot-start/before-phone/workflow.mp4",
+      "duration_seconds": 2.3,
+      "decoded_frames": 69,
+      "sha256": "fbeb877b9efcddeaf79ee476ac37c9246ce961b6a8505be2113e1f6a31a3520d",
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": ""
+    },
+    "workflow-laptop": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-robot-start/workflow-laptop-v4/workflow.mp4",
+      "duration_seconds": 26.666016,
+      "decoded_frames": 800,
+      "sha256": "b1565f4a118680327877d7398a6603072f37d97b3089d6bb4ca4ae8f1c6c2d90",
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": ""
+    },
+    "workflow-phone": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-robot-start/workflow-phone-v4/workflow.mp4",
+      "duration_seconds": 22.5,
+      "decoded_frames": 675,
+      "sha256": "df7ced6a1f3fbda8e8bc84abd7676712a7a979962d6c86c45ba55ccea2012a77",
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": ""
+    },
+    "workflow-arm": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-robot-start/workflow-arm-v4/workflow.mp4",
+      "duration_seconds": 7.9,
+      "decoded_frames": 237,
+      "sha256": "64811c8eb7e8ae54bb1c7f24a41d0f5459d05839c22465aac0b6a0c700a78d99",
+      "strict_decode_exit": 0,
+      "strict_decode_stderr": ""
+    }
+  },
+  "workflows": {
+    "before-laptop": {
+      "events": [
+        "01-existing-robot-no-start-control",
+        "02-original-start"
+      ],
+      "native_inputs": 6
+    },
+    "before-phone": {
+      "events": [
+        "01-existing-robot-no-start-control",
+        "02-original-start"
+      ],
+      "native_inputs": 6
+    },
+    "workflow-laptop": {
+      "events": [
+        "01-built-route",
+        "02-start-heading",
+        "02-start-placed",
+        "03-undone",
+        "04-start-heading",
+        "04-start-placed",
+        "05-drive-contact",
+        "06-reset-new-start",
+        "07-saved",
+        "08-map-changed",
+        "09-restored",
+        "10-reloaded",
+        "11-replay-contact",
+        "12-replay-reset"
+      ],
+      "native_inputs": 66,
+      "drives": [
+        {
+          "label": "05-drive",
+          "begin": [
+            0.0,
+            -1.2,
+            0.035
+          ],
+          "end": [
+            0.0,
+            -0.17,
+            0.035
+          ],
+          "contacts": [
+            {
+              "time": 2.73999999999992,
+              "normal_force_N": 3.3552308439083367,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.002935721135092595
+            },
+            {
+              "time": 2.775999999999916,
+              "normal_force_N": 1.2639330231537016,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0013487330685009978
+            },
+            {
+              "time": 2.811999999999912,
+              "normal_force_N": 1.2077319926025638,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0004298634854724526
+            },
+            {
+              "time": 2.863999999999906,
+              "normal_force_N": 1.216154867046428,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.00012590249454305083
+            },
+            {
+              "time": 2.899999999999902,
+              "normal_force_N": 1.2153252455599075,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -9.268811695687423e-05
+            }
+          ]
+        },
+        {
+          "label": "11-replay",
+          "begin": [
+            0.0,
+            -1.2,
+            0.035
+          ],
+          "end": [
+            -0.0,
+            -0.17,
+            0.035
+          ],
+          "contacts": [
+            {
+              "time": 2.775999999999916,
+              "normal_force_N": 1.2716442084571076,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0014326591025874103
+            },
+            {
+              "time": 2.811999999999912,
+              "normal_force_N": 1.2095006998426938,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0004566211106832448
+            },
+            {
+              "time": 2.845999999999908,
+              "normal_force_N": 1.2092709147635636,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0001831600482246455
+            },
+            {
+              "time": 2.899999999999902,
+              "normal_force_N": 1.2156146749424677,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -9.35802550823301e-05
+            },
+            {
+              "time": 2.9339999999998985,
+              "normal_force_N": 1.2052305763795128,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -8.419735883368228e-05
+            }
+          ]
+        }
+      ],
+      "saved_start": [
+        0.0,
+        -1.2
+      ],
+      "saved_yaw": 90.0
+    },
+    "workflow-phone": {
+      "events": [
+        "01-built-route",
+        "02-start-heading",
+        "02-start-placed",
+        "03-undone",
+        "04-start-heading",
+        "04-start-placed",
+        "05-drive-contact",
+        "06-reset-new-start",
+        "07-saved",
+        "08-map-changed",
+        "09-restored",
+        "10-reloaded",
+        "11-replay-contact",
+        "12-replay-reset"
+      ],
+      "native_inputs": 66,
+      "drives": [
+        {
+          "label": "05-drive",
+          "begin": [
+            0.0,
+            -1.2,
+            0.035
+          ],
+          "end": [
+            -0.0,
+            -0.17,
+            0.035
+          ],
+          "contacts": [
+            {
+              "time": 2.73999999999992,
+              "normal_force_N": 3.8032730765346683,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0029103170672177664
+            },
+            {
+              "time": 2.775999999999916,
+              "normal_force_N": 1.2716442084571076,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0014326591025874103
+            },
+            {
+              "time": 2.811999999999912,
+              "normal_force_N": 1.2095006998426938,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0004566211106832448
+            },
+            {
+              "time": 2.863999999999906,
+              "normal_force_N": 1.2158011225981176,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.00012951637004334244
+            },
+            {
+              "time": 2.899999999999902,
+              "normal_force_N": 1.2156146749424677,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -9.35802550823301e-05
+            }
+          ]
+        },
+        {
+          "label": "11-replay",
+          "begin": [
+            0.0,
+            -1.2,
+            0.035
+          ],
+          "end": [
+            0.0,
+            -0.17,
+            0.035
+          ],
+          "contacts": [
+            {
+              "time": 2.945999999999897,
+              "normal_force_N": 4.3691498148177175,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0028529795574182846
+            },
+            {
+              "time": 2.9799999999998934,
+              "normal_force_N": 1.3321696336467472,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0016191238276304699
+            },
+            {
+              "time": 3.0339999999998875,
+              "normal_force_N": 1.2271680629398738,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.0003056634539422776
+            },
+            {
+              "time": 3.0679999999998837,
+              "normal_force_N": 1.2286170801206977,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -0.00013991332558253814
+            },
+            {
+              "time": 3.1039999999998797,
+              "normal_force_N": 1.2278022042121677,
+              "owners": [
+                "barrier",
+                "rover"
+              ],
+              "distance_m": -9.745976219568199e-05
+            }
+          ]
+        }
+      ],
+      "saved_start": [
+        0.0,
+        -1.2
+      ],
+      "saved_yaw": 90.0
+    },
+    "workflow-arm": {
+      "events": [
+        "01-arm-heading",
+        "01-arm-tabletop",
+        "02-undone",
+        "03-arm-heading",
+        "03-arm-tabletop",
+        "04-saved-tabletop-reset"
+      ],
+      "native_inputs": 24
+    }
+  },
+  "limits": [
+    "Scoped default suite, not complete default suite. Optional security/type executables unavailable; no dependency installed.",
+    "Sequential retained before/after timings on the same machine are descriptive, not causal ABBA speed or GPU-memory proof.",
+    "Fixed camera literal residuals reported separately; tolerance 1e-10 does not assert bitwise camera identity.",
+    "Phone is emulated Chrome touch, not physical hardware; Windows/other GPUs unverified.",
+    "Fixed-arm clip proves tabletop placement/Undo and reset at home, not manipulation or displaced return; rover proves save/map/restore/reload/replay.",
+    "Existing edit velocity/time reset semantics apply. No ongoing controller preservation, crash-atomic multi-file guarantee or arbitrary unsupported model teleport.",
+    "No single-action success tuning. Broad quality/lightweight/playability goal remains active."
+  ]
+}

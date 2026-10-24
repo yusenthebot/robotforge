@@ -251,7 +251,7 @@ def duplicate(pg: Playground, message: dict) -> dict:
         return _commit(pg, store, request, None, clone, len(world.objects))
 
 
-def _guard(pg, store, version, generation, digest):
+def _guard(pg, store, version, generation, digest, subject="prop"):
     from robotforge.design.world import World
     from robotforge.playground import PlaygroundError
 
@@ -264,7 +264,7 @@ def _guard(pg, store, version, generation, digest):
         or pg._play_world_sha256 != digest
         or hashlib.sha256(raw).hexdigest() != digest
     ):
-        raise PlaygroundError("the simulation changed; select the prop again")
+        raise PlaygroundError(f"the simulation changed; select the {subject} again")
     world = World.from_yaml(raw.decode("utf-8"))
     if hashlib.sha256(world.model_dump_json().encode("utf-8")).hexdigest() != pg._play_world_descriptor:
         raise PlaygroundError("the saved world differs from the running model; reload the world")

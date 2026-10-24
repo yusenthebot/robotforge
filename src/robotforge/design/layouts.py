@@ -11,7 +11,7 @@ import stat
 import tempfile
 import time
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -239,14 +239,36 @@ def prepare_restore(store: WorldStore, identity: str, expected: str) -> Prepared
 
 @contextlib.contextmanager
 def install(store: WorldStore, prepared: PreparedLayout) -> Iterator[list[str]]:
+    def validate() -> None:
+        _, raw = _record(store, prepared.id)
+        if sha(raw) != prepared.digest:
+            raise LayoutError("changed", "The world or saved layout changed while preparing restoration")
+
+    with _install_world(store, prepared, validate) as notes:
+        yield notes
+
+
+@dataclass(frozen=True)
+class PreparedWorld:
+    before: bytes
+    after: bytes
+    compiled: CompiledWorld
+    xml: bytes
+
+
+@contextlib.contextmanager
+def _install_world(
+    store: WorldStore, prepared: PreparedWorld | PreparedLayout, validate: Callable[[], None] | None = None
+) -> Iterator[list[str]]:
     """Stage disk writes, publish authoritative YAML last, roll back on a failed model install.
 
     Individual replaces are atomic, not a crash-atomic multi-file transaction. XML is derived.
     A later undo-pruning failure is a reported warning, not a false failed-restore result.
     """
     with _locked(store):
-        _, raw = _record(store, prepared.id)
-        if sha(raw) != prepared.digest or _read(store.file, MAX_WORLD_BYTES) != prepared.before:
+        if validate is not None:
+            validate()
+        if _read(store.file, MAX_WORLD_BYTES) != prepared.before:
             raise LayoutError("changed", "The world or saved layout changed while preparing restoration")
         xml = store.build_dir / "world.xml"
         if xml.is_symlink() or store.history.is_symlink() or store.build_dir.is_symlink():
@@ -271,10 +293,9 @@ def install(store: WorldStore, prepared: PreparedLayout) -> Iterator[list[str]]:
             undo = stage(history, prepared.before)
             rollback_world = stage(store.file, prepared.before)
             rollback_xml = stage(xml, old_xml) if old_xml is not None else None
-            if (
-                _read(store.file, MAX_WORLD_BYTES) != prepared.before
-                or sha(_record(store, prepared.id)[1]) != prepared.digest
-            ):
+            if validate is not None:
+                validate()
+            if _read(store.file, MAX_WORLD_BYTES) != prepared.before:
                 raise LayoutError("changed", "The world or saved layout changed while staging restoration")
             os.link(undo, history)
             saved_history = True
