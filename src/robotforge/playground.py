@@ -52,6 +52,7 @@ from robotforge.sim import carry, finder, lidar, mechanisms, placement, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession, fresh_data
+from robotforge.viewer.held_drive import HeldDrive
 from robotforge.viewer.server import ViewerHub
 
 if TYPE_CHECKING:
@@ -156,13 +157,49 @@ class Playground:
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
 
-        def teleop(msg: dict[str, Any]) -> None:
+        hub.drive_holds.bind(self.behaviors)
+
+        def teleop(msg: dict[str, Any]) -> HeldDrive | None:
             walker = msg.get("walker")  # set only when the user switches between the gait and a learned policy
-            speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
-            air = {k: float(msg[k]) for k in ("side", "climb") if msg.get(k)}  # aircraft: sideways, up and down
-            self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None, **air)
+            axes = {key: float(msg.get(key, 0.0)) for key in ("speed", "turn")}
+            axes.update(
+                {key: float(msg[key]) if msg.get(key) is not None else 0.0 for key in ("side", "climb", "heave")}
+            )
+            if not all(math.isfinite(value) for value in axes.values()):
+                raise ValueError("teleop axes must be finite numbers")
+            for key, expected in (("version", self.session.version), ("generation", self.session.generation)):
+                if key in msg and (type(msg[key]) is not int or msg[key] != expected):
+                    raise ValueError("The driving scene changed; release and press again")
+                if "hold_ms" in msg and key not in msg:
+                    raise ValueError("held driving requires version and generation")
+            robot = self.behaviors.resolve(str(msg["robot"]))
+            self.behaviors.move(
+                robot,
+                axes["speed"],
+                axes["turn"],
+                str(walker) if walker else None,
+                side=axes["side"],
+                climb=axes["climb"],
+            )
             if msg.get("heave") is not None:  # an underwater robot going up or down (keys E and Q)
-                self.behaviors.heave(str(msg["robot"]), float(msg["heave"]))
+                self.behaviors.heave(robot, axes["heave"])
+            if "hold_ms" not in msg:
+                return None
+            controller = self.session.controllers.get(robot)
+            model, generation = self.session.model, self.session.generation
+
+            def release() -> None:
+                # A trip can reuse its pilot. Never stop a newer navigation or replacement controller.
+                if (
+                    self.session.model is model
+                    and self.session.generation == generation
+                    and self.session.controllers.get(robot) is controller
+                    and f"__navigate__{robot}" not in self.session.controllers
+                ):
+                    self.behaviors.heave(robot, 0.0)
+                    self.behaviors.stop(robot)
+
+            return HeldDrive(robot, release)
 
         def teleop_arm(msg: dict[str, Any]) -> None:
             """An arm's tool jogged from a gamepad: velocity [x, y, z] m/s in the world, and/or the gripper. The hand

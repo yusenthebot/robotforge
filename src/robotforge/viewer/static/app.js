@@ -18,6 +18,7 @@ import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 import { canMove, moveAxes, moveSpeed } from "./padmap.js";
 import { createPlacementGesture, initCreation } from "./creation.js";
 import { createPlacementPreview } from "./placement-preview.js";
+import { createScreenDrive } from "./screen-drive.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -27,6 +28,7 @@ translatePage();
 // ---------------------------------------------------------------- renderer setup
 
 const canvas = $("view");
+let screenDrive = null;
 const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel: cancelCreation, change: updateCreationPreview });
 const creationGesture = createPlacementGesture();
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -361,8 +363,10 @@ let layoutCatalog = null, layoutConfirmation = null, layoutMutating = false, lay
 let layoutRequest = 0, layoutError = "";
 
 async function applyScene(desc) {
+  screenDrive?.clear(false); // the server already replaced the old scene; never stop its new controllers
   const request = ++sceneRequest;
   loadingScene = true;
+  renderScreenDrive();
   posedVersion = 0;
   renderedVersion = 0;
   $("loading").hidden = false;
@@ -1105,9 +1109,11 @@ function connect() {
     setConnected(true);
   };
   ws.onclose = () => {
+    screenDrive?.clear(false); // the server's bounded hold expires even when no stop can cross this socket
     sceneRequest++;
     loadingScene = true;
     renderedVersion = 0;
+    renderScreenDrive();
     setConnected(false);
     for (const p of pending.values()) p.reject(new Error(t("disconnected")));
     pending.clear();
@@ -1421,10 +1427,13 @@ function receiveRobotInfo(info) {
 }
 
 let stateGeneration = null;
+let stateVersion = null;
 
 function applyState(s) {
+  if (Number.isInteger(s.version)) stateVersion = s.version;
   if (Number.isInteger(s.generation)) {
     const changed = stateGeneration !== s.generation;
+    if (changed) screenDrive?.clear(false);
     if (stateGeneration !== null && stateGeneration !== s.generation && !busy) {
       lastAddition = lastObjectEdit = null; cancelCreation(true);
     }
@@ -1442,6 +1451,7 @@ function applyState(s) {
     resolveCreatedRobot();
   }
   paused = s.paused;
+  renderScreenDrive();
   rtf = s.rtf;
   rotorCommands(s.ctrl, paused);
   behaviors = s.behaviors || [];
@@ -1512,7 +1522,33 @@ function renderDrive() {
   const named = robot || shown;
   if (named) $("drive-text").innerHTML = t(say, { name: escapeHtml(named.name) });
   lastDrive = "";
+  renderScreenDrive();
 }
+
+const coarsePointer = window.matchMedia("(any-pointer: coarse)");
+let screenDrivePreference = storageGet("robotforge.screen-drive");
+function renderScreenDrive() {
+  if (!screenDrive) return;
+  const robot = driveTarget();
+  const wanted = screenDrivePreference === null ? coarsePointer.matches : screenDrivePreference === "1";
+  $("show-screen-drive").checked = wanted;
+  const show = Boolean(wanted && robot && !lessonActive() && !loadingScene);
+  const ready = Boolean(ws?.readyState === WebSocket.OPEN && !paused && !busy && !document.hidden
+    && renderedVersion === sceneDesc?.version && (stateVersion === null || stateVersion === sceneDesc.version));
+  $("screen-drive-target").textContent = robot?.name ?? "";
+  $("screen-drive-hint").textContent = t(paused ? "screen_drive_play" : "screen_drive_hold");
+  screenDrive.update({ target: `${selected}:${sceneDesc?.version}:${stateGeneration}`, show, ready,
+    rise: canRise(robot), slide: moveAxes(robot).includes("slide") });
+}
+
+function setScreenDriving(on) {
+  screenDrivePreference = on ? "1" : "0";
+  storageSet("robotforge.screen-drive", screenDrivePreference);
+  renderScreenDrive();
+}
+$("show-screen-drive").addEventListener("change", (event) => setScreenDriving(event.target.checked));
+$("screen-drive-close").addEventListener("click", () => setScreenDriving(false));
+coarsePointer.addEventListener("change", renderScreenDrive);
 
 // What the keys ask for, -1..1 on each axis; the gamepad's stick (gamepad.js) asks for the same things in between.
 function keyAxes() {
@@ -1523,6 +1559,8 @@ function keyAxes() {
 // The pad where its stick asks for something on an axis, else the keys.
 function driveAxes() {
   const keys = keyAxes();
+  const screen = screenDrive?.axes();
+  if (screen) for (const key of Object.keys(keys)) keys[key] = Math.max(-1, Math.min(1, keys[key] + screen[key]));
   const pad = padAxes();
   if (!pad) return keys;
   return { fwd: pad.fwd || keys.fwd, left: pad.left || keys.left, slide: pad.slide || keys.slide, up: pad.up || keys.up };
@@ -1532,7 +1570,8 @@ function driveCommand(robot) {
   const { fwd, left, slide, up } = driveAxes();
   const learned = learnedWalkers[robot.name];
   const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : moveSpeed(robot)) ?? 0.3;
-  const cmd = { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+  const cmd = { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0),
+    version: sceneDesc.version, generation: stateGeneration };
   if (moveAxes(robot).includes("heave")) cmd.heave = up * HEAVE;
   if (isAircraft(robot)) {
     cmd.speed = fwd * top * 0.5;
@@ -1542,7 +1581,7 @@ function driveCommand(robot) {
   return cmd;
 }
 
-function sendDrive() {
+function sendDrive(refresh = false) {
   const robot = driveTarget();
   for (const k of document.querySelectorAll("#drive kbd, #lesson-drive kbd")) k.classList.toggle("on", pressed.has((isAircraft(robot) && k.dataset.fly) || k.dataset.key));
   const lessonDrive = lessonDriveSpec();
@@ -1559,8 +1598,9 @@ function sendDrive() {
   }
   if (!robot) return;
   const cmd = driveCommand(robot);
-  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}:${cmd.heave ?? ""}:${cmd.side ?? 0}:${cmd.climb ?? 0}`;
-  if (key === lastDrive) return;
+  if (screenDrive?.held()) cmd.hold_ms = 750;
+  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}:${cmd.heave ?? ""}:${cmd.side ?? 0}:${cmd.climb ?? 0}:${cmd.hold_ms ?? ""}`;
+  if (key === lastDrive && !refresh) return;
   lastDrive = key;
   send(cmd);
 }
@@ -1586,7 +1626,12 @@ controls.addEventListener("change", () => {
 function stopDriving() {
   // Switching robots mid-drive must not leave the old one walking off on its own.
   const robot = robotByName(selected);
-  if (canMove(robot) && (pressed.size || padAxes())) send({ type: "teleop", robot: robot.name, speed: 0, turn: 0 });
+  if (canMove(robot) && (pressed.size || padAxes() || screenDrive?.held())) {
+    const command = driveCommand(robot);
+    for (const key of ["speed", "turn", "side", "climb", "heave"]) if (key in command) command[key] = 0;
+    send(command);
+  }
+  screenDrive?.clear(false);
   pressed.clear();
   padRelease(false); // the pad's arm, if it was jogging one, is told to hold
   lastDrive = "";
@@ -1659,6 +1704,8 @@ window.addEventListener("blur", () => {
   pressed.clear();
   sendDrive();
 });
+document.addEventListener("visibilitychange", () => { if (document.hidden) stopDriving(); });
+window.addEventListener("pagehide", stopDriving);
 
 // ---------------------------------------------------------------- panels, buttons and keys
 
@@ -1845,9 +1892,10 @@ showCoach();
 // Any first touch counts, a button as much as the canvas: opening Learn left the hint floating over the panel.
 document.addEventListener("pointerdown", dismissCoach, { capture: true });
 
-const togglePlay = () => send({ type: "cmd", cmd: paused ? "play" : "pause" });
+const togglePlay = () => { if (!paused) stopDriving(); send({ type: "cmd", cmd: paused ? "play" : "pause" }); };
 $("btn-play").addEventListener("click", togglePlay);
 function resetWorld() {
+  stopDriving();
   cancelCreation(true);
   lastAddition = lastObjectEdit = null; updateUndo();
   send({ type: "cmd", cmd: "reset" });
@@ -2023,6 +2071,7 @@ async function runChoice(button, msg, { frame = false, done } = {}) {
 }
 
 function setPanelBusy(on) {
+  if (on) stopDriving();
   if (!on && selectingObjects && (placementVersion !== sceneDesc?.version || placementGeneration !== stateGeneration)) {
     clearObjectSelection(); updateEmpty(); renderDrive();
   }
@@ -2032,6 +2081,7 @@ function setPanelBusy(on) {
   updateUndo();
   renderEditableObjects();
   renderLayouts();
+  renderScreenDrive();
   for (const id of ["object-move", "object-copy", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
 }
 
@@ -2065,6 +2115,7 @@ function beginCreation() {
   creationPoint({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
   updateEmpty();
   updateUndo();
+  renderScreenDrive();
 }
 
 function cancelCreation(force = false) {
@@ -2076,6 +2127,7 @@ function cancelCreation(force = false) {
   creationSurface = null; placementPreview.clear();
   canvas.classList.remove("placing"); controls.enabled = true;
   updateEmpty();
+  renderScreenDrive();
   updateUndo();
 }
 
@@ -2775,6 +2827,7 @@ function loop() {
   if (ready && renderedVersion !== sceneDesc.version && !renderer.getContext().isContextLost()) {
     renderedVersion = sceneDesc.version;
     $("loading").hidden = true;
+    renderScreenDrive();
     updateEmpty();
     resolveCreatedRobot();
   }
@@ -2880,6 +2933,15 @@ initMap({
 
 initTraining({ request, toast });
 initFlow({ inLesson: () => lessonActive(), storageGet, storageSet });
+
+screenDrive = createScreenDrive($("screen-drive"), (refresh) => {
+  if (screenDrive.held() && (loadingScene || renderedVersion !== sceneDesc?.version || paused
+    || ws?.readyState !== WebSocket.OPEN || busy || document.hidden || !driveTarget())) {
+    screenDrive.clear(false); renderScreenDrive(); return;
+  }
+  if (screenDrive.held() && driveTarget()) startFollow();
+  sendDrive(refresh);
+});
 
 initGamepad({
   send,

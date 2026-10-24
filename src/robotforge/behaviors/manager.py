@@ -177,19 +177,24 @@ def _commanded(op: str, tell: Callable[[BehaviorManager, dict[str, Any]], tuple[
         def command(self: BehaviorManager, *args: Any, **kwargs: Any):
             if not self.command_hooks:
                 return method(self, *args, **kwargs)
-            outer = not getattr(self._issuing, "depth", 0) and not self.session.in_controller
-            self._issuing.depth = getattr(self._issuing, "depth", 0) + 1
-            try:
-                result = method(self, *args, **kwargs)
-            finally:
-                self._issuing.depth -= 1
-            if outer:
-                bound = signature.bind(self, *args, **kwargs)
-                bound.apply_defaults()
-                robot, event = tell(self, dict(bound.arguments))
-                for hook in tuple(self.command_hooks):
-                    hook(robot, {"op": op, **event})
-            return result
+            # Held viewer commands expire on another thread. A newer quick command
+            # and its ownership notification must be indivisible to that expiry.
+            # Path planning and manipulation are deliberately outside this extra lock.
+            boundary = self.session.lock if op in {"move", "heave", "stop"} else contextlib.nullcontext()
+            with boundary:
+                outer = not getattr(self._issuing, "depth", 0) and not self.session.in_controller
+                self._issuing.depth = getattr(self._issuing, "depth", 0) + 1
+                try:
+                    result = method(self, *args, **kwargs)
+                finally:
+                    self._issuing.depth -= 1
+                if outer:
+                    bound = signature.bind(self, *args, **kwargs)
+                    bound.apply_defaults()
+                    robot, event = tell(self, dict(bound.arguments))
+                    for hook in tuple(self.command_hooks):
+                        hook(robot, {"op": op, **event})
+                return result
 
         return command
 
@@ -209,7 +214,14 @@ def _tell_move(m: BehaviorManager, a: dict[str, Any]) -> tuple[str, dict[str, An
 
 
 def _tell_go(m: BehaviorManager, a: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    to = a["to"] if isinstance(a["to"], str) else _floats(a["to"])
+    destination = a["to"]
+    if isinstance(destination, str):
+        to = destination
+    elif len(destination) and isinstance(destination[0], (list, tuple, np.ndarray)):
+        # Keep multi-waypoint flights in the already accepted JSON path syntax.
+        to = json.dumps([_floats(point) for point in destination])
+    else:
+        to = _floats(destination)
     return m.resolve(a["robot"]), {"to": to, **({"speed": a["speed"]} if a["speed"] else {})}
 
 

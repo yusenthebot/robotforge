@@ -689,6 +689,24 @@ input[type="range"]::-moz-range-thumb {
 
 .drive-speed:empty { display: none; }
 
+.screen-drive { position: fixed; bottom: calc(var(--gutter) + 72px); left: var(--gutter); z-index: 3; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); box-shadow: var(--shadow); max-width: calc(100% - var(--gutter) * 2); }
+.screen-drive-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.screen-drive-head strong { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screen-drive-close { min-width: 32px; min-height: 32px; font-size: 20px; border-radius: 8px; }
+.screen-drive .note { margin: 0 0 8px; font-size: 11px; }
+.screen-drive-grids { display: flex; gap: 12px; }
+.screen-drive-main { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(2, 50px); gap: 4px; }
+.screen-drive-main [data-direction="fwd"] { grid-column: 2; }
+.screen-drive-main [data-direction="left"] { grid-column: 1; grid-row: 2; }
+.screen-drive-main [data-direction="back"] { grid-column: 2; grid-row: 2; }
+.screen-drive-main [data-direction="right"] { grid-column: 3; grid-row: 2; }
+.screen-drive-extra { display: grid; grid-template-columns: repeat(2, 56px); grid-template-rows: repeat(2, 50px); gap: 4px; }
+.screen-drive [data-direction] { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; font-size: 11px; }
+.screen-drive [data-direction] > span:first-child { font-size: 18px; line-height: 20px; }
+.screen-drive [data-direction][aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); }
+.screen-drive [data-direction]:disabled { opacity: .45; }
+body:has(#screen-drive:not([hidden])) .drive { bottom: calc(var(--gutter) + 280px); }
+
 /* ---------------------------------------------------------------- help */
 
 .help {

@@ -192,6 +192,7 @@
       <h2 class="section-title"><span data-i18n="display">Display</span></h2>
       <label class="check"><input type="checkbox" id="show-collision"><span data-i18n="collision">Show collision shapes</span></label>
       <label class="check"><input type="checkbox" id="show-shadows" checked><span data-i18n="shadows">Shadows</span></label>
+      <label class="check"><input type="checkbox" id="show-screen-drive"><span data-i18n="screen_drive">On-screen driving</span></label>
     </section>
   </aside>
 
@@ -264,6 +265,25 @@
     <span class="drive-speed" id="drive-speed"></span>
     <span class="pad-chip" id="drive-pad" hidden title="Gamepad"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4.5 4.5 0 0 1 4.4 5.4l-.9 4.2a2.2 2.2 0 0 1-3.8 1l-1.9-2.1H9.2L7.3 17.6a2.2 2.2 0 0 1-3.8-1l-.9-4.2A4.5 4.5 0 0 1 7 7z"/><path d="M8 10v3M6.5 11.5h3"/><circle cx="15.5" cy="10.5" r=".6"/><circle cx="17.5" cy="12.5" r=".6"/></svg><span data-i18n="pad_chip">Gamepad</span></span>
   </div>
+
+  <section class="screen-drive" id="screen-drive" hidden data-i18n-label="screen_drive">
+    <div class="screen-drive-head"><strong id="screen-drive-target"></strong><button class="screen-drive-close" id="screen-drive-close" type="button" data-i18n-label="screen_drive_hide">×</button></div>
+    <p id="screen-drive-hint" class="note" data-i18n="screen_drive_hold">Hold to move; release to stop.</p>
+    <div class="screen-drive-grids">
+      <div class="screen-drive-main">
+        <button type="button" data-direction="fwd" aria-pressed="false"><span aria-hidden="true">↑</span><span data-i18n="screen_fwd">Forward</span></button>
+        <button type="button" data-direction="left" aria-pressed="false"><span aria-hidden="true">↶</span><span data-i18n="screen_left">Turn left</span></button>
+        <button type="button" data-direction="back" aria-pressed="false"><span aria-hidden="true">↓</span><span data-i18n="screen_back">Back</span></button>
+        <button type="button" data-direction="right" aria-pressed="false"><span aria-hidden="true">↷</span><span data-i18n="screen_right">Turn right</span></button>
+      </div>
+      <div class="screen-drive-extra" hidden>
+        <button type="button" data-direction="up" aria-pressed="false" hidden><span aria-hidden="true">↑</span><span data-i18n="screen_up">Rise</span></button>
+        <button type="button" data-direction="down" aria-pressed="false" hidden><span aria-hidden="true">↓</span><span data-i18n="screen_down">Descend</span></button>
+        <button type="button" data-direction="slide_left" aria-pressed="false" hidden><span aria-hidden="true">←</span><span data-i18n="screen_slide_left">Slide left</span></button>
+        <button type="button" data-direction="slide_right" aria-pressed="false" hidden><span aria-hidden="true">→</span><span data-i18n="screen_slide_right">Slide right</span></button>
+      </div>
+    </div>
+  </section>
 
   <footer class="dock">
     <button class="play" id="btn-play" type="button" data-i18n-label="pause_tip">
