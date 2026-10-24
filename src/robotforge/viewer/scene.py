@@ -211,6 +211,7 @@ def describe(
     painted = {int(entry["id"]) for entry in mesh_entries if "colors" in entry}  # colored per vertex already
     uv_meshes = {int(entry["id"]) for entry in mesh_entries if "uv" in entry}
     texture_ids = {alias: entry["id"] for entry in texture_entries or [] for alias in entry["aliases"]}
+    native_materials = _native_materials(model)
     geoms = []
     for g in range(model.ngeom):
         gtype = _GEOM_TYPE_NAMES.get(int(model.geom_type[g]))
@@ -235,6 +236,9 @@ def describe(
                 "group": int(model.geom_group[g]),
             }
         )
+        material_id = int(model.geom_matid[g])
+        if material_id in native_materials:
+            geoms[-1]["material_id"] = material_id
         if texture_entries and gtype == "mesh":
             tex = _geom_texture(model, g)
             native_id = texture_ids.get(tex) if int(model.geom_dataid[g]) in uv_meshes else None
@@ -282,11 +286,26 @@ def describe(
         **({"textures": texture_entries} if texture_entries else {}),
         "grounds": _ground_looks(model),
         "surfaces": _surfaces(model),
+        **({"native_materials": native_materials} if native_materials else {}),
         "water": water.describe() if (water := water_model.decode(model)) is not None else None,
         "actuators": actuators,
         "visibleGroupLimit": VISIBLE_GROUP_LIMIT,
         "stat": {"center": [float(c) for c in model.stat.center], "extent": float(model.stat.extent)},
     }
+
+
+def _native_materials(model: mujoco.MjModel) -> dict[int, dict[str, float]]:
+    """Keep authored PBR separate from the viewer's named presets; -1 means unset in MuJoCo."""
+    out = {}
+    for material in range(model.nmat):
+        values = {}
+        for parameter, array in (("roughness", model.mat_roughness), ("metalness", model.mat_metallic)):
+            value = float(array[material])
+            if np.isfinite(value) and 0 <= value <= 1:
+                values[parameter] = value
+        if values:
+            out[material] = values
+    return out
 
 
 def _flexes(model: mujoco.MjModel) -> list[dict]:

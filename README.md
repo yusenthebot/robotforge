@@ -155,6 +155,8 @@ All of these are real screenshots of the viewer (`uv run python scripts/screensh
 
 Give the agent the path of a URDF, xacro, MJCF or mesh file.
 robotforge checks it, repairs the common problems (mesh formats, inertia, the starting stance), and puts it in your world.
+For non-ground MJCF surfaces, the viewer keeps explicitly authored roughness and metallic values.
+Registered asset surfaces and built-in named material presets keep their existing appearance; materials without valid native PBR values use the existing name-based fallback.
 
 ![The A1 quadruped imported from Unitree's own URDF](docs/images/import_a1.jpg)
 

@@ -451,7 +451,8 @@ async function installScene(desc, request) {
       if (!g) continue;
       const mat = look
         ? groundLook(geom, look)
-        : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3], desc.surfaces);
+        : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3], desc.surfaces,
+          desc.native_materials?.[String(geom.material_id)]);
       orientWoodGrain(mat, g);
       const texture = textureFor(geom.texture);
       if (texture) {

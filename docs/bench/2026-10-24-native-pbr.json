@@ -1,0 +1,1367 @@
+{
+  "runtime_sha256": "56c78a354b57d88627a758095e7e091266116fd1ccee9d4abbdcda45a3e03a59",
+  "baseline_commit": "3508b3cac06d6e11350427526c32af7a60fecd67",
+  "checks": {
+    "production_frozen": true,
+    "helper_frozen": true,
+    "model_original_bytes": true,
+    "source_selected": true,
+    "focused-default": true,
+    "browser-full": true,
+    "slow-assets-sensors": true,
+    "17_new_cases": true,
+    "verification:stages": true,
+    "verification:commands": true,
+    "post:stages": true,
+    "post:commands": true,
+    "models-adam-baseline:source-path": true,
+    "fixed-final:source-path": true,
+    "motion-baseline:source-path": true,
+    "motion-baseline-encode:source-path": true,
+    "motion-candidate:source-path": true,
+    "motion-candidate-encode:source-path": true,
+    "budget:source-path": true,
+    "framework7": true,
+    "budget.json:reference": true,
+    "framework-regression-v1.json:reference": true,
+    "six_models": true,
+    "model_sources": true,
+    "gallery:model:arrays": true,
+    "gallery:model:scalars": true,
+    "gallery:model:physics": true,
+    "gallery:model:payload": true,
+    "kitchen:model:arrays": true,
+    "kitchen:model:scalars": true,
+    "kitchen:model:physics": true,
+    "kitchen:model:payload": true,
+    "wood_props:model:arrays": true,
+    "wood_props:model:scalars": true,
+    "wood_props:model:physics": true,
+    "wood_props:model:payload": true,
+    "park:model:arrays": true,
+    "park:model:scalars": true,
+    "park:model:physics": true,
+    "park:model:payload": true,
+    "wood_terrain:model:arrays": true,
+    "wood_terrain:model:scalars": true,
+    "wood_terrain:model:physics": true,
+    "wood_terrain:model:payload": true,
+    "adam:model:arrays": true,
+    "adam:model:scalars": true,
+    "adam:model:physics": true,
+    "adam:model:payload": true,
+    "fixed_sources": true,
+    "fixed_view_sets": true,
+    "gallery:old_fields": true,
+    "gallery:frozen": true,
+    "gallery:errors": true,
+    "kitchen:old_fields": true,
+    "kitchen:frozen": true,
+    "kitchen:errors": true,
+    "wood_props:old_fields": true,
+    "wood_props:frozen": true,
+    "wood_props:errors": true,
+    "park:old_fields": true,
+    "park:frozen": true,
+    "park:errors": true,
+    "wood_terrain:old_fields": true,
+    "wood_terrain:frozen": true,
+    "wood_terrain:errors": true,
+    "gallery_far:pixels": true,
+    "gallery_far:samples": true,
+    "gallery_far:resources": true,
+    "gallery_far:draws": true,
+    "gallery_far:gl": true,
+    "gallery_far:projection": true,
+    "gallery_far:camera_tolerance_1e-10": true,
+    "gallery_near:pixels": true,
+    "gallery_near:samples": true,
+    "gallery_near:resources": true,
+    "gallery_near:draws": true,
+    "gallery_near:gl": true,
+    "gallery_near:projection": true,
+    "gallery_near:camera_tolerance_1e-10": true,
+    "gallery_low:pixels": true,
+    "gallery_low:samples": true,
+    "gallery_low:resources": true,
+    "gallery_low:draws": true,
+    "gallery_low:gl": true,
+    "gallery_low:projection": true,
+    "gallery_low:camera_tolerance_1e-10": true,
+    "kitchen_far:pixels": true,
+    "kitchen_far:samples": true,
+    "kitchen_far:resources": true,
+    "kitchen_far:draws": true,
+    "kitchen_far:gl": true,
+    "kitchen_far:projection": true,
+    "kitchen_far:camera_tolerance_1e-10": true,
+    "kitchen_near:pixels": true,
+    "kitchen_near:samples": true,
+    "kitchen_near:resources": true,
+    "kitchen_near:draws": true,
+    "kitchen_near:gl": true,
+    "kitchen_near:projection": true,
+    "kitchen_near:camera_tolerance_1e-10": true,
+    "kitchen_low:pixels": true,
+    "kitchen_low:samples": true,
+    "kitchen_low:resources": true,
+    "kitchen_low:draws": true,
+    "kitchen_low:gl": true,
+    "kitchen_low:projection": true,
+    "kitchen_low:camera_tolerance_1e-10": true,
+    "wood_props_near:pixels": true,
+    "wood_props_near:samples": true,
+    "wood_props_near:resources": true,
+    "wood_props_near:draws": true,
+    "wood_props_near:gl": true,
+    "wood_props_near:projection": true,
+    "wood_props_near:camera_tolerance_1e-10": true,
+    "wood_props_table_top:pixels": true,
+    "wood_props_table_top:samples": true,
+    "wood_props_table_top:resources": true,
+    "wood_props_table_top:draws": true,
+    "wood_props_table_top:gl": true,
+    "wood_props_table_top:projection": true,
+    "wood_props_table_top:camera_tolerance_1e-10": true,
+    "wood_props_table_detail:pixels": true,
+    "wood_props_table_detail:samples": true,
+    "wood_props_table_detail:resources": true,
+    "wood_props_table_detail:draws": true,
+    "wood_props_table_detail:gl": true,
+    "wood_props_table_detail:projection": true,
+    "wood_props_table_detail:camera_tolerance_1e-10": true,
+    "wood_props_table_grazing:pixels": true,
+    "wood_props_table_grazing:samples": true,
+    "wood_props_table_grazing:resources": true,
+    "wood_props_table_grazing:draws": true,
+    "wood_props_table_grazing:gl": true,
+    "wood_props_table_grazing:projection": true,
+    "wood_props_table_grazing:camera_tolerance_1e-10": true,
+    "wood_props_floor_detail:pixels": true,
+    "wood_props_floor_detail:samples": true,
+    "wood_props_floor_detail:resources": true,
+    "wood_props_floor_detail:draws": true,
+    "wood_props_floor_detail:gl": true,
+    "wood_props_floor_detail:projection": true,
+    "wood_props_floor_detail:camera_tolerance_1e-10": true,
+    "wood_props_floor_grazing:pixels": true,
+    "wood_props_floor_grazing:samples": true,
+    "wood_props_floor_grazing:resources": true,
+    "wood_props_floor_grazing:draws": true,
+    "wood_props_floor_grazing:gl": true,
+    "wood_props_floor_grazing:projection": true,
+    "wood_props_floor_grazing:camera_tolerance_1e-10": true,
+    "park_far:pixels": true,
+    "park_far:samples": true,
+    "park_far:resources": true,
+    "park_far:draws": true,
+    "park_far:gl": true,
+    "park_far:projection": true,
+    "park_far:camera_tolerance_1e-10": true,
+    "park_near:pixels": true,
+    "park_near:samples": true,
+    "park_near:resources": true,
+    "park_near:draws": true,
+    "park_near:gl": true,
+    "park_near:projection": true,
+    "park_near:camera_tolerance_1e-10": true,
+    "park_low:pixels": true,
+    "park_low:samples": true,
+    "park_low:resources": true,
+    "park_low:draws": true,
+    "park_low:gl": true,
+    "park_low:projection": true,
+    "park_low:camera_tolerance_1e-10": true,
+    "park_bench_detail:pixels": true,
+    "park_bench_detail:samples": true,
+    "park_bench_detail:resources": true,
+    "park_bench_detail:draws": true,
+    "park_bench_detail:gl": true,
+    "park_bench_detail:projection": true,
+    "park_bench_detail:camera_tolerance_1e-10": true,
+    "park_bench_grazing:pixels": true,
+    "park_bench_grazing:samples": true,
+    "park_bench_grazing:resources": true,
+    "park_bench_grazing:draws": true,
+    "park_bench_grazing:gl": true,
+    "park_bench_grazing:projection": true,
+    "park_bench_grazing:camera_tolerance_1e-10": true,
+    "wood_terrain_near:pixels": true,
+    "wood_terrain_near:samples": true,
+    "wood_terrain_near:resources": true,
+    "wood_terrain_near:draws": true,
+    "wood_terrain_near:gl": true,
+    "wood_terrain_near:projection": true,
+    "wood_terrain_near:camera_tolerance_1e-10": true,
+    "wood_terrain_low:pixels": true,
+    "wood_terrain_low:samples": true,
+    "wood_terrain_low:resources": true,
+    "wood_terrain_low:draws": true,
+    "wood_terrain_low:gl": true,
+    "wood_terrain_low:projection": true,
+    "wood_terrain_low:camera_tolerance_1e-10": true,
+    "wood_terrain_ramp_detail:pixels": true,
+    "wood_terrain_ramp_detail:samples": true,
+    "wood_terrain_ramp_detail:resources": true,
+    "wood_terrain_ramp_detail:draws": true,
+    "wood_terrain_ramp_detail:gl": true,
+    "wood_terrain_ramp_detail:projection": true,
+    "wood_terrain_ramp_detail:camera_tolerance_1e-10": true,
+    "wood_terrain_stair_detail:pixels": true,
+    "wood_terrain_stair_detail:samples": true,
+    "wood_terrain_stair_detail:resources": true,
+    "wood_terrain_stair_detail:draws": true,
+    "wood_terrain_stair_detail:gl": true,
+    "wood_terrain_stair_detail:projection": true,
+    "wood_terrain_stair_detail:camera_tolerance_1e-10": true,
+    "wood_terrain_hfield_detail:pixels": true,
+    "wood_terrain_hfield_detail:samples": true,
+    "wood_terrain_hfield_detail:resources": true,
+    "wood_terrain_hfield_detail:draws": true,
+    "wood_terrain_hfield_detail:gl": true,
+    "wood_terrain_hfield_detail:projection": true,
+    "wood_terrain_hfield_detail:camera_tolerance_1e-10": true,
+    "preview_sources": true,
+    "baseline:preview_frozen": true,
+    "baseline:preview_errors": true,
+    "candidate:preview_frozen": true,
+    "candidate:preview_errors": true,
+    "adam:fixed_frozen": true,
+    "adam:fixed_errors": true,
+    "adam_front:new_samples": true,
+    "adam_front:new_gl": true,
+    "adam_side:new_samples": true,
+    "adam_side:new_gl": true,
+    "adam_near:new_samples": true,
+    "adam_near:new_gl": true,
+    "adam_front:native_author_values": true,
+    "adam_front:logo_legacy": true,
+    "adam_front:preview_resources": true,
+    "adam_front:preview_gl": true,
+    "adam_front:preview_camera": true,
+    "adam_front:visible_change": true,
+    "adam_side:native_author_values": true,
+    "adam_side:logo_legacy": true,
+    "adam_side:preview_resources": true,
+    "adam_side:preview_gl": true,
+    "adam_side:preview_projection": true,
+    "adam_side:preview_camera": true,
+    "adam_side:visible_change": true,
+    "adam_near:native_author_values": true,
+    "adam_near:logo_legacy": true,
+    "adam_near:preview_resources": true,
+    "adam_near:preview_gl": true,
+    "adam_near:preview_projection": true,
+    "adam_near:preview_camera": true,
+    "adam_near:visible_change": true,
+    "original_adam_author_values": true,
+    "adam_side:final_view": true,
+    "adam_side:final_preview_pixels": true,
+    "adam_near:final_view": true,
+    "adam_near:final_preview_pixels": true,
+    "settled_adam_source": true,
+    "settled_adam_set": true,
+    "settled_complete_sets": true,
+    "settled_adam_frozen": true,
+    "settled_adam_errors": true,
+    "settled_adam_old_fields": true,
+    "adam_front:settled_projection": true,
+    "adam_front:settled_camera": true,
+    "adam_front:settled_samples": true,
+    "adam_front:settled_resources": true,
+    "adam_front:settled_draws": true,
+    "adam_front:settled_gl": true,
+    "adam_front:settled_visible_change": true,
+    "adam_front:settled_author_materials": true,
+    "adam_front:settled_candidate_original_pixels": true,
+    "adam_side:settled_projection": true,
+    "adam_side:settled_camera": true,
+    "adam_side:settled_samples": true,
+    "adam_side:settled_resources": true,
+    "adam_side:settled_draws": true,
+    "adam_side:settled_gl": true,
+    "adam_side:settled_visible_change": true,
+    "adam_side:settled_author_materials": true,
+    "adam_side:settled_candidate_original_pixels": true,
+    "adam_near:settled_projection": true,
+    "adam_near:settled_camera": true,
+    "adam_near:settled_samples": true,
+    "adam_near:settled_resources": true,
+    "adam_near:settled_draws": true,
+    "adam_near:settled_gl": true,
+    "adam_near:settled_visible_change": true,
+    "adam_near:settled_author_materials": true,
+    "adam_near:settled_candidate_original_pixels": true,
+    "settled_candidate_source": true,
+    "corrective_capture_receipt": true,
+    "wheel_source_set": true,
+    "wheel_source_bytes": true,
+    "one_original_budget": true,
+    "original_budget11": true,
+    "baseline:motion_source": true,
+    "baseline:media_binding": true,
+    "baseline:decoded_samples": true,
+    "baseline:motion_frozen": true,
+    "baseline:motion_errors": true,
+    "baseline:strict_decode": true,
+    "candidate:motion_source": true,
+    "candidate:media_binding": true,
+    "candidate:decoded_samples": true,
+    "candidate:motion_frozen": true,
+    "candidate:motion_errors": true,
+    "candidate:strict_decode": true,
+    "same_prescribed_camera_path": true,
+    "same_motion_physics": true
+  },
+  "failed_checks": [],
+  "test_counts": {
+    "focused-default": {
+      "passed": 1338,
+      "skipped": 1,
+      "failed": 0
+    },
+    "browser-full": {
+      "passed": 203,
+      "skipped": 0,
+      "failed": 0
+    },
+    "slow-assets-sensors": {
+      "passed": 8,
+      "skipped": 0,
+      "failed": 0
+    }
+  },
+  "distinct_pytest_passes": 1549,
+  "frozen_files": 626,
+  "helper_files": 193,
+  "package_files": 395,
+  "wheel_bytes": 3860672,
+  "wheel_delta_bytes": 501,
+  "models": {
+    "gallery": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "kitchen": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "wood_props": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "park": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "wood_terrain": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    },
+    "adam": {
+      "arrays": true,
+      "array_count": 480,
+      "scalars": true,
+      "physics": true,
+      "payload": true
+    }
+  },
+  "views": {
+    "gallery_far": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.7999999821186066,
+      "candidate_draw_median_ms": 1.7999999970197678
+    },
+    "gallery_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.7999999821186066,
+      "candidate_draw_median_ms": 1.5999999940395355
+    },
+    "gallery_low": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.9000000059604645,
+      "candidate_draw_median_ms": 3.4000000059604645
+    },
+    "kitchen_far": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 2.6645352591003757e-15,
+      "eye_target_literal_exact": false,
+      "baseline_draw_median_ms": 1.2999999821186066,
+      "candidate_draw_median_ms": 1.9000000059604645
+    },
+    "kitchen_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.6500000059604645,
+      "candidate_draw_median_ms": 1.0
+    },
+    "kitchen_low": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.2000000178813934,
+      "candidate_draw_median_ms": 1.6499999910593033
+    },
+    "wood_props_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 0.7000000029802322,
+      "candidate_draw_median_ms": 1.2999999821186066
+    },
+    "wood_props_table_top": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 0.699999988079071,
+      "candidate_draw_median_ms": 1.4000000059604645
+    },
+    "wood_props_table_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 0.6500000059604645,
+      "candidate_draw_median_ms": 1.5
+    },
+    "wood_props_table_grazing": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 0.699999988079071,
+      "candidate_draw_median_ms": 1.4500000029802322
+    },
+    "wood_props_floor_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.0999999940395355,
+      "candidate_draw_median_ms": 1.2000000178813934
+    },
+    "wood_props_floor_grazing": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 0.9000000059604645,
+      "candidate_draw_median_ms": 1.25
+    },
+    "park_far": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.300000011920929,
+      "candidate_draw_median_ms": 1.0
+    },
+    "park_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.5499999970197678,
+      "candidate_draw_median_ms": 0.9500000029802322
+    },
+    "park_low": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.9000000059604645,
+      "candidate_draw_median_ms": 2.199999988079071
+    },
+    "park_bench_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 2.0,
+      "candidate_draw_median_ms": 1.9500000029802322
+    },
+    "park_bench_grazing": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.0999999940395355,
+      "candidate_draw_median_ms": 1.9000000059604645
+    },
+    "wood_terrain_near": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 0.800000011920929,
+      "candidate_draw_median_ms": 1.1500000059604645
+    },
+    "wood_terrain_low": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 1.7763568394002505e-15,
+      "eye_target_literal_exact": false,
+      "baseline_draw_median_ms": 0.75,
+      "candidate_draw_median_ms": 1.2999999821186066
+    },
+    "wood_terrain_ramp_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 1.5,
+      "candidate_draw_median_ms": 1.5999999940395355
+    },
+    "wood_terrain_stair_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0.0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 0.9500000029802322,
+      "candidate_draw_median_ms": 1.6500000059604645
+    },
+    "wood_terrain_hfield_detail": {
+      "pixels_exact": true,
+      "max_channel_delta": 0,
+      "eye_target_max_abs_delta": 0,
+      "eye_target_literal_exact": true,
+      "baseline_draw_median_ms": 0.9000000059604645,
+      "candidate_draw_median_ms": 1.7000000029802322
+    }
+  },
+  "author_fidelity": {
+    "adam_front": {
+      "before": {
+        "adam/black": {
+          "roughness": 0.55,
+          "metalness": 0.12,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/sliver": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/pnd_logo": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": true,
+          "vertexColors": false
+        }
+      },
+      "after": {
+        "adam/black": {
+          "roughness": 0,
+          "metalness": 1,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/sliver": {
+          "roughness": 0,
+          "metalness": 1,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/pnd_logo": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": true,
+          "vertexColors": false
+        }
+      },
+      "changed_pixel_count": 196709,
+      "settled_changed_pixel_count": 13923
+    },
+    "adam_side": {
+      "before": {
+        "adam/black": {
+          "roughness": 0.55,
+          "metalness": 0.12,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/sliver": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/pnd_logo": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": true,
+          "vertexColors": false
+        }
+      },
+      "after": {
+        "adam/black": {
+          "roughness": 0,
+          "metalness": 1,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/sliver": {
+          "roughness": 0,
+          "metalness": 1,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/pnd_logo": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": true,
+          "vertexColors": false
+        }
+      },
+      "changed_pixel_count": 19758,
+      "settled_changed_pixel_count": 19758
+    },
+    "adam_near": {
+      "before": {
+        "adam/black": {
+          "roughness": 0.55,
+          "metalness": 0.12,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/sliver": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/pnd_logo": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": true,
+          "vertexColors": false
+        }
+      },
+      "after": {
+        "adam/black": {
+          "roughness": 0,
+          "metalness": 1,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/sliver": {
+          "roughness": 0,
+          "metalness": 1,
+          "physical": false,
+          "coat": 0,
+          "map": false,
+          "vertexColors": false
+        },
+        "adam/pnd_logo": {
+          "roughness": 0.5,
+          "metalness": 0.05,
+          "physical": false,
+          "coat": 0,
+          "map": true,
+          "vertexColors": false
+        }
+      },
+      "changed_pixel_count": 29651,
+      "settled_changed_pixel_count": 29651
+    }
+  },
+  "preview_front_diagnostics": {
+    "adam_front:preview_projection": false,
+    "adam_front:final_view": false,
+    "adam_front:final_preview_pixels": false
+  },
+  "corrective_capture": [
+    {
+      "mode": "baseline",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-pbr/capture_adam_settled.py",
+        "baseline"
+      ],
+      "PYTHONPATH": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-pbr/baseline-code/src",
+      "exit_code": 0,
+      "seconds": 11.082959416002268,
+      "runtime_sha256": "ab532d2ca6ef48cc589d511a7476089e787f6006e7bdf45d0650a8cd0752e3a7",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "mode": "candidate",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-pbr/capture_adam_settled.py",
+        "candidate"
+      ],
+      "PYTHONPATH": "/Users/yusenthebot/dev/robotforge/src",
+      "exit_code": 0,
+      "seconds": 10.489378875005059,
+      "runtime_sha256": "56c78a354b57d88627a758095e7e091266116fd1ccee9d4abbdcda45a3e03a59",
+      "frozen_inputs_unchanged": true
+    }
+  ],
+  "loading": {
+    "gallery": {
+      "compact_scene_delta_bytes": 4006,
+      "navigations": {
+        "fresh_profile": {
+          "baseline_twoRAF_proxy_ms": 375.90000000596046,
+          "candidate_twoRAF_proxy_ms": 360.10000002384186,
+          "baseline_http_encoded_bytes": 30638752,
+          "candidate_http_encoded_bytes": 30639531,
+          "http_delta_bytes": 779,
+          "baseline_helper_resource_count": 32,
+          "baseline_actual_http_count": 30,
+          "candidate_helper_resource_count": 32,
+          "candidate_actual_http_count": 30
+        },
+        "warm_navigation": {
+          "baseline_twoRAF_proxy_ms": 197.69999998807907,
+          "candidate_twoRAF_proxy_ms": 213.7000000178814,
+          "baseline_http_encoded_bytes": 29225329,
+          "candidate_http_encoded_bytes": 29225329,
+          "http_delta_bytes": 0,
+          "baseline_helper_resource_count": 32,
+          "baseline_actual_http_count": 30,
+          "candidate_helper_resource_count": 32,
+          "candidate_actual_http_count": 30
+        }
+      }
+    },
+    "kitchen": {
+      "compact_scene_delta_bytes": 2391,
+      "navigations": {
+        "fresh_profile": {
+          "baseline_twoRAF_proxy_ms": 348.19999998807907,
+          "candidate_twoRAF_proxy_ms": 337.40000000596046,
+          "baseline_http_encoded_bytes": 4248879,
+          "candidate_http_encoded_bytes": 4249658,
+          "http_delta_bytes": 779,
+          "baseline_helper_resource_count": 32,
+          "baseline_actual_http_count": 30,
+          "candidate_helper_resource_count": 32,
+          "candidate_actual_http_count": 30
+        },
+        "warm_navigation": {
+          "baseline_twoRAF_proxy_ms": 210,
+          "candidate_twoRAF_proxy_ms": 200.80000001192093,
+          "baseline_http_encoded_bytes": 2835456,
+          "candidate_http_encoded_bytes": 2835456,
+          "http_delta_bytes": 0,
+          "baseline_helper_resource_count": 32,
+          "baseline_actual_http_count": 30,
+          "candidate_helper_resource_count": 32,
+          "candidate_actual_http_count": 30
+        }
+      }
+    },
+    "wood_props": {
+      "compact_scene_delta_bytes": 156,
+      "navigations": {
+        "fresh_profile": {
+          "baseline_twoRAF_proxy_ms": 211.59999999403954,
+          "candidate_twoRAF_proxy_ms": 206.10000002384186,
+          "baseline_http_encoded_bytes": 1616558,
+          "candidate_http_encoded_bytes": 1617337,
+          "http_delta_bytes": 779,
+          "baseline_helper_resource_count": 32,
+          "baseline_actual_http_count": 30,
+          "candidate_helper_resource_count": 32,
+          "candidate_actual_http_count": 30
+        },
+        "warm_navigation": {
+          "baseline_twoRAF_proxy_ms": 101.5,
+          "candidate_twoRAF_proxy_ms": 116.59999999403954,
+          "baseline_http_encoded_bytes": 203135,
+          "candidate_http_encoded_bytes": 203135,
+          "http_delta_bytes": 0,
+          "baseline_helper_resource_count": 32,
+          "baseline_actual_http_count": 30,
+          "candidate_helper_resource_count": 32,
+          "candidate_actual_http_count": 30
+        }
+      }
+    },
+    "park": {
+      "compact_scene_delta_bytes": 2150,
+      "navigations": {
+        "fresh_profile": {
+          "baseline_twoRAF_proxy_ms": 391.19999998807907,
+          "candidate_twoRAF_proxy_ms": 362.5,
+          "baseline_http_encoded_bytes": 18732665,
+          "candidate_http_encoded_bytes": 18733444,
+          "http_delta_bytes": 779,
+          "baseline_helper_resource_count": 29,
+          "baseline_actual_http_count": 29,
+          "candidate_helper_resource_count": 29,
+          "candidate_actual_http_count": 29
+        },
+        "warm_navigation": {
+          "baseline_twoRAF_proxy_ms": 258.90000000596046,
+          "candidate_twoRAF_proxy_ms": 257.5,
+          "baseline_http_encoded_bytes": 17435863,
+          "candidate_http_encoded_bytes": 17435863,
+          "http_delta_bytes": 0,
+          "baseline_helper_resource_count": 29,
+          "baseline_actual_http_count": 29,
+          "candidate_helper_resource_count": 29,
+          "candidate_actual_http_count": 29
+        }
+      }
+    },
+    "wood_terrain": {
+      "compact_scene_delta_bytes": 0,
+      "navigations": {
+        "fresh_profile": {
+          "baseline_twoRAF_proxy_ms": 213.5,
+          "candidate_twoRAF_proxy_ms": 215.5,
+          "baseline_http_encoded_bytes": 1448176,
+          "candidate_http_encoded_bytes": 1448955,
+          "http_delta_bytes": 779,
+          "baseline_helper_resource_count": 32,
+          "baseline_actual_http_count": 30,
+          "candidate_helper_resource_count": 32,
+          "candidate_actual_http_count": 30
+        },
+        "warm_navigation": {
+          "baseline_twoRAF_proxy_ms": 128,
+          "candidate_twoRAF_proxy_ms": 128,
+          "baseline_http_encoded_bytes": 34753,
+          "candidate_http_encoded_bytes": 34753,
+          "http_delta_bytes": 0,
+          "baseline_helper_resource_count": 32,
+          "baseline_actual_http_count": 30,
+          "candidate_helper_resource_count": 32,
+          "candidate_actual_http_count": 30
+        }
+      }
+    }
+  },
+  "budget": {
+    "started": "2026-10-24T18:22:32+08:00",
+    "sha": "3508b3c-dirty",
+    "quick": false,
+    "partial": true,
+    "covers": [
+      "install",
+      "viewer"
+    ],
+    "machine": {
+      "system": "Darwin",
+      "release": "26.3.2",
+      "machine": "arm64",
+      "cpus": 18,
+      "python": "3.12.13",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "load": [
+        4.1,
+        4.6,
+        4.6
+      ]
+    },
+    "load_after": [
+      4.0,
+      4.5,
+      4.6
+    ],
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3770.1875,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.3983,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.3
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5467,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.336
+        },
+        "fps": {
+          "value": 60.3368,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.245,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 4.0,
+          "unit": "ms",
+          "better": "lower",
+          "median": 4,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 132.8,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 558.8
+        },
+        "idle_cpu_pct": {
+          "value": 3.6,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "budgets": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "imports.robotforge_cpu_ms": "not run",
+      "imports.cli_cpu_ms": "not run",
+      "imports.mcp_server_cpu_ms": "not run",
+      "imports.robotforge_heavy": "not run",
+      "imports.cli_heavy": "not run",
+      "imports.mcp_server_heavy": "not run",
+      "physics.dog_idle.steps_per_s": "not run",
+      "physics.dog_idle.controllers_share": "not run",
+      "physics.dog_walk.steps_per_s": "not run",
+      "physics.go2_idle.steps_per_s": "not run",
+      "physics.go2_idle.controllers_share": "not run",
+      "physics.go2_walk.steps_per_s": "not run",
+      "physics.go2_rl_idle.steps_per_s": "not run",
+      "physics.go2_rl_idle.controllers_share": "not run",
+      "physics.humanoid_idle.steps_per_s": "not run",
+      "physics.humanoid_idle.controllers_share": "not run",
+      "physics.arm_pick.steps_per_s": "not run",
+      "physics.warehouse_nav.steps_per_s": "not run",
+      "physics.objects_20.steps_per_s": "not run",
+      "physics.machine.steps_per_s": "not run",
+      "physics.dog_idle.peak_mb": "not run",
+      "physics.go2_walk.peak_mb": "not run",
+      "physics.warehouse_nav.peak_mb": "not run",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok",
+      "mcp.start_s": "not run",
+      "mcp.new_world_ms": "not run",
+      "mcp.add_robot_ms": "not run",
+      "mcp.move_ms": "not run",
+      "mcp.observe_ms": "not run",
+      "mcp.server_rss_mb": "not run",
+      "mcp.idle_cpu_pct": "not run"
+    }
+  },
+  "media": {
+    "baseline": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-pbr/motion-baseline/adam-clip/workflow.mp4",
+      "sha256": "4250fbb00be143bd95a817f682d7d0798d2d109ccaa5a18c820b52059d55980b",
+      "duration_seconds": 5.3,
+      "decoded_frames": 159,
+      "strict_decode_exit_code": 0,
+      "strict_decode_stderr": ""
+    },
+    "candidate": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-pbr/motion-candidate/adam-clip/workflow.mp4",
+      "sha256": "764886738298e2e4fabf4fa5ff9e2fbec618276c1824731ba146d0c64934ffaf",
+      "duration_seconds": 5.3,
+      "decoded_frames": 159,
+      "strict_decode_exit_code": 0,
+      "strict_decode_stderr": ""
+    }
+  },
+  "limits": [
+    "Native MJCF PBR fidelity, not universal aesthetic quality. Cached342XML survey finds one explicit native-PBR original robot; no claim about all URDF or uncached models.",
+    "Registered asset surfaces and exact known RF presets retain priority; native ground materials keep existing ground-style path. Partial native fields get neutral counterpart roughness.5/metalness0; no shininess/specular conversion.",
+    "Same prescribed paused camera path is not pixel-synchronous camera or temporal-improvement certification. Original Adam metallic1/roughness0 values not tuned.",
+    "Corrective manifest scope text retains an inherited five-world description; actual exact scene/view/material sets and receipts prove Adam-only.",
+    "Original preview front projection/pixels fail three controls; summary-v2 retained. Final new Adam comparison uses separately frozen baseline/candidate settled captures; candidate pixels additionally match existing final fixed images. No cause beyond measured projection difference certified.",
+    "22old fixed views test compatibility, not22new aesthetic gains. Camera1e-10 tolerance not bitwise identity; all actual values retained.",
+    "Scoped default suite, not entire default suite. Policy optional skip and unavailable type/security tools reported. Physical phones/Windows/other GPUs unverified.",
+    "Retained sequential timing/loading samples are descriptive, not causal ABBA speed or VRAM proof. Broad shared quality/lightweight/playability goal remains active.",
+    "Inherited helper resource count includes data URLs; final loading fields separate helper_resource_count from actual_http_count. First source/report seal retained as parent; final source archive is source-v2.tar.gz."
+  ],
+  "reporting_corrections": {
+    "parent_summary": "summary-v6.json",
+    "reason": "Inherited helper counts data URLs as HTTP resources. Preserve raw manifests; reclassify response URL schemes offline. Byte deltas stay measured totals; no network rerun.",
+    "rows": [
+      {
+        "scene": "gallery",
+        "mode": "fresh_profile",
+        "version": "baseline",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "gallery",
+        "mode": "fresh_profile",
+        "version": "candidate",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "gallery",
+        "mode": "warm_navigation",
+        "version": "baseline",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "gallery",
+        "mode": "warm_navigation",
+        "version": "candidate",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "kitchen",
+        "mode": "fresh_profile",
+        "version": "baseline",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "kitchen",
+        "mode": "fresh_profile",
+        "version": "candidate",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "kitchen",
+        "mode": "warm_navigation",
+        "version": "baseline",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "kitchen",
+        "mode": "warm_navigation",
+        "version": "candidate",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "wood_props",
+        "mode": "fresh_profile",
+        "version": "baseline",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "wood_props",
+        "mode": "fresh_profile",
+        "version": "candidate",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "wood_props",
+        "mode": "warm_navigation",
+        "version": "baseline",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "wood_props",
+        "mode": "warm_navigation",
+        "version": "candidate",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "park",
+        "mode": "fresh_profile",
+        "version": "baseline",
+        "helper_resource_count": 29,
+        "actual_http_count": 29,
+        "data_resources": 0,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "park",
+        "mode": "fresh_profile",
+        "version": "candidate",
+        "helper_resource_count": 29,
+        "actual_http_count": 29,
+        "data_resources": 0,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "park",
+        "mode": "warm_navigation",
+        "version": "baseline",
+        "helper_resource_count": 29,
+        "actual_http_count": 29,
+        "data_resources": 0,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "park",
+        "mode": "warm_navigation",
+        "version": "candidate",
+        "helper_resource_count": 29,
+        "actual_http_count": 29,
+        "data_resources": 0,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "wood_terrain",
+        "mode": "fresh_profile",
+        "version": "baseline",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "wood_terrain",
+        "mode": "fresh_profile",
+        "version": "candidate",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "wood_terrain",
+        "mode": "warm_navigation",
+        "version": "baseline",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      },
+      {
+        "scene": "wood_terrain",
+        "mode": "warm_navigation",
+        "version": "candidate",
+        "helper_resource_count": 32,
+        "actual_http_count": 30,
+        "data_resources": 2,
+        "data_response_header_bytes": 0
+      }
+    ]
+  }
+}
