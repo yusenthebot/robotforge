@@ -369,6 +369,8 @@ async function applyScene(desc) {
   screenDrive?.clear(false); // the server already replaced the old scene; never stop its new controllers
   const request = ++sceneRequest;
   loadingScene = true;
+  follow = null;
+  if (driveCameraIntent === "follow") driveCameraIntent = "auto";
   renderScreenDrive();
   posedVersion = 0;
   renderedVersion = 0;
@@ -493,6 +495,7 @@ async function installScene(desc, request) {
   firstScene = false;
   wantFrame = false;
   follow = null;
+  if (driveCameraIntent === "follow") driveCameraIntent = "auto";
   tween = null;
   fitWhenPosed = refitRig = null; // asked for the scene this one replaces
   onScene(desc);
@@ -771,6 +774,7 @@ const TWEEN_MS = 450;
 
 function moveCamera(eye, target, animate) {
   follow = null;
+  renderCameraControls();
   if (!animate || reduceMotion) {
     tween = null;
     camera.position.copy(eye);
@@ -1114,6 +1118,8 @@ function connect() {
   };
   ws.onclose = () => {
     screenDrive?.clear(false); // the server's bounded hold expires even when no stop can cross this socket
+    follow = null;
+    if (driveCameraIntent === "follow") driveCameraIntent = "auto";
     sceneRequest++;
     loadingScene = true;
     renderedVersion = 0;
@@ -1206,7 +1212,10 @@ function onScene(desc) {
     const body = o.userData.body;
     if (o.isMesh && body !== undefined && !desc.bodies[body]?.dynamic && !robotOfBody.has(body)) groundMeshes.push(o);
   });
-  if (!robotByName(selected)) selected = (robots.find(canMove) ?? robots[0])?.name ?? null;
+  if (!robotByName(selected)) {
+    selected = (robots.find(canMove) ?? robots[0])?.name ?? null;
+    driveCameraIntent = "auto";
+  }
   ringState = null;
   worldName = desc.world || worldName;
   renderTitle();
@@ -1259,6 +1268,7 @@ function select(name, { focus = false } = {}) {
     selected = name;
     ringState = null;
     follow = null;
+    driveCameraIntent = "auto";
   }
   for (const b of $("robot-list").children) b.setAttribute("aria-pressed", String(b.dataset.robot === selected));
   renderSelection();
@@ -1532,6 +1542,7 @@ function renderDrive() {
 const coarsePointer = window.matchMedia("(any-pointer: coarse)");
 let screenDrivePreference = storageGet("robotforge.screen-drive");
 function renderScreenDrive() {
+  renderCameraControls();
   if (!screenDrive) return;
   const robot = driveTarget();
   const wanted = screenDrivePreference === null ? coarsePointer.matches : screenDrivePreference === "1";
@@ -1540,7 +1551,7 @@ function renderScreenDrive() {
   const ready = Boolean(ws?.readyState === WebSocket.OPEN && !paused && !busy && !document.hidden
     && renderedVersion === sceneDesc?.version && (stateVersion === null || stateVersion === sceneDesc.version));
   $("screen-drive-target").textContent = robot?.name ?? "";
-  $("screen-drive-hint").textContent = t(paused ? "screen_drive_play" : "screen_drive_hold");
+  $("screen-drive-hint").textContent = t(paused ? "screen_drive_play" : driveCameraIntent === "free" ? "screen_drive_free" : "screen_drive_hold");
   screenDrive.update({ target: `${selected}:${sceneDesc?.version}:${stateGeneration}`, show, ready,
     rise: canRise(robot), slide: moveAxes(robot).includes("slide") });
 }
@@ -1643,12 +1654,47 @@ function stopDriving() {
 
 // Follow the driven robot with the camera until the user orbits by hand.
 let follow = null; // { body, last: Vector3, z: smoothed height, t: last update ms }
+let driveCameraIntent = "auto"; // auto on first drive; explicit free view survives input renewals
 const FOLLOW_Z_SECONDS = 0.6; // height follows this slowly: up stairs and hills, not every stride
 const FOLLOW_RECENTER = 1.0; // m: lessons aim a little beside the robot they follow; further off is an accident
 
 function startFollow() {
+  if (!lessonActive() && driveCameraIntent === "free") return;
   startFollowBody(sceneDesc?.bodies.find((b) => b.name.startsWith(`${selected}/`) && b.dynamic)?.id ?? null);
+  if (!lessonActive() && follow) driveCameraIntent = "follow";
+  renderCameraControls();
 }
+
+function freeDriveCamera() {
+  follow = null;
+  tween = null;
+  refitRig = null;
+  if (!lessonActive()) driveCameraIntent = "free";
+  renderScreenDrive();
+}
+
+function renderCameraControls() {
+  const button = $("camera-view"), robot = robotByName(selected);
+  button.hidden = !robot || lessonActive() || creator.active() || selectingObjects;
+  button.disabled = !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version || busy || ws?.readyState !== WebSocket.OPEN;
+  const movable = canMove(robot), active = !!follow && movable;
+  if (movable) button.setAttribute("aria-pressed", String(active));
+  else button.removeAttribute("aria-pressed");
+  button.setAttribute("aria-label", t(movable ? "camera_follow_robot" : "camera_focus_robot", { name: robot?.name ?? "" }));
+  button.title = button.getAttribute("aria-label");
+  $("camera-view-label").textContent = t(movable ? active ? "camera_following" : "camera_follow" : "camera_focus");
+}
+
+$("camera-view").addEventListener("click", () => {
+  if ($("camera-view").hidden || $("camera-view").disabled) return;
+  if (follow && canMove(robotByName(selected))) { freeDriveCamera(); return; }
+  focusRobot(selected);
+  if (canMove(robotByName(selected))) {
+    driveCameraIntent = "follow";
+    startFollowBody(sceneDesc?.bodies.find((b) => b.name.startsWith(`${selected}/`) && b.dynamic)?.id ?? null, { keepTween: true });
+  }
+  renderScreenDrive();
+});
 
 function startFollowBody(body, { keepTween = false } = {}) {
   if (body === null || !bodyNodes[body]) return;
@@ -1677,7 +1723,7 @@ function updateFollow() {
 }
 
 controls.addEventListener("start", () => {
-  follow = null;
+  freeDriveCamera();
   tween = null;
   refitRig = null; // the learner's own view stays
 });
@@ -1905,7 +1951,8 @@ function resetWorld() {
   send({ type: "cmd", cmd: "reset" });
 }
 $("btn-reset").addEventListener("click", resetWorld);
-$("btn-frame").addEventListener("click", () => frameCamera({ animate: true }));
+function viewWholeScene() { freeDriveCamera(); frameCamera({ animate: true }); }
+$("btn-frame").addEventListener("click", viewWholeScene);
 $("btn-record").addEventListener("click", () => (recording ? stopRecording() : startRecording()));
 
 // ---------------------------------------------------------------- recording
@@ -2011,7 +2058,7 @@ window.addEventListener("keydown", (e) => {
   } else if (e.key === ".") {
     send({ type: "cmd", cmd: "step" });
   } else if (e.key === "f" || e.key === "F") {
-    frameCamera({ animate: true });
+    viewWholeScene();
   } else if (e.key === "?") {
     setHelp($("help").hidden);
   } else if (e.key === "Escape") {
@@ -2110,6 +2157,7 @@ $("empty-add").addEventListener("click", () => { setDrawer(true); creator.open()
 function beginCreation() {
   clearObjectSelection();
   stopDriving(); endDrag();
+  freeDriveCamera();
   creationGesture.invalidate();
   placementVersion = sceneDesc.version;
   placementGeneration = stateGeneration;
@@ -2131,7 +2179,7 @@ function cancelCreation(force = false) {
   creationSurface = null; placementPreview.clear();
   canvas.classList.remove("placing"); controls.enabled = true;
   updateEmpty();
-  renderScreenDrive();
+  renderDrive();
   updateUndo();
 }
 
@@ -2191,6 +2239,7 @@ function clearObjectSelection() {
 function beginObjectSelection(entry = null) {
   if (busy || !editableObjects().length || !sceneReadyToDraw() || !Number.isInteger(stateGeneration)) return;
   cancelCreation(); stopDriving(); endDrag();
+  freeDriveCamera();
   placementVersion = sceneDesc.version; placementGeneration = stateGeneration;
   selectingObjects = true; objectSelection = entry;
   creationClickUntil = 0; // An explicit edit-mode choice starts a new deliberate interaction.

@@ -266,6 +266,18 @@ kbd {
 
 .pill[aria-expanded="true"] .chev { transform: rotate(180deg); }
 
+.camera-view svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.camera-view[aria-pressed="true"], .camera-view[aria-pressed="true"]:hover { color: var(--amber-ink); background: var(--amber); border-color: var(--amber); }
+@media (max-width: 520px) {
+  .top, .top-left, .top-actions { gap: 4px; }
+  .top .pill { padding-left: 8px; padding-right: 8px; }
+  .top .learn { width: 34px; padding: 0; justify-content: center; }
+  .top .learn span { display: none; }
+  .camera-view { width: 44px; height: 44px; padding: 0; justify-content: center; }
+  .camera-view span { display: none; }
+}
+@media (max-width: 360px) { .top .count { display: none; } }
+
 /* ---------------------------------------------------------------- drawer */
 
 .drawer {
@@ -657,9 +669,6 @@ input[type="range"]::-moz-range-thumb {
 /* ---------------------------------------------------------------- driving */
 
 .drive {
-  position: fixed;
-  left: var(--gutter);
-  bottom: calc(var(--gutter) + 8px); /* on the dock's middle line, so the two rows of text line up */
   display: flex;
   align-items: center;
   gap: 10px;
@@ -689,7 +698,11 @@ input[type="range"]::-moz-range-thumb {
 
 .drive-speed:empty { display: none; }
 
-.screen-drive { position: fixed; bottom: calc(var(--gutter) + 72px); left: var(--gutter); z-index: 3; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); box-shadow: var(--shadow); max-width: calc(100% - var(--gutter) * 2); }
+.drive-hud { position: fixed; bottom: calc(var(--gutter) + 72px); left: var(--gutter); z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: calc(100% - var(--gutter) * 2); pointer-events: none; }
+.drive-hud > * { pointer-events: auto; }
+.undo-actions { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; }
+.undo-actions:not(:has(button:not([hidden]))) { display: none; }
+.screen-drive { padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); box-shadow: var(--shadow); max-width: 100%; }
 .screen-drive-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .screen-drive-head strong { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .screen-drive-close { min-width: 32px; min-height: 32px; font-size: 20px; border-radius: 8px; }
@@ -705,7 +718,10 @@ input[type="range"]::-moz-range-thumb {
 .screen-drive [data-direction] > span:first-child { font-size: 18px; line-height: 20px; }
 .screen-drive [data-direction][aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); }
 .screen-drive [data-direction]:disabled { opacity: .45; }
-body:has(#screen-drive:not([hidden])) .drive { bottom: calc(var(--gutter) + 280px); }
+.drive-hud .drive { max-width: 100%; }
+@media (min-width: 821px) {
+  .drive-hud:has(#screen-drive[hidden]):not(:has(.undo-actions button:not([hidden]))) { bottom: calc(var(--gutter) + 8px); }
+}
 
 /* ---------------------------------------------------------------- help */
 
@@ -793,7 +809,7 @@ body:has(#screen-drive:not([hidden])) .drive { bottom: calc(var(--gutter) + 280p
 .size-choices { display: flex; gap: 4px; }
 .size-choices .pill { min-height: 36px; padding: 5px 8px; }
 .size-choices [aria-pressed="true"] { border-color: var(--amber); color: var(--amber); }
-.undo-add { position: fixed; bottom: 104px; left: var(--gutter); z-index: 4; background: var(--panel-solid); box-shadow: var(--shadow); }
+.undo-add { background: var(--panel-solid); box-shadow: var(--shadow); }
 #view.placing { cursor: crosshair; }
 
 .spinner {
@@ -858,7 +874,6 @@ body:has(#screen-drive:not([hidden])) .drive { bottom: calc(var(--gutter) + 280p
   .tool span { display: none; }
   .tool { padding: 0 8px; }
   .tool.rec[aria-pressed="true"] span { display: inline; } /* the time recorded so far stays in view */
-  .drive { bottom: calc(var(--gutter) + 72px); }
   .drawer { max-height: calc(100% - var(--gutter) * 2 - 44px - 140px); } /* stop above the drive hint */
   .coach { bottom: calc(var(--gutter) + 128px); }
 }
