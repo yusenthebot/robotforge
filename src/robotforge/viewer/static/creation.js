@@ -76,15 +76,15 @@ export function initCreation({ start, submit, cancel, change }) {
   function begin(entry, kind, title) {
     item = { ...entry, kind }; point = null; sending = false; size = "normal";
     // Authored worlds may contain many full turns; copy the same heading within the request's angle bounds.
-    yaw = kind === "edit" ? entry.yaw : kind === "copy" ? entry.yaw % 360 : 0; session++;
+    yaw = kind === "edit" ? entry.yaw : kind === "copy" || kind === "start" ? entry.yaw % 360 : 0; session++;
     repeat.checked = false; syncRepeat();
-    $("placement-hint").textContent = t(kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
+    $("placement-hint").textContent = t(kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     $("place-rotate").textContent = t("rotate_place", { angle: yaw });
     $("object-placement-controls").hidden = kind === "robot";
-    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy";
-    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit";
-    $("placement-title").textContent = t(kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
+    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start";
+    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start";
+    $("placement-title").textContent = t(kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
     start();
@@ -109,8 +109,10 @@ export function initCreation({ start, submit, cancel, change }) {
   }
   return {
     active: () => item !== null,
-    editing: () => item?.kind === "edit" ? item : null,
+    editing: () => item?.kind === "edit" || item?.kind === "start" ? item : null,
     edit: (entry) => begin(entry, "edit", entry.name),
+    repositionRobot: (entry) => begin(entry, "start", entry.name),
+    heading: () => item?.kind === "start" ? yaw : null,
     duplicate: (entry) => begin(entry, "copy", entry.name),
     session: () => session,
     repeating: () => (item?.kind === "object" || item?.kind === "copy") && repeat.checked,
@@ -119,7 +121,7 @@ export function initCreation({ start, submit, cancel, change }) {
       point = null; $("place-here").disabled = true;
       $("placement-hint").textContent = t("place_next_hint");
     },
-    preview: () => item && item.kind !== "robot" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
+    preview: () => item && item.kind !== "robot" && item.kind !== "start" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
     open() { setOpen(true); $("create-list").querySelector("button")?.focus(); },
     render(entries, editable, busy, objects = []) {
       $("create-section").hidden = !editable || !entries.length;

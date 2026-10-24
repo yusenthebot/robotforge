@@ -374,6 +374,7 @@ async function applyScene(desc) {
   renderScreenDrive();
   posedVersion = 0;
   renderedVersion = 0;
+  renderRobotStart();
   $("loading").hidden = false;
   $("loading").querySelector(".spinner").hidden = false;
   $("loading").querySelector("span[data-i18n]").textContent = t("loading_scene");
@@ -1124,13 +1125,14 @@ function connect() {
     loadingScene = true;
     renderedVersion = 0;
     renderScreenDrive();
+    renderRobotStart();
     setConnected(false);
     for (const p of pending.values()) p.reject(new Error(t("disconnected")));
     pending.clear();
     layoutCatalog = layoutConfirmation = null;
     renderLayouts();
     creationSelection?.reject(new Error(t("disconnected")));
-    lastAddition = lastObjectEdit = null; updateUndo();
+    lastAddition = lastObjectEdit = lastRobotEdit = null; updateUndo();
     cancelCreation(true);
     setTimeout(connect, retryMs);
     retryMs = Math.min(retryMs * 2, 5000);
@@ -1185,6 +1187,7 @@ function onScene(desc) {
   }
   clearObjectSelection();
   if (lastObjectEdit?.version !== desc.version) lastObjectEdit = null;
+  if (lastRobotEdit?.version !== desc.version) lastRobotEdit = null;
   if (lastAddition?.version !== desc.version) lastAddition = null;
   if (creator.active() && !busy) cancelCreation(true);
   robots = desc.robots || [];
@@ -1260,6 +1263,7 @@ function renderRobotList() {
   const n = robots.length || (sceneDesc?.actuators.length ?? 0);
   $("drawer-label").textContent = worldInfo.isWorld || robots.length ? t("robots") : t("joints");
   $("drawer-count").textContent = n ? String(n) : "";
+  renderRobotStart();
 }
 
 function select(name, { focus = false } = {}) {
@@ -1329,6 +1333,7 @@ function renderSelection() {
   renderModes();
   renderDrive();
   sensorsSelect();
+  renderRobotStart();
 }
 
 // ---------------------------------------------------------------- joint sliders
@@ -1449,7 +1454,7 @@ function applyState(s) {
     const changed = stateGeneration !== s.generation;
     if (changed) screenDrive?.clear(false);
     if (stateGeneration !== null && stateGeneration !== s.generation && !busy) {
-      lastAddition = lastObjectEdit = null; cancelCreation(true);
+      lastAddition = lastObjectEdit = lastRobotEdit = null; cancelCreation(true);
     }
     stateGeneration = s.generation; // retain changes during our own edit, then reconcile against its reply
     if (changed && !layoutMutating) {
@@ -1466,6 +1471,7 @@ function applyState(s) {
   }
   paused = s.paused;
   renderScreenDrive();
+  renderRobotStart();
   rtf = s.rtf;
   rotorCommands(s.ctrl, paused);
   behaviors = s.behaviors || [];
@@ -1947,7 +1953,7 @@ $("btn-play").addEventListener("click", togglePlay);
 function resetWorld() {
   stopDriving();
   cancelCreation(true);
-  lastAddition = lastObjectEdit = null; updateUndo();
+  lastAddition = lastObjectEdit = lastRobotEdit = null; updateUndo();
   send({ type: "cmd", cmd: "reset" });
 }
 $("btn-reset").addEventListener("click", resetWorld);
@@ -2094,7 +2100,8 @@ function onReply(msg) {
   pending.delete(msg.id);
   if (msg.ok) waiting.resolve(msg.data);
   else {
-    const error = new Error(msg.code?.startsWith("layout_") ? tOr(msg.code, msg.message) : msg.message);
+    const localized = msg.code?.startsWith("layout_") || msg.code?.startsWith("robot_start_");
+    const error = new Error(localized ? tOr(msg.code, msg.message) : msg.message);
     error.code = msg.code;
     waiting.reject(error);
   }
@@ -2133,6 +2140,7 @@ function setPanelBusy(on) {
   renderEditableObjects();
   renderLayouts();
   renderScreenDrive();
+  renderRobotStart();
   for (const id of ["object-move", "object-copy", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
 }
 
@@ -2140,8 +2148,13 @@ function setPanelBusy(on) {
 
 let placementVersion = 0, placementGeneration = null, creationClickUntil = 0, creationSelection = null;
 let lastAddition = null, creationSurface = null;
-let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null;
+let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null, lastRobotEdit = null;
 const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
+const headingShape = new THREE.Shape();
+headingShape.moveTo(0.19, 0); headingShape.lineTo(0.1, 0.045); headingShape.lineTo(0.1, -0.045); headingShape.closePath();
+const creationHeading = new THREE.Mesh(new THREE.ShapeGeometry(headingShape), creationMarker.material);
+creationHeading.visible = false;
+creationMarker.add(creationHeading);
 creationMarker.visible = false;
 scene3.add(creationMarker);
 
@@ -2208,7 +2221,32 @@ function creationPoint(e) {
   updateCreationPreview();
 }
 
-function updateCreationPreview() { placementPreview.update(creator.preview(), creationSurface); }
+function updateCreationPreview() {
+  placementPreview.update(creator.preview(), creationSurface);
+  const heading = creator.heading();
+  creationHeading.visible = heading !== null;
+  creationMarker.rotation.z = THREE.MathUtils.degToRad(heading ?? 0);
+}
+
+function editableRobotStart() {
+  const info = sceneDesc?.robot_edit;
+  return sceneDesc?.world && !sceneDesc?.lesson && info?.version === sceneDesc.version
+    ? info.robots.find((entry) => entry.name === selected) : null;
+}
+
+function renderRobotStart() {
+  const button = $("robot-start");
+  button.hidden = !editableRobotStart();
+  button.disabled = busy || !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version
+    || stateVersion !== sceneDesc?.version || !Number.isInteger(stateGeneration);
+}
+
+$("robot-start").addEventListener("click", () => {
+  const entry = editableRobotStart();
+  if (!$("robot-start").disabled && entry) {
+    creator.repositionRobot({ ...entry, world_sha256: sceneDesc.robot_edit.world_sha256 });
+  }
+});
 
 function editableObjects() {
   return sceneDesc?.world && !sceneDesc?.lesson && sceneDesc?.object_edit?.version === sceneDesc.version
@@ -2287,19 +2325,20 @@ async function removeSelectedObject() {
   await runChoice($("object-remove"), { type: "world", action: "remove_object", name: entry.name,
     version: placementVersion, generation: placementGeneration, world_sha256: sceneDesc.object_edit.world_sha256 }, {
     done: async (data) => {
-      await waitForCreation(data, true); lastObjectEdit = data.undo_edit; lastAddition = null;
+      await waitForCreation(data, true); lastObjectEdit = data.undo_edit; lastAddition = lastRobotEdit = null;
       clearObjectSelection(); updateUndo(); renderDrive(); toast(t("prop_removed", { name: data.removed })); canvas.focus();
     },
   });
 }
 $("object-remove").addEventListener("click", removeSelectedObject);
 $("undo-edit").addEventListener("click", async () => {
-  if (busy || !lastObjectEdit) return;
+  if (busy || (!lastObjectEdit && !lastRobotEdit)) return;
   stopDriving(); endDrag();
-  await runChoice($("undo-edit"), { type: "world", action: "undo_object_edit", ...lastObjectEdit }, {
+  const robotStart = !!lastRobotEdit;
+  await runChoice($("undo-edit"), { type: "world", action: robotStart ? "undo_robot_start" : "undo_object_edit", ...(lastRobotEdit || lastObjectEdit) }, {
     done: async (data) => {
-      await waitForCreation(data, true); lastObjectEdit = null; updateUndo();
-      toast(t(data.removed ? "prop_removed" : "prop_edit_undone", { name: data.object || data.removed })); canvas.focus();
+      await waitForCreation(data, true); lastObjectEdit = lastRobotEdit = null; updateUndo();
+      toast(t(robotStart ? "robot_start_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed })); canvas.focus();
     },
   });
 });
@@ -2343,6 +2382,7 @@ async function placeEntity(item, pos) {
   creationGesture.invalidate();
   creator.busy(true);
   const payload = item.kind === "robot" ? { action: "add_robot", template: item.name }
+    : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw };
@@ -2352,10 +2392,11 @@ async function placeEntity(item, pos) {
       if (creator.repeating() && !Number.isInteger(data.generation)) {
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
-      await waitForCreation(data, creator.repeating() || item.kind === "edit" || item.kind === "copy");
+      await waitForCreation(data, creator.repeating() || item.kind === "edit" || item.kind === "copy" || item.kind === "start");
       if (placementSession !== creator.session()) return;
       lastAddition = data.undo || null;
       lastObjectEdit = data.undo_edit || null;
+      lastRobotEdit = data.undo_robot_start || null;
       creationClickUntil = performance.now() + 500;
       if (creator.repeating()) {
         if (item.kind === "copy" && (!editableObjects().some((o) => o.name === item.name) || !sceneDesc.object_edit.world_sha256)) {
@@ -2366,7 +2407,7 @@ async function placeEntity(item, pos) {
         creator.next(item.kind === "copy" ? { world_sha256: sceneDesc.object_edit.world_sha256 } : {});
         creationSurface = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
-      toast(t(item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object }));
+      toast(t(item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object }));
       canvas.focus();
     },
   });
@@ -2377,7 +2418,8 @@ async function placeEntity(item, pos) {
 
 function updateUndo() {
   $("undo-add").hidden = !lastAddition || creator.active() || selectingObjects || !!sceneDesc?.lesson;
-  $("undo-edit").hidden = !lastObjectEdit || creator.active() || selectingObjects || !!sceneDesc?.lesson;
+  $("undo-edit").hidden = (!lastObjectEdit && !lastRobotEdit) || creator.active() || selectingObjects || !!sceneDesc?.lesson;
+  $("undo-edit").textContent = t(lastRobotEdit ? "undo_robot_start" : "undo_object_edit");
   $("undo-edit").disabled = busy;
   $("undo-add").disabled = busy;
   $("undo-add").title = lastAddition?.name || "";
@@ -2389,7 +2431,7 @@ $("undo-add").addEventListener("click", async () => {
   await runChoice($("undo-add"), { type: "world", action: "undo_add", token: lastAddition.token, version: lastAddition.version }, {
     done: async (data) => {
       await waitForCreation(data);
-      lastAddition = lastObjectEdit = null; updateUndo();
+      lastAddition = lastObjectEdit = lastRobotEdit = null; updateUndo();
       toast(t("addition_undone", { name: data.removed })); canvas.focus();
     },
   });
@@ -2881,6 +2923,7 @@ function loop() {
     renderedVersion = sceneDesc.version;
     $("loading").hidden = true;
     renderScreenDrive();
+    renderRobotStart();
     updateEmpty();
     resolveCreatedRobot();
   }
@@ -2896,6 +2939,7 @@ function loop() {
 
 canvas.addEventListener("webglcontextlost", () => {
   renderedVersion = 0;
+  renderRobotStart();
   $("loading").hidden = false;
   updateEmpty();
 });
