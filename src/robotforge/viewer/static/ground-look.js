@@ -127,8 +127,8 @@ function surfaceTile(style) {
   return result;
 }
 
-export function groundMaterial(style, color, anisotropy) {
-  const tile = surfaceTile(style);
+export function groundMaterial(style, color, anisotropy, preparedWood = null) {
+  const tile = style === "wood" && preparedWood ? preparedWood : surfaceTile(style);
   const map = new THREE.CanvasTexture(tile.color);
   map.source = tile.colorSource;
   map.colorSpace = THREE.SRGBColorSpace;
@@ -164,6 +164,7 @@ vec2 rfTileSlope() {
         "perturbNormalArb( - vViewPosition, normal, dHdxy_fwd(), faceDirection )",
         "rfMetricBump( - vViewPosition, normal, rfTileSlope(), faceDirection )"));
   };
+  mat.userData.groundSource = style === "wood" && preparedWood ? "natural-oak" : "procedural";
   mat.customProgramCacheKey = () => "rf-ground-metric-v1";
   return mat;
 }
@@ -179,7 +180,55 @@ export function groundPreview(style, rgb, detailed = true) {
   ctx.fillRect(0, 0, 96, 64);
   if (detailed) {
     ctx.globalCompositeOperation = "multiply";
-    ctx.drawImage(surfaceTile(style).color, 0, 0, 96, 64);
+    ctx.drawImage((style === "wood" && naturalWood ? naturalWood : surfaceTile(style)).color, 0, 0, 96, 64);
+    if (style === "wood" && !naturalWood) loadWood().then((tile) => {
+      if (!tile) return;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillRect(0, 0, 96, 64);
+      ctx.globalCompositeOperation = "multiply";
+      ctx.drawImage(tile.color, 0, 0, 96, 64);
+    });
   }
   return canvas;
+}
+
+// Optional local images are prepared before installation. Late work fills only the
+// CPU cache; an installed scene keeps the tile it selected, including its fallback.
+let naturalWood = null, woodPending = null, woodWarned = false;
+
+function woodFallback(reason) {
+  if (!woodWarned) console.warn("robotforge: optional wood texture unavailable; using procedural ground", reason);
+  woodWarned = true;
+  return null;
+}
+
+function loadWood() {
+  if (naturalWood) return Promise.resolve(naturalWood);
+  if (!woodPending) {
+    woodPending = import("./ground-wood.js")
+      .then((module) => module.woodTiles())
+      .then(({ color, detail }) => {
+        naturalWood = { color, detail, colorSource: new THREE.Source(color), detailSource: new THREE.Source(detail) };
+        return naturalWood;
+      })
+      .catch((error) => woodFallback(error?.name || "load"))
+      .finally(() => { woodPending = null; });
+  }
+  return woodPending;
+}
+
+export async function prepareGroundTextures(desc) {
+  const usesWood = desc.geoms.some((geom) => {
+    const look = desc.grounds?.[geom.material];
+    return look && !(geom.type === "plane" && look.pattern === "checker") && groundStyle(geom.material, look) === "wood";
+  });
+  if (!usesWood) return null;
+  let timer;
+  try {
+    return await Promise.race([loadWood(), new Promise((resolve) => {
+      timer = setTimeout(() => resolve(woodFallback("timeout")), 1000);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

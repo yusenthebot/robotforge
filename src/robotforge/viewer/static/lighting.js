@@ -10,6 +10,10 @@ export function createLighting(scene, renderer) {
   hemi.position.set(0, 0, 1);
   const sun = new THREE.DirectionalLight(0xfff6ec, 1.9);
   sun.castShadow = true;
+  // Reuse rigid-world depth until a caster or its framing changes. Sensor pictures
+  // keep their existing global autoUpdate gate and cannot consume this dirty flag.
+  sun.shadow.autoUpdate = false;
+  sun.shadow.needsUpdate = true;
   sun.position.fromArray(KEY_POSITION);
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.up.set(0, 0, 1);
@@ -36,6 +40,9 @@ export function createLighting(scene, renderer) {
   }
 
   function bind(world, nodes = [], desc = {}) {
+    sun.shadow.needsUpdate = true;
+    // These worlds also animate below body transforms; retain their existing redraws.
+    sun.shadow.autoUpdate = !!(desc.rotors?.length || desc.flexes?.length);
     root = world; groups = []; fixed = []; floor = null; fitted = null; fixedReady = false;
     if (!world) return;
     world.updateMatrixWorld(true);
@@ -97,6 +104,7 @@ export function createLighting(scene, renderer) {
       fixedReady = true;
     }
     if (!force && !changedFixed && fitted && groups.every((g) => !g.flex && g.transform.equals(g.node.matrixWorld))) return;
+    sun.shadow.needsUpdate = true; // A caster can move without changing the fitted bounds.
     bounds.copy(staticBounds);
     for (const g of groups) {
       if (g.flex) {
@@ -121,5 +129,13 @@ export function createLighting(scene, renderer) {
     sun.shadow.bias = next.bias;
   }
 
-  return { sun, bind, update, state: () => fitted };
+  function restore() {
+    // The studio is GPU-generated; unlike image textures it cannot re-upload CPU pixels.
+    const previous = scene.environment;
+    scene.environment = studioEnvironment(renderer);
+    previous?.dispose();
+    sun.shadow.needsUpdate = true;
+  }
+
+  return { sun, bind, update, restore, state: () => fitted };
 }
