@@ -29,6 +29,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from robotforge.flow_board import FlowBoard
 from robotforge.sim.session import SimSession
 from robotforge.viewer import scene
+from robotforge.viewer.held_drive import DriveHolds, HeldDrive, hold_seconds
 
 log = logging.getLogger(__name__)
 
@@ -112,7 +113,8 @@ class ViewerHub:
         self._scene_msg: dict | None = None
         self._announced_version = session.version
         # Hooks the playground installs: extra message types (e.g. teleop) and extra scene and state info.
-        self.handlers: dict[str, Callable[[dict[str, Any]], None]] = {}
+        self.handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
+        self.drive_holds = DriveHolds(session)
         # Messages whose work takes a while (loading a scene, setting up MPC): run in a worker thread so
         # the stream keeps flowing, then answered with {"type": "reply", "id", "ok", "data" | "message"}.
         self.slow_handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
@@ -209,6 +211,7 @@ class ViewerHub:
         s = self.session
         return {
             "type": "state",
+            "version": s.version,
             "paused": s.paused,
             "generation": s.generation,
             "speed": s.speed,
@@ -228,13 +231,18 @@ class ViewerHub:
 
     # ---- client messages ------------------------------------------------------------
 
-    def handle(self, msg: dict[str, Any]) -> None:
+    def handle(self, msg: dict[str, Any], owner: WebSocket | None = None) -> None:
         with self.session.lock:
+            seconds = hold_seconds(msg, owner)
+            if seconds is not None and owner not in self.clients:
+                raise ValueError("hold_ms requires a connected viewer")
             if msg.get("type") in {"ctrl", "teleop", "teleop_arm"}:
                 self.session.execution.require_idle()
-            self._handle(msg)
+            result = self._handle(msg)
+            if seconds is not None and isinstance(result, HeldDrive):
+                self.drive_holds.keep(owner, result, seconds)
 
-    def _handle(self, msg: dict[str, Any]) -> None:
+    def _handle(self, msg: dict[str, Any]) -> Any:
         s = self.session
         kind = msg.get("type")
         if kind == "cmd":
@@ -262,7 +270,7 @@ class ViewerHub:
         elif kind == "drag_end":
             s.end_drag()
         elif kind in self.handlers:
-            self.handlers[kind](msg)
+            return self.handlers[kind](msg)
         else:
             raise ValueError(f"unknown message type {kind!r}")
 
@@ -312,7 +320,7 @@ class ViewerHub:
             except (WebSocketDisconnect, RuntimeError):
                 dead.append(ws)
         for ws in dead:
-            self.clients.discard(ws)
+            self.forget(ws)
 
     def seen(self, ws: WebSocket) -> None:
         """The viewer took in one more pose frame."""
@@ -322,6 +330,7 @@ class ViewerHub:
         self.clients.discard(ws)
         self._sent.pop(ws, None)
         self._seen.pop(ws, None)
+        self.drive_holds.forget(ws)
 
     async def _send_poses(self, data: bytes) -> None:
         dead = []
@@ -356,6 +365,7 @@ class ViewerHub:
         while True:
             tick_start = time.perf_counter()
             try:
+                self.drive_holds.expire(tick_start)
                 # The real-time clock only runs while someone is watching, so an agent's
                 # world does not drift between tool calls.
                 if self.clients and self.session.clock_owner is None:
@@ -445,7 +455,7 @@ def create_app(hub: ViewerHub) -> Starlette:
                     if isinstance(msg, dict) and msg.get("type") == "seen":
                         hub.seen(ws)
                     elif not hub.start_slow(ws, msg):
-                        hub.handle(msg)
+                        hub.handle(msg, ws)
                 except (ValueError, KeyError, IndexError, TypeError) as exc:
                     await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
         except WebSocketDisconnect:

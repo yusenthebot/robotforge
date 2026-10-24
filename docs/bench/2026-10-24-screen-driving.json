@@ -1,0 +1,954 @@
+{
+  "baseline_commit": "fc4f6074282208f2dc90b77f10dae1a74f169627",
+  "baseline_runtime_sha256": "b6a2e8891de433c55e899b0ce9cf0886bdbc9a1c9848322724b8af3c03d347f6",
+  "runtime_sha256": "04e265220deedbac623587b7610a34b7b102fa760b79cce9e4bd1ab296505779",
+  "checks": {
+    "frozen570": true,
+    "runtime": true,
+    "stages": true,
+    "source_baseline": true,
+    "source_candidate": true,
+    "gallery_scene": true,
+    "gallery_frozen": true,
+    "gallery_errors": true,
+    "gallery_far_pixels": true,
+    "gallery_far_png": true,
+    "gallery_far_resources": true,
+    "gallery_far_camera": true,
+    "gallery_far_gl": true,
+    "gallery_near_pixels": true,
+    "gallery_near_png": true,
+    "gallery_near_resources": true,
+    "gallery_near_camera": true,
+    "gallery_near_gl": true,
+    "gallery_low_pixels": true,
+    "gallery_low_png": true,
+    "gallery_low_resources": true,
+    "gallery_low_camera": true,
+    "gallery_low_gl": true,
+    "kitchen_scene": true,
+    "kitchen_frozen": true,
+    "kitchen_errors": true,
+    "kitchen_far_pixels": true,
+    "kitchen_far_png": true,
+    "kitchen_far_resources": true,
+    "kitchen_far_camera": true,
+    "kitchen_far_gl": true,
+    "kitchen_near_pixels": true,
+    "kitchen_near_png": true,
+    "kitchen_near_resources": true,
+    "kitchen_near_camera": true,
+    "kitchen_near_gl": true,
+    "kitchen_low_pixels": true,
+    "kitchen_low_png": true,
+    "kitchen_low_resources": true,
+    "kitchen_low_camera": true,
+    "kitchen_low_gl": true,
+    "park_scene": true,
+    "park_frozen": true,
+    "park_errors": true,
+    "park_far_pixels": true,
+    "park_far_png": true,
+    "park_far_resources": true,
+    "park_far_camera": true,
+    "park_far_gl": true,
+    "park_near_pixels": true,
+    "park_near_png": true,
+    "park_near_resources": true,
+    "park_near_camera": true,
+    "park_near_gl": true,
+    "park_low_pixels": true,
+    "park_low_png": true,
+    "park_low_resources": true,
+    "park_low_camera": true,
+    "park_low_gl": true,
+    "park_bench_detail_pixels": true,
+    "park_bench_detail_png": true,
+    "park_bench_detail_resources": true,
+    "park_bench_detail_camera": true,
+    "park_bench_detail_gl": true,
+    "park_bench_grazing_pixels": true,
+    "park_bench_grazing_png": true,
+    "park_bench_grazing_resources": true,
+    "park_bench_grazing_camera": true,
+    "park_bench_grazing_gl": true,
+    "wood_props_scene": true,
+    "wood_props_frozen": true,
+    "wood_props_errors": true,
+    "wood_props_near_pixels": true,
+    "wood_props_near_png": true,
+    "wood_props_near_resources": true,
+    "wood_props_near_camera": true,
+    "wood_props_near_gl": true,
+    "wood_props_table_top_pixels": true,
+    "wood_props_table_top_png": true,
+    "wood_props_table_top_resources": true,
+    "wood_props_table_top_camera": true,
+    "wood_props_table_top_gl": true,
+    "wood_props_table_detail_pixels": true,
+    "wood_props_table_detail_png": true,
+    "wood_props_table_detail_resources": true,
+    "wood_props_table_detail_camera": true,
+    "wood_props_table_detail_gl": true,
+    "wood_props_table_grazing_pixels": true,
+    "wood_props_table_grazing_png": true,
+    "wood_props_table_grazing_resources": true,
+    "wood_props_table_grazing_camera": true,
+    "wood_props_table_grazing_gl": true,
+    "wood_props_floor_detail_pixels": true,
+    "wood_props_floor_detail_png": true,
+    "wood_props_floor_detail_resources": true,
+    "wood_props_floor_detail_camera": true,
+    "wood_props_floor_detail_gl": true,
+    "wood_props_floor_grazing_pixels": true,
+    "wood_props_floor_grazing_png": true,
+    "wood_props_floor_grazing_resources": true,
+    "wood_props_floor_grazing_camera": true,
+    "wood_props_floor_grazing_gl": true,
+    "wheel_source_exact": true,
+    "wheel_new_files": true,
+    "focused-default_distinct": true,
+    "focused-default_passed": true,
+    "browser-full_distinct": true,
+    "browser-full_passed": true,
+    "slow-assets-sensors_distinct": true,
+    "slow-assets-sensors_passed": true,
+    "budget11": true,
+    "video_baseline": true,
+    "video_phone": true,
+    "native_phone": true,
+    "contact_phone": true,
+    "video_desktop": true,
+    "native_desktop": true,
+    "contact_desktop": true,
+    "lease_probe": true
+  },
+  "counts": {
+    "focused-default": {
+      "passed": 1000,
+      "skipped": 1,
+      "failed": 0
+    },
+    "browser-full": {
+      "passed": 151,
+      "skipped": 0,
+      "failed": 0
+    },
+    "slow-assets-sensors": {
+      "passed": 8,
+      "skipped": 0,
+      "failed": 0
+    }
+  },
+  "distinct_pytest_cases": 1159,
+  "fixed_views": 17,
+  "observations": {
+    "gallery": {
+      "chrome_rss_mib": [
+        1989.125,
+        1999.359375
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            334.5,
+            342.69999998807907
+          ],
+          "http_bytes": [
+            30499075,
+            30511132
+          ],
+          "http_requests": [
+            28,
+            29
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            183.40000000596046,
+            211.59999999403954
+          ],
+          "http_bytes": [
+            29222369,
+            29224581
+          ],
+          "http_requests": [
+            28,
+            29
+          ]
+        }
+      },
+      "views": {
+        "far": {
+          "draw_median_ms": [
+            3.800000011920929,
+            2.6500000059604645
+          ],
+          "draw_p95_reported_ms": [
+            4.4000000059604645,
+            3.4000000059604645
+          ],
+          "fps": [
+            59.999999999999986,
+            60.00393468424159
+          ]
+        },
+        "near": {
+          "draw_median_ms": [
+            2.699999988079071,
+            2.8499999940395355
+          ],
+          "draw_p95_reported_ms": [
+            4.0999999940395355,
+            4.9000000059604645
+          ],
+          "fps": [
+            59.998032851381936,
+            59.99803285138191
+          ]
+        },
+        "low": {
+          "draw_median_ms": [
+            4.0,
+            3.9000000059604645
+          ],
+          "draw_p95_reported_ms": [
+            4.799999982118607,
+            4.5
+          ],
+          "fps": [
+            60,
+            60
+          ]
+        }
+      }
+    },
+    "kitchen": {
+      "chrome_rss_mib": [
+        1870.71875,
+        1882.5625
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            297.30000001192093,
+            304.30000001192093
+          ],
+          "http_bytes": [
+            4109202,
+            4121259
+          ],
+          "http_requests": [
+            28,
+            29
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            182.59999999403954,
+            182.30000001192093
+          ],
+          "http_bytes": [
+            2832496,
+            2834708
+          ],
+          "http_requests": [
+            28,
+            29
+          ]
+        }
+      },
+      "views": {
+        "far": {
+          "draw_median_ms": [
+            2.2999999970197678,
+            2.4000000059604645
+          ],
+          "draw_p95_reported_ms": [
+            2.899999976158142,
+            2.9000000059604645
+          ],
+          "fps": [
+            60.00983767830793,
+            59.999999999999986
+          ]
+        },
+        "near": {
+          "draw_median_ms": [
+            1.9000000059604645,
+            1.2000000029802322
+          ],
+          "draw_p95_reported_ms": [
+            2.4000000059604645,
+            2.100000023841858
+          ],
+          "fps": [
+            60,
+            60.00393468424159
+          ]
+        },
+        "low": {
+          "draw_median_ms": [
+            2.399999976158142,
+            2.300000011920929
+          ],
+          "draw_p95_reported_ms": [
+            3,
+            2.7999999821186066
+          ],
+          "fps": [
+            60,
+            60
+          ]
+        }
+      }
+    },
+    "park": {
+      "chrome_rss_mib": [
+        1970.125,
+        1974.125
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            342.59999999403954,
+            375.80000001192093
+          ],
+          "http_bytes": [
+            18709759,
+            18721816
+          ],
+          "http_requests": [
+            28,
+            29
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            222.89999997615814,
+            241.89999997615814
+          ],
+          "http_bytes": [
+            17433053,
+            17435265
+          ],
+          "http_requests": [
+            28,
+            29
+          ]
+        }
+      },
+      "views": {
+        "far": {
+          "draw_median_ms": [
+            3.199999988079071,
+            1.300000011920929
+          ],
+          "draw_p95_reported_ms": [
+            3.699999988079071,
+            2.699999988079071
+          ],
+          "fps": [
+            60,
+            60.00393468424158
+          ]
+        },
+        "near": {
+          "draw_median_ms": [
+            1.4000000059604645,
+            3.1000000089406967
+          ],
+          "draw_p95_reported_ms": [
+            2.5999999940395355,
+            3.9000000059604645
+          ],
+          "fps": [
+            59.99400059994001,
+            59
+          ]
+        },
+        "low": {
+          "draw_median_ms": [
+            2.9000000059604645,
+            3.0
+          ],
+          "draw_p95_reported_ms": [
+            3.600000023841858,
+            3.4000000059604645
+          ],
+          "fps": [
+            60.00983767830792,
+            60
+          ]
+        },
+        "bench_detail": {
+          "draw_median_ms": [
+            3.0999999940395355,
+            3.4500000029802322
+          ],
+          "draw_p95_reported_ms": [
+            4,
+            4.200000017881393
+          ],
+          "fps": [
+            60,
+            60
+          ]
+        },
+        "bench_grazing": {
+          "draw_median_ms": [
+            2.5999999940395355,
+            2.699999988079071
+          ],
+          "draw_p95_reported_ms": [
+            3.199999988079071,
+            3.300000011920929
+          ],
+          "fps": [
+            60.009837678307974,
+            59.998032851381936
+          ]
+        }
+      }
+    },
+    "wood_props": {
+      "chrome_rss_mib": [
+        1825.375,
+        1821.875
+      ],
+      "navigation": {
+        "fresh_profile": {
+          "first_frame_ms": [
+            180.40000000596046,
+            191.30000001192093
+          ],
+          "http_bytes": [
+            1476881,
+            1488938
+          ],
+          "http_requests": [
+            28,
+            29
+          ]
+        },
+        "warm_navigation": {
+          "first_frame_ms": [
+            114.19999998807907,
+            118.5
+          ],
+          "http_bytes": [
+            200175,
+            202387
+          ],
+          "http_requests": [
+            28,
+            29
+          ]
+        }
+      },
+      "views": {
+        "near": {
+          "draw_median_ms": [
+            1.5,
+            1.5
+          ],
+          "draw_p95_reported_ms": [
+            2.800000011920929,
+            2.2999999821186066
+          ],
+          "fps": [
+            60,
+            60.00393468424158
+          ]
+        },
+        "table_top": {
+          "draw_median_ms": [
+            1.300000011920929,
+            1.2999999821186066
+          ],
+          "draw_p95_reported_ms": [
+            1.7999999821186066,
+            1.9000000059604645
+          ],
+          "fps": [
+            60.00393468424159,
+            60
+          ]
+        },
+        "table_detail": {
+          "draw_median_ms": [
+            1.0999999940395355,
+            1.5
+          ],
+          "draw_p95_reported_ms": [
+            2.0999999940395355,
+            2.199999988079071
+          ],
+          "fps": [
+            60,
+            60.00393468424162
+          ]
+        },
+        "table_grazing": {
+          "draw_median_ms": [
+            1.699999988079071,
+            1.899999976158142
+          ],
+          "draw_p95_reported_ms": [
+            2.5,
+            2.699999988079071
+          ],
+          "fps": [
+            60.00393468424157,
+            60
+          ]
+        },
+        "floor_detail": {
+          "draw_median_ms": [
+            1.300000011920929,
+            1.5499999970197678
+          ],
+          "draw_p95_reported_ms": [
+            2,
+            2
+          ],
+          "fps": [
+            60,
+            60
+          ]
+        },
+        "floor_grazing": {
+          "draw_median_ms": [
+            1.5999999940395355,
+            1.5
+          ],
+          "draw_p95_reported_ms": [
+            2.199999988079071,
+            2.199999988079071
+          ],
+          "fps": [
+            60,
+            60
+          ]
+        }
+      }
+    }
+  },
+  "wheel": {
+    "bytes": 3763055,
+    "delta_bytes": 5335,
+    "package_files": 392
+  },
+  "budget": {
+    "checks": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "imports.robotforge_cpu_ms": "not run",
+      "imports.cli_cpu_ms": "not run",
+      "imports.mcp_server_cpu_ms": "not run",
+      "imports.robotforge_heavy": "not run",
+      "imports.cli_heavy": "not run",
+      "imports.mcp_server_heavy": "not run",
+      "physics.dog_idle.steps_per_s": "not run",
+      "physics.dog_idle.controllers_share": "not run",
+      "physics.dog_walk.steps_per_s": "not run",
+      "physics.go2_idle.steps_per_s": "not run",
+      "physics.go2_idle.controllers_share": "not run",
+      "physics.go2_walk.steps_per_s": "not run",
+      "physics.go2_rl_idle.steps_per_s": "not run",
+      "physics.go2_rl_idle.controllers_share": "not run",
+      "physics.humanoid_idle.steps_per_s": "not run",
+      "physics.humanoid_idle.controllers_share": "not run",
+      "physics.arm_pick.steps_per_s": "not run",
+      "physics.warehouse_nav.steps_per_s": "not run",
+      "physics.objects_20.steps_per_s": "not run",
+      "physics.machine.steps_per_s": "not run",
+      "physics.dog_idle.peak_mb": "not run",
+      "physics.go2_walk.peak_mb": "not run",
+      "physics.warehouse_nav.peak_mb": "not run",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok",
+      "mcp.start_s": "not run",
+      "mcp.new_world_ms": "not run",
+      "mcp.add_robot_ms": "not run",
+      "mcp.move_ms": "not run",
+      "mcp.observe_ms": "not run",
+      "mcp.server_rss_mb": "not run",
+      "mcp.idle_cpu_pct": "not run"
+    },
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3674.8584,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.2564,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.2
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.4909,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.309
+        },
+        "fps": {
+          "value": 60.097,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.9,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.9000000059604645,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1269,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 4.0,
+          "unit": "ms",
+          "better": "lower",
+          "median": 4,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 132.5,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 557.4
+        },
+        "idle_cpu_pct": {
+          "value": 5.4,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    }
+  },
+  "videos": {
+    "baseline": {
+      "media": {
+        "source_sha256": "b6a2e8891de433c55e899b0ce9cf0886bdbc9a1c9848322724b8af3c03d347f6",
+        "video_sha256": "16755411ae7f4074cc9857635f5f8ae45f0a08053591855a748d5ebee2032534",
+        "bytes": 23995,
+        "full_decode_passed": true,
+        "probe": {
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 390,
+              "height": 844,
+              "r_frame_rate": "30/1",
+              "nb_frames": "96"
+            }
+          ],
+          "format": {
+            "duration": "3.200000"
+          }
+        },
+        "raw_frames": 187,
+        "raw_timestamp_span_seconds": 3.097790002822876,
+        "sample_times_seconds": [
+          0.064,
+          0.576,
+          1.2160000000000002,
+          1.7600000000000002,
+          2.304,
+          3.04
+        ],
+        "sheet": "decoded-contact.jpg",
+        "scope": "All encoded frames fully decoded; six deterministic decoded frames sampled for visual inspection. This does not certify every animation frame visually."
+      },
+      "contacts": 0,
+      "contact_times": [],
+      "native_input_count": 4
+    },
+    "phone": {
+      "media": {
+        "source_sha256": "04e265220deedbac623587b7610a34b7b102fa760b79cce9e4bd1ab296505779",
+        "video_sha256": "1db87422a0095b2fa0076d1063e649377be8ed622883d23f4a842efb7210bc2c",
+        "bytes": 200282,
+        "full_decode_passed": true,
+        "probe": {
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 390,
+              "height": 844,
+              "r_frame_rate": "30/1",
+              "nb_frames": "227"
+            }
+          ],
+          "format": {
+            "duration": "7.566667"
+          }
+        },
+        "raw_frames": 444,
+        "raw_timestamp_span_seconds": 7.430992841720581,
+        "sample_times_seconds": [
+          0.15133334,
+          1.36200006,
+          2.87533346,
+          4.1616668500000005,
+          5.44800024,
+          7.18833365
+        ],
+        "sheet": "decoded-contact.jpg",
+        "scope": "All encoded frames fully decoded; six deterministic decoded frames sampled for visual inspection. This does not certify every animation frame visually."
+      },
+      "contacts": 5,
+      "contact_times": [
+        2.893999999999903,
+        2.929999999999899,
+        2.9859999999998927,
+        3.0239999999998886,
+        3.0599999999998846
+      ],
+      "native_input_count": 14
+    },
+    "desktop": {
+      "media": {
+        "source_sha256": "04e265220deedbac623587b7610a34b7b102fa760b79cce9e4bd1ab296505779",
+        "video_sha256": "dd62c6cc238bbe811c7f1c1b526f8fc0d3b58b613465de2d29694972ae89938a",
+        "bytes": 450971,
+        "full_decode_passed": true,
+        "probe": {
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 1280,
+              "height": 800,
+              "r_frame_rate": "30/1",
+              "nb_frames": "226"
+            }
+          ],
+          "format": {
+            "duration": "7.533333"
+          }
+        },
+        "raw_frames": 441,
+        "raw_timestamp_span_seconds": 7.399249076843262,
+        "sample_times_seconds": [
+          0.15066666,
+          1.35599994,
+          2.8626665399999998,
+          4.14333315,
+          5.42399976,
+          7.156666349999999
+        ],
+        "sheet": "decoded-contact.jpg",
+        "scope": "All encoded frames fully decoded; six deterministic decoded frames sampled for visual inspection. This does not certify every animation frame visually."
+      },
+      "contacts": 5,
+      "contact_times": [
+        3.0959999999998806,
+        3.1519999999998745,
+        3.1899999999998703,
+        3.2259999999998663,
+        3.263999999999862
+      ],
+      "native_input_count": 18
+    }
+  },
+  "lease_probe": {
+    "source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "fc4f6074282208f2dc90b77f10dae1a74f169627",
+      "git_dirty": true,
+      "active_source_sha256": "04e265220deedbac623587b7610a34b7b102fa760b79cce9e4bd1ab296505779",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "scope": "Actual local Starlette WebSockets and normal ViewerHub.run wall clock. Captures commanded speeds, not instant physical rest. No fake clock, direct expire(), physics stepping or controller replacement.",
+    "no_renewal": {
+      "nominal_ms": 250,
+      "observed_zero_ms": 275.53725001052953,
+      "initial_position": [
+        0.0,
+        0.0,
+        0.034
+      ],
+      "final_position": [
+        0.049,
+        0.0,
+        0.035
+      ]
+    },
+    "old_owner_disconnect_preserves_new": true,
+    "latest_owner_disconnect_zero_ms": 1.637542009120807,
+    "expiry_while_paused": {
+      "time_before": 0.5220000000000004,
+      "time_after": 0.5220000000000004,
+      "zero": true
+    },
+    "legacy_disconnect_semantics_preserved": true,
+    "source_after": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "fc4f6074282208f2dc90b77f10dae1a74f169627",
+      "git_dirty": true,
+      "active_source_sha256": "04e265220deedbac623587b7610a34b7b102fa760b79cce9e4bd1ab296505779",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "passed": true
+  },
+  "limits": [
+    "Focused default suite only; complete default suite not rerun.",
+    "mypy, pyright, bandit and pip-audit unavailable; no new tools installed.",
+    "Single sequential fixed-scene baseline/candidate sample, not ABBA; timings mixed and RSS is not VRAM.",
+    "Fixed images are paused; motion evidence is separate native UI driving video.",
+    "Chrome phone touch emulation on macOS, not physical phones or Windows.",
+    "Baseline video demonstrates absent controls, not equivalent driving task time.",
+    "Five exact-owner positive-force contact times per candidate video; no individual manipulation success tuning.",
+    "Full media decode plus six visually inspected frames per video, not every-frame visual certification.",
+    "One unchanged install/viewer budget run; other project budget groups not run.",
+    "Broad visual quality and playability goal remains active."
+  ]
+}

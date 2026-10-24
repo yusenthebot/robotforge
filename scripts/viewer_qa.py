@@ -82,7 +82,7 @@ LINT = r"""
     return parts.join(" ");
   };
   const SURFACES = ["#learn-panel", "#lesson-panel", "#lesson-plots", "#world-panel", "#drawer", "#help", ".dock",
-    "#drive", "#coach", "#toast", "#banner", "#empty", ".top .title", "#learn-toggle", "#world-toggle",
+    "#drive", "#screen-drive", "#coach", "#toast", "#banner", "#empty", ".top .title", "#learn-toggle", "#world-toggle",
     "#drawer-toggle", "#help-toggle"];
   const surfaces = [];
   for (const s of SURFACES) {
