@@ -1,5 +1,14 @@
 # progress
 
+## Round70: shared shadow reuse and actual context recovery (2026-10-24)
+
+Rigid-world depth caching preserves actual pixels and refreshes on caster/bind/context changes; rotor/flex and sensor boundaries keep their original behavior.
+Actual context loss exposed an older GPU studio-environment loss; regeneration restores the same RGB across two loss/restore cycles.
+1459distinct pytest passes,7framework,source/freshlockedwheel60tool smoke,5models exact,22pixel-exact/projection-controlled views; one unchanged original11/11install/viewer budget.
+GL draws drop54.1percent in the fixed40sample/view loop; timings/loading remain mixed, so no universal speedup claim.
+Sevenoriginal strictlydecoded videos include native desktop drive/contact/reverse/turn/release/pause/reset; see [report](docs/bench/2026-10-24-shadow-cache.md).
+Round69failed budget and all development/harness failures retained; broad shared-material and creative-play goal remains active.
+
 ## Round69: natural wood ground within bounded resource cost (2026-10-24)
 
 Selected shared512colour/256detail oak images after real256/512 gallery/kitchen/park/floor screening.

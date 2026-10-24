@@ -51,6 +51,7 @@ controls.dampingFactor = 0.12;
 
 const lighting = createLighting(scene3, renderer);
 const { sun } = lighting;
+canvas.addEventListener("webglcontextrestored", () => lighting.restore());
 
 function makeGradientTexture(top, bottom) {
   const c = document.createElement("canvas");
