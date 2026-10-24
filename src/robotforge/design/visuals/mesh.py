@@ -345,7 +345,38 @@ def rounded_box(hx: float, hy: float, hz: float, radius: float, segments: int = 
         inset = rb * (1 - math.sin(a))
         z = (hz - rb) + rb * math.cos(a)
         rings.append(at_z(rounded_rect(hx - inset, hy - inset, max(rc - inset, 1e-5), per), z))
-    return loft(rings)
+    mesh = loft(rings)
+    # Area-weighted triangle normals lean into the bevel and interpolate that
+    # lean across an entire flat side. Use the rounded surface's tangents instead,
+    # keeping the existing vertices, caps, topology and collision envelope.
+    phi = np.concatenate([np.linspace(k * math.pi / 2, (k + 1) * math.pi / 2, per + 1) for k in range(4)])
+    cos_phi, sin_phi = np.cos(phi), np.sin(phi)
+    sx = np.repeat([1, -1, -1, 1], per + 1)
+    sy = np.repeat([1, 1, -1, -1], per + 1)
+    normals = mesh.normals.copy()
+    offset = 0
+    for sign, arc in ((-1, angles), (1, angles[::-1])):
+        for a in arc:
+            inset = rb * (1 - math.sin(a))
+            r = max(min(rc - inset, hx - inset, hy - inset), 1e-5)
+            zfactor = np.ones_like(phi)
+            if r <= 1e-5:
+                # A smaller corner can hit rounded_rect's radius/center clamps.
+                # Then its radius is constant and only unclamped centers move.
+                zfactor = sx * cos_phi * (hx - inset - r > 0) + sy * sin_phi * (hy - inset - r > 0)
+            row = np.column_stack([math.sin(a) * cos_phi, math.sin(a) * sin_phi, sign * math.cos(a) * zfactor])
+            length = np.linalg.norm(row, axis=1, keepdims=True)
+            end = offset + len(phi)
+            normals[offset:end] = np.where(length > _EPS, row / np.maximum(length, _EPS), normals[offset:end])
+            offset = end
+    # Position keys can merge nearly coincident epsilon-scale points as well as
+    # exact wrap seams. Preserve their shared-normal contract and singular fallback.
+    acc = np.zeros((int(mesh.keys.max()) + 1, 3))
+    np.add.at(acc, mesh.keys, normals)
+    shared = acc[mesh.keys]
+    length = np.linalg.norm(shared, axis=1, keepdims=True)
+    normals = np.where(length > _EPS, shared / np.maximum(length, _EPS), mesh.normals)
+    return Mesh(mesh.vertices, normals, mesh.faces, mesh.keys)
 
 
 @cached
