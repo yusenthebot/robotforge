@@ -1,5 +1,12 @@
 # progress
 
+## Round71: camera intent and shared driving HUD (2026-10-24)
+
+Find/Follow takes one action; manual free view survives sustained controls. Real phone Undo obstruction and stale post-build keyboard hint fixed with normal HUD flow/shared refresh.
+1478distinct pytest passes(19new),7framework,source/freshlockedwheel60tool smoke,5models exact,22pixel/projection/resource/draw controls exact.
+Four original desktop/emulated-phone build/drive/save/restore/reload/replay recordings strictly decode;24sampled decoded frames inspected.
+One unchanged new-source budget11/11, acceptancePASS; prior9/11failure and raw attempts retained, no relaxation or replacement. [Report](docs/bench/2026-10-24-driving-camera-hud.md). Broad goal active.
+
 ## Round70: shared shadow reuse and actual context recovery (2026-10-24)
 
 Rigid-world depth caching preserves actual pixels and refreshes on caster/bind/context changes; rotor/flex and sensor boundaries keep their original behavior.
