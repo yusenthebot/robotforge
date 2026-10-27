@@ -20,7 +20,7 @@ robotforge 把机器人模型、场景、传感器与控制放进同一个本地
 - **按名字加载模型。** 精选库包括宇树 Go2、波士顿动力 Spot、ANYmal C、Franka Panda、UR5e、AgileX PiPER、宇树 G1 和 Booster T1，还有更大的[开源机器人目录](docs/CATALOGUE.md)。
 - **导入自己的模型。** 支持 URDF、xacro、MJCF 和网格，提供导入体检报告；世界可导出为带网格的 MJCF，单台机器人可导出为 MJCF 或 URDF。保留执行器请使用 MJCF（[导入与导出](docs/EXTENDING.md)）。
 - **自由组合。** 在已有模型上挂载机械臂、夹爪和传感器，检查质量、平衡与够取范围；需要新结构时，也能从零件搭建（[拼装指南](docs/BUILDER.md)）。
-- **搭建场景并试玩。** 在仓库、公园和不同地形中驾驶，用塑料、木材或钢搭建道具、近看细节并复制配置，调整机器人起点与朝向，保存布局后恢复重玩（[创造玩法](docs/CREATIVE_PLAY.md)、[场景](docs/SCENES.md)）。
+- **搭建场景并试玩。** 在仓库和公园中驾驶，组合局部坡道与台阶，用塑料、木材或钢搭建道具并近看细节，调整机器人起点与朝向，保存布局后恢复重玩（[创造玩法](docs/CREATIVE_PLAY.md)、[场景](docs/SCENES.md)）。
 - **看见传感器读数。** 查看相机、深度、分割、激光雷达、IMU 和接触信息，探索建图、定位与导航（[传感器](docs/SENSORS.md)、[感知](docs/PERCEPTION.md)）。
 - **控制、对比和扩展。** 使用键盘、手柄、脚本和插件，在共享任务与实验记录下比较控制器或训练策略；PPO、SAC 使用可选的 `rl` 依赖（[算法](docs/ALGORITHMS.md)、[训练](docs/TRAINING.md)、[插件](docs/EXTENDING.md)）。
 

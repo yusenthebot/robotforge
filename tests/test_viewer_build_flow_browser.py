@@ -313,6 +313,8 @@ def test_plain_model_build_links_to_maps_and_enables_creation_after_real_map_loa
         await click(tab, '[data-tab="objects"]')
         assert not await tab.eval("document.getElementById('build-pick-map').hidden")
         assert await tab.eval("document.getElementById('build-add-robot').hidden")
+        assert await tab.eval("document.getElementById('local-terrain-section').hidden")
+        assert await tab.eval("document.querySelectorAll('#terrain-create-list .object-card').length") == 0
         await click(tab, "#build-pick-map")
         assert await tab.eval("document.activeElement.dataset.tab") == "maps"
         await click(tab, "#map-list button:first-child")
@@ -320,7 +322,22 @@ def test_plain_model_build_links_to_maps_and_enables_creation_after_real_map_loa
         await click(tab, '[data-tab="objects"]')
         assert await tab.eval("document.getElementById('build-pick-map').hidden")
         assert not await tab.eval("document.getElementById('build-add-robot').hidden")
-        assert await tab.eval("document.querySelectorAll('.object-card').length") == 5
+        assert await tab.eval(
+            "[...document.querySelectorAll('#object-list .object-card')].map(e=>e.dataset.object)"
+        ) == [
+            "ball",
+            "block",
+            "pin",
+            "barrier",
+            "table",
+        ]
+        assert await tab.eval(
+            "[...document.querySelectorAll('#terrain-create-list .object-card')].map(e=>e.dataset.terrain)"
+        ) == [
+            "ramp",
+            "stairs",
+        ]
+        assert not await tab.eval("document.getElementById('local-terrain-section').hidden")
         assert not tab.errors
 
     viewer("phone", "zh-CN", scenario, world=lambda pg: None)

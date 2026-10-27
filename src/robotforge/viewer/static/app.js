@@ -1241,7 +1241,7 @@ function renderTitle() {
 
 function renderRobotList() {
   renderEditableObjects();
-  creator.render(worldInfo.catalog?.robot_templates || [], worldInfo.isWorld && !sceneDesc?.lesson, busy, worldInfo.catalog?.object_presets || [], worldInfo.catalog?.robot_models || []);
+  creator.render(worldInfo.catalog?.robot_templates || [], worldInfo.isWorld && !sceneDesc?.lesson, busy, worldInfo.catalog?.object_presets || [], worldInfo.catalog?.robot_models || [], worldInfo.catalog?.terrain_presets || []);
   const list = $("robot-list");
   list.replaceChildren(
     ...robots.map((r) => {
@@ -2159,7 +2159,7 @@ function setPanelBusy(on) {
 
 // ------------------------------------------------------------ pick a local robot, click to place
 
-let placementVersion = 0, placementGeneration = null, creationClickUntil = 0, creationSelection = null;
+let placementVersion = 0, placementGeneration = null, placementWorldSha = null, creationClickUntil = 0, creationSelection = null;
 let lastAddition = null, creationSurface = null;
 let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null, lastRobotEdit = null;
 const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
@@ -2187,6 +2187,7 @@ function beginCreation() {
   creationGesture.invalidate();
   placementVersion = sceneDesc.version;
   placementGeneration = stateGeneration;
+  placementWorldSha = sceneDesc.object_edit?.world_sha256 || null;
   setDrawer(false); setWorldPanel(false); setHelp(false);
   controls.enabled = true;
   canvas.classList.add("placing"); canvas.focus();
@@ -2225,7 +2226,9 @@ function creationPoint(e) {
   const up = hit?.face?.normal.clone().transformDirection(hit.object.matrixWorld);
   const dynamicSurface = body > 0 && sceneDesc.bodies[body]?.dynamic;
   const propPlacement = creator.preview() !== null;
-  const valid = hit && up?.z >= 0.7 && (propPlacement ? !robotOfBody.has(body) : !dynamicSurface);
+  const valid = hit && up?.z >= 0.7 && (creator.placingTerrain()
+    ? sceneDesc.geoms.find((g) => g.id === hit.object.userData.geom)?.type === "plane" && Math.abs(hit.point.z) <= 0.001
+    : propPlacement ? !robotOfBody.has(body) : !dynamicSurface);
   const point = valid ? hit.point.toArray().map((v) => +v.toFixed(4)) : null;
   creator.point(point);
   creationSurface = point;
@@ -2393,6 +2396,7 @@ function resolveCreatedRobot() {
   if (sceneDesc.version < wanted.version) return;
   if (sceneDesc.version !== wanted.version || (wanted.robot && !robotByName(wanted.robot))
       || (wanted.object && !objectInScene(wanted.object))
+      || (wanted.terrain && !objectInScene(wanted.terrain))
       || (wanted.removed && (robotByName(wanted.removed) || objectInScene(wanted.removed)))) {
     wanted.reject(new Error(t("create_scene_changed"))); return;
   }
@@ -2413,6 +2417,7 @@ function waitForCreation(data, rendered = false) {
 async function placeEntity(item, pos) {
   if (busy || creationGesture.active() || !item || !pos) return;
   if (creator.repeating() && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
+  if (item.kind === "terrain" && (!Number.isInteger(placementGeneration) || !placementWorldSha)) { toast(t("loading_scene")); return; }
   const placementSession = creator.session();
   creationGesture.invalidate();
   creator.busy(true);
@@ -2421,19 +2426,26 @@ async function placeEntity(item, pos) {
     : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
+    : item.kind === "terrain" ? { action: "add_terrain", preset: item.name, yaw: item.yaw, world_sha256: placementWorldSha }
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw,
         ...(item.material ? { material: item.material } : {}) };
   await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
     frame: item.kind === "robot" || item.kind === "model",
     progress: (event) => { if (placementSession === creator.session()) creator.progress(event.stage, event.fraction); },
     done: async (data) => {
+      // A committed terrain edit remains undoable even if its first displayed geometry times out.
+      if (item.kind === "terrain") lastAddition = data.undo || null;
       if (creator.repeating() && !Number.isInteger(data.generation)) {
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
       if (item.kind === "model") creator.progress("display");
       try {
-        await waitForCreation(data, item.kind === "model" || creator.repeating() || item.kind === "edit" || item.kind === "copy" || item.kind === "start");
+        await waitForCreation(data, item.kind === "terrain" || item.kind === "model" || creator.repeating() || item.kind === "edit" || item.kind === "copy" || item.kind === "start");
       } catch (error) {
+        if (item.kind === "terrain") {
+          lastAddition = stateVersion === data.version && stateGeneration === data.generation ? data.undo || null : null;
+          cancelCreation(true);
+        }
         // A committed model stays undoable if only display completion timed out.
         if (item.kind === "model" && placementSession === creator.session()
             && stateVersion === data.version && stateGeneration === data.generation) {
@@ -2456,7 +2468,7 @@ async function placeEntity(item, pos) {
         creator.next(item.kind === "copy" ? { world_sha256: sceneDesc.object_edit.world_sha256 } : {});
         creationSurface = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
-      toast(t(item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object }));
+      toast(t(item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain }));
       canvas.focus();
     },
   });
@@ -2479,9 +2491,9 @@ $("undo-add").addEventListener("click", async () => {
   stopDriving(); endDrag();
   await runChoice($("undo-add"), { type: "world", action: "undo_add", token: lastAddition.token, version: lastAddition.version }, {
     done: async (data) => {
-      await waitForCreation(data);
+      await waitForCreation(data, data.paused === true);
       lastAddition = lastObjectEdit = lastRobotEdit = null; updateUndo();
-      toast(t("addition_undone", { name: data.removed })); canvas.focus();
+      toast(t(data.paused === true ? "terrain_undone" : "addition_undone", { name: data.removed })); canvas.focus();
     },
   });
 });
