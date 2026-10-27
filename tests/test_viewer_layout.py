@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from viewer_camera import settle_camera
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "viewer_qa.py"
 FIXTURES = Path(__file__).parent / "fixtures" / "menagerie"
@@ -176,7 +177,9 @@ def test_a_lesson_rig_that_settles_after_its_first_poses_is_framed_as_it_stands(
 
     async def scenario(tab, _server):
         await _start(tab, "pid_twins")
-        await tab.until("!window.__robotforge.tweening()")
+        # First poses schedule another fit after 800 ms; !tweening alone has a gap between the two fits.
+        await tab.until("window.__robotforge.time >= 0.8")
+        await settle_camera(tab, quiet_ms=1000)
         return await tab.eval(RIG_ACROSS)
 
     seen = viewer("phone", "en", scenario)

@@ -29,7 +29,7 @@ async def click(tab, selector=None, point=None):
               // Native select popups complete their click only after a choice, which the caller makes next.
               window.__nativeClickNeedsDelivery=!e.disabled&&e.tagName!=='SELECT';
               window.__nativeClickListener=(event)=>{{
-                if(event.isTrusted&&e.contains(event.target))window.__nativeClickDelivered=true;
+                if(event.isTrusted&&document.querySelector(selector)?.contains(event.target))window.__nativeClickDelivered=true;
               }};
               document.addEventListener('click',window.__nativeClickListener,true);
               return [x,y];

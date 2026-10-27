@@ -1,5 +1,14 @@
 # progress
 
+## Prop inspection and lesson camera regression (2026-10-27)
+
+Native selected-prop Focus makes shared wood/steel details easy to inspect, using actual current multi-part bounds and unobscured canvas.
+Late lesson-open replies now retain the existing settled refit; native manual camera cancellation remains authoritative. No control or action-success tuning.
+Earlier regular suite3794pass/128skip on7842754e; finalb6381c3d complete browser211pass/1USDskip,24targeted,44contracts,7canonical,source/fresh installed60-tool smoke and original11/11install/viewer budgets pass.
+Wheel3913096B(+421B),406package/installed files exact,standardcold0.9187s; actual native Malo inspection/drive/reset clip 17.767s fully decodes,6decoded stills inspected.
+Two visual probes rejected for insufficient ordinary-distance benefit; product lighting/material resources remain unchanged. Original failures and readiness corrections retained; no fabricated cause for one unreproduced transient Cancel focus loss.
+[Report](docs/bench/2026-10-27-prop-inspection.md). Broad quality/lightweight/creative-play goal active.
+
 ## Round74: preserve original native PBR while keeping shared visual contracts (2026-10-24)
 
 Optional ID-shared native roughness/metalness survives into actual viewer materials; registered/exact RF presets retain priority and legacy API/image/alpha/ground paths remain.

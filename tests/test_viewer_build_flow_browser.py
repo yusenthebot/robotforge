@@ -181,7 +181,7 @@ def test_repeat_idle_external_zero_time_reset_and_edit_cancel_without_resubmitti
 
 
 WIRE = """
-window.__flow={holdState:false,holdReply:false,replies:[],generation:null};
+window.__flow={holdState:false,holdReply:false,replies:[],heldMessages:[],generation:null};
 const flow=window.__flow,Native=window.WebSocket;
 window.WebSocket=class extends Native{
   constructor(...args){super(...args);flow.socket=this}
@@ -192,7 +192,7 @@ window.WebSocket=class extends Native{
         flow.generation=msg.generation;
         if(flow.holdState){flow.releaseState=()=>handler(event);return}
       }
-      if(msg.type==='reply'&&flow.holdReply){flow.replies.push(()=>handler(event));return}
+      if(msg.type==='reply'&&flow.holdReply){flow.heldMessages.push(msg);flow.replies.push(()=>handler(event));return}
     }
     handler(event);
   }}

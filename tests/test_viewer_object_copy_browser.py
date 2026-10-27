@@ -9,6 +9,7 @@ import pytest
 from test_viewer_creation_browser import click, key
 from test_viewer_layout import pytestmark, viewer  # noqa: F401
 from test_viewer_object_edit_browser import choose
+from viewer_camera import settle_camera
 
 READY = "window.__robotforge.scene?.version === window.__robotforge.renderedVersion && !window.__robotforge.busy().busy"
 
@@ -29,6 +30,7 @@ def course(pg):
 
 
 async def place(tab, position):
+    await settle_camera(tab)
     version = await tab.eval("window.__robotforge.scene.version")
     await click(tab, point=await tab.eval(f"window.__robotforge.screenOfPoint({position})"))
     await tab.until(f"{READY} && window.__robotforge.scene.version > {version}")

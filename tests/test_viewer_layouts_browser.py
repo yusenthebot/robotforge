@@ -45,6 +45,9 @@ async def journey(tab, server):
     await tab.until("!window.__robotforge.busy().busy && " + READY)
     assert not server.pg.current_world().objects and not server.pg.current_world().terrain
     await click(tab, RESTORE)
+    await tab.until(
+        "!document.getElementById('layout-confirm').hidden && document.activeElement.id === 'layout-cancel'"
+    )
     assert await tab.eval("document.activeElement.id") == "layout-cancel"
     await key(tab, "Escape")
     await key(tab, "Escape", kind="keyUp")
@@ -56,8 +59,9 @@ async def journey(tab, server):
     assert server.pg.current_world().model_dump(mode="json") == original
     assert server.pg.session.paused and server.pg.session.data.time == 0
     # Reload reads the same durable record; it does not depend on browser local storage.
+    origin = await tab.eval("performance.timeOrigin")
     await tab.page.call("Page.reload")
-    await tab.until("!!window.__robotforge?.scene")
+    await tab.until(f"performance.timeOrigin !== {origin} && !!window.__robotforge?.scene")
     await open_layouts(tab)
     assert await tab.eval("document.querySelector('.layout-row span').textContent") == name
     assert files[0].read_bytes() == frozen
