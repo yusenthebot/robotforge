@@ -428,6 +428,7 @@ class _Recorder:
 
 
 LOCK_MIN_FORCE = 2.0  # N on each finger before a pinch counts as a grasp
+LOCK_OPPOSED = 0.5  # the two fingers' pushes must point at least 120 deg apart (cosine below -0.5)
 LOCK_MAX_SLIP = (0.05, 0.6)  # m/s and rad/s of the object relative to the palm, above which it is not locked
 LOCK_PATCH_RADIUS = 0.02  # m: the pads' contact patch, for the friction torque they can hold
 LOCK_COOLDOWN = 30  # ticks after a slip before the object may lock again
@@ -491,10 +492,11 @@ class _GraspLocks:
                 pairs.append((palm, fingers, obj, e.name))
         return pairs
 
-    def _squeeze(self) -> dict[tuple[int, int], list[float]]:
-        """Per (finger, object): normal force and the largest friction coefficient of their contacts."""
+    def _squeeze(self) -> dict[tuple[int, int], list]:
+        """Per (finger, object): normal force, the largest friction coefficient of their contacts, and the
+        summed normal push on the object (world frame)."""
         m, d = self.world.model, self.world.data
-        out: dict[tuple[int, int], list[float]] = {}
+        out: dict[tuple[int, int], list] = {}
         if d.ncon == 0:
             return out
         geoms = d.contact.geom[: d.ncon]
@@ -505,18 +507,28 @@ class _GraspLocks:
             if obj not in self.objects:
                 continue
             mujoco.mj_contactForce(m, d, int(i), force)
-            entry = out.setdefault((int(finger), int(obj)), [0.0, 0.0])
+            entry = out.setdefault((int(finger), int(obj)), [0.0, 0.0, np.zeros(3)])
             entry[0] += float(force[0])
             entry[1] = max(entry[1], float(d.contact.friction[i][0]))
+            # the contact normal points from geom1 to geom2
+            entry[2] = entry[2] + (1.0 if b2[i] == obj else -1.0) * float(force[0]) * d.contact.frame[i][:3]
         return out
 
     def _pinched(self, palm: int, squeeze, threshold: float = LOCK_MIN_FORCE) -> list[tuple[float, int, float]]:
+        """(squeeze, object, mu) of the objects both fingers press from opposite sides, firmest first.
+
+        Closed fingertips pushing down on an object (a push or a roll) press it too, but from the same side:
+        that is no pinch, and locking it would drag the object along with the hand."""
         fingers = self.grippers[palm]
         found = []
         for obj in self.objects:
             sides = [squeeze.get((f, obj)) for f in fingers]
-            if all(s is not None and s[0] > threshold for s in sides):
-                found.append((sum(s[0] for s in sides), obj, max(s[1] for s in sides)))
+            if not all(s is not None and s[0] > threshold for s in sides):
+                continue
+            pushes = [s[2] / max(float(np.linalg.norm(s[2])), 1e-9) for s in sides]
+            if float(pushes[0] @ pushes[1]) > -LOCK_OPPOSED:
+                continue
+            found.append((sum(s[0] for s in sides), obj, max(s[1] for s in sides)))
         return sorted(found, reverse=True)
 
     def update(self) -> None:
