@@ -450,6 +450,11 @@ def _boxes(patch: _Patch) -> list[_Box]:
     return [_Box((b.center[0] - shift, b.center[1], b.center[2]), b.half, b.pitch) for b in boxes]
 
 
+def box_geometry(patch: Stairs | Ramp) -> list[dict[str, list[float] | float]]:
+    """Local preview boxes from the same geometry used to compile the terrain."""
+    return [{"center": list(box.center), "half": list(box.half), "pitch": box.pitch} for box in _boxes(patch)]
+
+
 def _block(x0: float, x1: float, top: float, width: float) -> _Box:
     """A solid block from the floor up to `top`, spanning x0..x1."""
     return _Box(((x0 + x1) / 2, 0.0, top / 2), ((x1 - x0) / 2, width / 2, top / 2))

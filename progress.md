@@ -1,5 +1,29 @@
 # progress
 
+## Rejected short-distance contact occlusion (2026-10-27)
+
+Nine real-model contact/raised/environment groups do not show enough ordinary-distance gain from the frozen 6cm/25percent/12tap prototype; root and independent visual review reject it.
+Extra depth+AO passes, three textures and5MiB nominal color pixels plus unmeasured depth/driver cost remain external; no renderer code shipped.
+All18actual paused lateral-camera movies strictly decode,108sampled decoded frames inspected,7989evidence checks pass and407product package files match the prior wheel byte-for-byte.
+First GL1282/readback failure, initial proxy diagnostic failure and corrected helper results are retained; original trigger is unproven, disabled images are near-identical rather than pixel-exact, and candidate lifecycle/sensors/full suite/smoke/original budgets are not certified.
+[Report](docs/bench/2026-10-27-contact-occlusion-screen.md).
+Next implement moving/rotating existing ramp/stairs with precise original fields and guarded Undo; broad material/lightweight/creative-play goal remains active, action-success tuning deferred.
+
+## Rejected daylight reflection screen (2026-10-27)
+
+One predeclared external sky-reflection candidate fails ordinary-distance quality across Malo, Go2 and Panda: mainly darker/cooler scenes, insufficient common detail gain. Local steel reflections improve but add one environment texture with6MiB nominal color pixels (not measured VRAM).
+No renderer changes shipped. Twelve original fixed stills and six actual paused scripted-camera videos retained; all movies fully decode and36decoded samples inspected. No native-gameplay or temporal-quality claim.
+Documentation verification: offline wheel407product files byte-identical,98experiment-record tests/Ruff and3484integrity checks pass; original13WIP files preserved. Optional type/security tools unavailable; no full candidate suite, installed smoke or original budget run after visual rejection.
+[Report](docs/bench/2026-10-27-daylight-screen.md). Next finite contact/depth screen must show ordinary-distance benefit within the existing performance budgets. Broad material/lightweight/creative-play goal active; action-success tuning deferred.
+
+## Local terrain composition (2026-10-27)
+
+Native ramp/stair placement preserves prior terrain and props, shares actual compile geometry with preview, checks saved/live occupancy, and keeps reset/pause semantics explicit.
+Single-add Undo and saved layouts support composition/replay; committed Undo survives a true display timeout/context-loss recovery. Existing Python/MCP and whole-terrain replacement interfaces remain compatible.
+Integrated frozen154677d6: scope-combined 4052pass/128skip; first full run retained one global-card-count assertion failure, corrected exact inventory scope and14filecases pass,7canonical,source/fresh offline installed60-tool smoke, original11/11install/viewer budgets.
+Wheel3919038B(+4368B),407files exact;standardcold0.9392s. Native rover/Malo movies and fixed3world comparisons retained.
+[Report](docs/bench/2026-10-27-local-terrain.md). Broad shared-material/lightweight/creative-play goal active; no individual action tuning or new material appearance gain claimed.
+
 ## Prop inspection and lesson camera regression (2026-10-27)
 
 Native selected-prop Focus makes shared wood/steel details easy to inspect, using actual current multi-part bounds and unobscured canvas.

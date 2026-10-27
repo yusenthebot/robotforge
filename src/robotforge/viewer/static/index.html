@@ -145,7 +145,12 @@
     <section class="tab-body" id="world-body-terrain" role="tabpanel" aria-labelledby="world-tab-terrain" data-body="terrain" hidden>
       <h2 class="section-title"><span data-i18n="ground">Ground</span></h2>
       <div class="swatches" id="ground-list"></div>
-      <h2 class="section-title spaced"><span data-i18n="terrain">Terrain</span></h2>
+      <section id="local-terrain-section">
+        <h2 class="section-title spaced" data-i18n="local_terrain">Add local terrain</h2>
+        <p class="note" data-i18n="local_terrain_lead">Combine pieces on clear ground. Adding or undoing pauses at saved starts.</p>
+        <div class="create-list" id="terrain-create-list"></div>
+      </section>
+      <h2 class="section-title spaced"><span data-i18n="terrain_replace">Replace all terrain</span></h2>
       <div class="choices" id="terrain-list"></div>
       <p class="note" id="terrain-note" hidden data-i18n="terrain_needs_world">This is a model file, not a world. Pick a map first to change the ground.</p>
     </section>
