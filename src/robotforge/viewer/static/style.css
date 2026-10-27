@@ -638,6 +638,25 @@ input[type="range"]::-moz-range-thumb {
 .tool:hover { background: var(--hover); color: var(--ink); }
 .tool:active { background: var(--press); }
 
+.view-panel {
+  position: fixed;
+  z-index: 70;
+  top: calc(var(--gutter) + 48px);
+  right: var(--gutter);
+  width: min(260px, calc(100% - var(--gutter) * 2));
+  max-height: calc(100% - var(--gutter) * 2 - 120px);
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel-solid);
+  box-shadow: 0 8px 30px rgba(20, 30, 40, 0.15);
+}
+.view-panel .note { margin: 10px 0; }
+.view-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.view-choices [aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); }
+.tool[aria-expanded="true"] { background: var(--hover); color: var(--ink); }
+
 .rec .rec-dot { fill: var(--rec, #e5484d); stroke: none; }
 .rec[aria-pressed="true"] { color: var(--rec, #e5484d); }
 .rec[aria-pressed="true"] #record-label { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -898,6 +917,12 @@ input[type="range"]::-moz-range-thumb {
   .dock .tool:focus-visible { outline-offset: -2px; } /* 2 px apart, a ring outside the button ran into the next one */
   .drawer, .drawer.left, .help { left: var(--gutter); right: var(--gutter); width: auto; }
   .title { display: none; }
+}
+
+@media (max-width: 360px) {
+  .dock { gap: 1px; padding: 0 6px; }
+  .dock .tool { padding: 0 6px; }
+  .dock .seg button { padding: 0 4px; }
 }
 
 @media (hover: none) and (pointer: coarse) {

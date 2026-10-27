@@ -1,5 +1,17 @@
 # progress
 
+## Shared camera inspection and composition (2026-10-28)
+
+Native Top/Front/Side/Back presets preserve current target, distance and perspective across existing creation/edit flows; world axes, temporary history and no automatic complete fit are explicit.
+Opening the menu invalidates held gestures and stale points; regression covers the actual old mouse-release accidental-add path.
+All273current non-slow browser nodes pass across serial same-product runs, with one optional USD collection skip;9GPU and384targeted backend yield666distinct pytest passes.
+Seven unchanged canonical cases, source/fresh offline60-tool smoke, Ruff/format/changed JS syntax and original11/11install/viewer budgets pass.
+Six final d454 native original-world workflow movies fully decode;36root samples plus3Top stills inspected, complete model/state control and exact Undo checked.
+Wheel3940225B(+2339B),413product files exact, original13WIP retained; one added1475BJS request, cold encoded resource+6453B.
+Mixed ABBA loading samples retained; no new shader gain, human-efficiency, complete regular-suite, every-frame or physical-phone claim.
+[Report](docs/bench/2026-10-28-camera-views.md).
+Broad shared visual/lightweight/creative-play goal active; individual action-success tuning deferred.
+
 ## Shared concrete colour scale (2026-10-28)
 
 Ordinary Malo/Go2 ground views lose dominant broad grey clouds while retaining finer grain; concrete floors, existing dock and stairs share the colour path.

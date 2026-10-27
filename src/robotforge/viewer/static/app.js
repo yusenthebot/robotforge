@@ -20,6 +20,7 @@ import { createPlacementGesture, initCreation } from "./creation.js";
 import { placementCoordinates } from "./placement-coordinate.js";
 import { createPlacementPreview } from "./placement-preview.js";
 import { createScreenDrive } from "./screen-drive.js";
+import { cameraView, cameraArc, arcEye } from "./camera-views.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -774,9 +775,11 @@ function sceneReadyToDraw() {
 // ---------------------------------------------------------------- camera moves
 
 let tween = null; // { fromEye, fromTarget, toEye, toTarget, t0 }
+let originalCameraView = null, currentCameraView = null;
+const viewButtons = [...$("view-panel").querySelectorAll("[data-camera-view]")];
 const TWEEN_MS = 450;
 
-function moveCamera(eye, target, animate) {
+function moveCamera(eye, target, animate, orbit = false) {
   follow = null;
   renderCameraControls();
   if (!animate || reduceMotion) {
@@ -787,16 +790,71 @@ function moveCamera(eye, target, animate) {
     return;
   }
   tween = { fromEye: camera.position.clone(), fromTarget: controls.target.clone(), toEye: eye, toTarget: target, t0: performance.now() };
+  if (orbit) tween.arc = cameraArc(tween.fromEye.toArray(), tween.fromTarget.toArray(), eye.toArray(), target.toArray());
 }
 
 function updateTween() {
   if (!tween) return;
   const k = Math.min(1, (performance.now() - tween.t0) / TWEEN_MS);
   const e = 1 - (1 - k) ** 3; // ease out
-  camera.position.lerpVectors(tween.fromEye, tween.toEye, e);
   controls.target.lerpVectors(tween.fromTarget, tween.toTarget, e);
+  if (tween.arc) camera.position.fromArray(arcEye(tween.arc, controls.target.toArray(), e));
+  else camera.position.lerpVectors(tween.fromEye, tween.toEye, e);
   if (k >= 1) tween = null;
 }
+
+function setViewPanel(open) {
+  setOpen("view-toggle", "view-panel", open);
+  if (open) {
+    stopDriving(); endDrag();
+    creationGesture.invalidate();
+    if (creator.active()) clearCreationPoint();
+    (viewButtons.find((button) => button.getAttribute("aria-pressed") === "true") || viewButtons[0]).focus();
+  }
+  shiftForDrawers();
+}
+
+function resetCameraViews() {
+  originalCameraView = currentCameraView = null;
+  setViewPanel(false);
+}
+
+function chooseCameraView(name) {
+  if ($("view-toggle").disabled || !hasSize()) return;
+  if (name === "back" && !originalCameraView) return;
+  // Drain residual orbit damping before saving a view or starting a deliberate arc.
+  const damping = controls.enableDamping;
+  controls.enableDamping = false; controls.update(); controls.enableDamping = damping;
+  const target = name === "back" ? originalCameraView.target.clone() : controls.target.clone();
+  const eye = name === "back" ? originalCameraView.eye.toArray() : cameraView(name, camera.position.toArray(), target.toArray());
+  if (!eye) return;
+  if (name !== "back" && !originalCameraView) originalCameraView = { eye: camera.position.clone(), target: controls.target.clone() };
+  freeDriveCamera(); endDrag();
+  creationGesture.invalidate();
+  if (creator.active()) clearCreationPoint();
+  creationClickUntil = performance.now() + (reduceMotion ? 60 : TWEEN_MS + 60);
+  currentCameraView = name === "back" ? null : name;
+  if (name === "back") originalCameraView = null;
+  setViewPanel(false);
+  moveCamera(new THREE.Vector3().fromArray(eye), target, true, true);
+  renderCameraControls();
+  canvas.focus();
+}
+
+$("view-toggle").addEventListener("click", () => setViewPanel($("view-panel").hidden));
+for (const button of viewButtons) {
+  button.addEventListener("click", () => chooseCameraView(button.dataset.cameraView));
+}
+$("view-back").addEventListener("click", () => chooseCameraView("back"));
+document.addEventListener("pointerdown", (event) => {
+  if ($("view-panel").hidden || $("view-panel").contains(event.target) || $("view-toggle").contains(event.target)) return;
+  setViewPanel(false);
+  // A tap that dismisses the view picker must not also place a prop or push a robot.
+  if (event.target === canvas) {
+    creationGesture.invalidate(); creationClickUntil = performance.now() + 350;
+    event.preventDefault(); event.stopPropagation();
+  }
+}, { capture: true });
 
 // ---------------------------------------------------------------- theme
 
@@ -970,13 +1028,14 @@ function pickBody(e) {
 canvas.addEventListener(
   "pointerdown",
   (e) => {
-    creationGesture.down(e, (creator.active() || selectingObjects) && !busy && performance.now() >= creationClickUntil
+    creationGesture.down(e, (creator.active() || selectingObjects) && !busy && !tween?.arc && performance.now() >= creationClickUntil
       ? { session: creator.session(), version: sceneDesc?.version, generation: stateGeneration } : null);
     if (creator.active() || selectingObjects) {
       if (creator.active()) clearCreationPoint();
       return; // OrbitControls owns camera motion; only a qualified release will place.
     }
     if (e.button !== 0) return;
+    if (tween?.arc) return;
     if (performance.now() < creationClickUntil) return;
     const hit = pickBody(e);
     if (!hit) return;
@@ -1039,7 +1098,7 @@ function finishCreationGesture(e) {
   // OrbitControls installs its release listener dynamically. Let it drain before a scene edit,
   // and recheck ownership in case the session changed during this pointer event.
   setTimeout(() => {
-    if (creationGesture.active() || creationGesture.epoch() !== epoch || !(creator.active() || selectingObjects) || busy || creator.session() !== context.session
+    if (!$("view-panel").hidden || creationGesture.active() || creationGesture.epoch() !== epoch || !(creator.active() || selectingObjects) || busy || creator.session() !== context.session
         || sceneDesc?.version !== context.version || stateGeneration !== context.generation
         || performance.now() < creationClickUntil) return;
     if (selectingObjects) pickObjectForEdit(point);
@@ -1184,6 +1243,8 @@ let worldName = "";
 const robotByName = (name) => robots.find((r) => r.name === name) ?? null;
 
 function onScene(desc) {
+  // Camera history belongs to this rendered model, never another map, layout or lesson.
+  resetCameraViews();
   if (!layoutMutating && layoutCatalog?.version !== desc.version) {
     layoutCatalog = null;
     layoutConfirmation = null;
@@ -1682,14 +1743,22 @@ function freeDriveCamera() {
   follow = null;
   tween = null;
   refitRig = null;
+  currentCameraView = null;
   if (!lessonActive()) driveCameraIntent = "free";
   renderScreenDrive();
 }
 
 function renderCameraControls() {
+  const disabled = !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version || busy || ws?.readyState !== WebSocket.OPEN;
+  $("view-toggle").disabled = disabled;
+  $("view-back").disabled = disabled || !originalCameraView;
+  for (const entry of viewButtons) {
+    entry.disabled = disabled;
+    entry.setAttribute("aria-pressed", String(currentCameraView === entry.dataset.cameraView));
+  }
   const button = $("camera-view"), robot = robotByName(selected);
   button.hidden = !robot || lessonActive() || creator.active() || selectingObjects;
-  button.disabled = !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version || busy || ws?.readyState !== WebSocket.OPEN;
+  button.disabled = disabled;
   const movable = canMove(robot), active = !!follow && movable;
   if (movable) button.setAttribute("aria-pressed", String(active));
   else button.removeAttribute("aria-pressed");
@@ -1712,6 +1781,7 @@ $("camera-view").addEventListener("click", () => {
 function startFollowBody(body, { keepTween = false } = {}) {
   if (body === null || !bodyNodes[body]) return;
   if (follow && follow.body === body) return;
+  currentCameraView = null;
   if (!keepTween) tween = null;
   const start = bodyNodes[body].position;
   follow = { body, last: start.clone(), z: start.z, t: performance.now() };
@@ -1836,7 +1906,7 @@ function freeRect() {
     if (r.width > W * 0.7) across(r);
     else left = Math.max(left, r.right);
   }
-  for (const id of ["drawer", "lesson-plots", "sensor-views"]) {
+  for (const id of ["drawer", "lesson-plots", "sensor-views", "view-panel"]) {
     const r = box($(id));
     if (!r) continue;
     if (r.width < W * 0.7 && r.left > left + 160) right = Math.min(right, r.left); // a column beside the view
@@ -1917,7 +1987,7 @@ window.addEventListener("resize", shiftForDrawers);
 window.addEventListener("resize", renderScreenDrive);
 // Panels change size with what they show (a quiz answered, the record unfolded): follow them.
 const panelWatch = new ResizeObserver(() => shiftForDrawers());
-for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar", "placement-bar"]) panelWatch.observe($(id));
+for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar", "placement-bar", "view-panel"]) panelWatch.observe($(id));
 
 function setHelp(open) {
   setOpen("help-toggle", "help", open);
@@ -2061,6 +2131,10 @@ $("show-shadows").addEventListener("change", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (!$("view-panel").hidden) {
+    if (e.key === "Escape") { setViewPanel(false); $("view-toggle").focus(); e.preventDefault(); }
+    return; // The picker owns keyboard focus; selecting a view cannot start driving.
+  }
   if (e.key === "Escape" && layoutConfirmation) {
     cancelLayoutConfirmation(); e.preventDefault(); return;
   }
@@ -2289,7 +2363,7 @@ function changePlacementSpacing() {
 }
 
 function creationPoint(e) {
-  if (!sceneReadyToDraw() || renderedVersion !== sceneDesc.version) {
+  if (!$("view-panel").hidden || tween?.arc || !sceneReadyToDraw() || renderedVersion !== sceneDesc.version) {
     clearCreationPoint(); return;
   }
   setPointer(e);
