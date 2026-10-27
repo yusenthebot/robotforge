@@ -1,5 +1,13 @@
 # progress
 
+## Rejected solid-wood growth field (2026-10-28)
+
+One frozen external 3D ring/pith/fibre field fails ordinary table/bench quality: flatter large areas, more regular bands and embossed close-up rings.
+Root and independent review reject it; production source/assets remain byte-identical, no shader ships.
+Five worlds/24stills,2542comparison checks, four fully decoded paused scripted-camera movies and24inspected decoded samples retained; capture success is not aesthetic or temporal certification.
+Offline wheel408product files exact and41experiment-record tests pass; no candidate full-suite/lifecycle/ABBA/original-budget claim.
+[Report](docs/bench/2026-10-28-solid-wood-growth-screen.md). Next separate color figure and micro-relief; do not retune this frozen ring candidate. Broad material/lightweight/play goal active, single-action tuning deferred.
+
 ## Authored terrain reposition (2026-10-28)
 
 Exact instance preview and relative quarter-turn move preserve original ramp/stair configuration, with source/target saved/live protection, one-use Undo and layout replay.

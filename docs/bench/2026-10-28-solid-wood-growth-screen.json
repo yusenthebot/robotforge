@@ -1,0 +1,466 @@
+{
+  "date": "2026-10-28",
+  "decision": "rejected",
+  "appearance_accepted": false,
+  "production_changed": false,
+  "production_source": "b58ddc20ac481b2aafc0629cab54afa0f58ae9c0b5e29e9d815738ab71f2961c",
+  "candidate_source": "a4c02210a71f430b709bc46d148371c5de37f54d4a2c7d680a349f83b16e915d",
+  "base_commit": "60fc1b93490a1da16c6798161fcbc90ceced3726",
+  "reference": "https://research.cs.cornell.edu/wood/",
+  "reference_scope": "Own bounded ring/pith field, not the paper implementation or a full wood BRDF.",
+  "parameters": {
+    "pith_offset_mm": [
+      60,
+      90
+    ],
+    "pith_bend_wavelength_mm": [
+      650,
+      1100
+    ],
+    "pith_bend_amplitude_mm": [
+      18,
+      9
+    ],
+    "second_pith_phase_rad": 0.7,
+    "radial_ring_mm": 6,
+    "raw_noise_warp_amplitude_cycles": 0.35,
+    "warp_scales_mm": [
+      350,
+      50,
+      50
+    ],
+    "harmonic_weights": [
+      0.8,
+      0.2
+    ],
+    "grain_mean": 0.575,
+    "ring_gain": 0.28,
+    "fine_gain": 0.1
+  },
+  "visual_gate": "Ordinary table AND bench both clearly improved; close-ups cannot compensate. Reject barcode/zebra grooves, darkening-only benefit, swimming or shimmer degradation. Freeze once; no post-screen retuning.",
+  "review": "Root and independent reviewer reject ordinary table/bench benefit: flatter table, more regular bench bands; close-up growth figures do not compensate.",
+  "capture": {
+    "worlds": 5,
+    "views_per_cohort": 12,
+    "original_images": 24,
+    "css_viewport": [
+      1280,
+      800
+    ],
+    "pixel_ratio": 2,
+    "image_size": [
+      2560,
+      1600
+    ],
+    "physics": "paused and reset before comparisons",
+    "empty_callout": "hidden equally by external helper so furniture is unobscured"
+  },
+  "comparison": {
+    "baseline_source": "b58ddc20ac481b2aafc0629cab54afa0f58ae9c0b5e29e9d815738ab71f2961c",
+    "candidate_source": "a4c02210a71f430b709bc46d148371c5de37f54d4a2c7d680a349f83b16e915d",
+    "checks": 2542,
+    "failures": 0,
+    "cases": {
+      "wood_props": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.082727294921875,
+            "changed_pixel_fraction": 0.0389599609375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.15500003695487946
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 2436,
+            "programs": 5
+          },
+          "top": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 1.966303466796875,
+            "changed_pixel_fraction": 0.58878759765625,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 2436,
+            "programs": 5
+          },
+          "detail": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 2.5379449055989585,
+            "changed_pixel_fraction": 0.78219677734375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 2436,
+            "programs": 5
+          },
+          "grazing": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.44918123372395835,
+            "changed_pixel_fraction": 0.188348388671875,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 2436,
+            "programs": 5
+          }
+        }
+      },
+      "park": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.072104736328125,
+            "changed_pixel_fraction": 0.024910400390625,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.19999998807907104,
+              0.3999999761581421
+            ],
+            "after_draw_p50_p95_ms": [
+              0.19999998807907104,
+              0.30000001192092896
+            ],
+            "resources": {
+              "geometries": 113,
+              "textures": 7
+            },
+            "draw_calls": 77,
+            "triangles": 430238,
+            "programs": 15
+          },
+          "detail": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 2.9486432291666667,
+            "changed_pixel_fraction": 0.68634521484375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.09999996423721313,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.09999999403953552,
+              0.19999998807907104
+            ],
+            "resources": {
+              "geometries": 113,
+              "textures": 7
+            },
+            "draw_calls": 16,
+            "triangles": 19740,
+            "programs": 15
+          },
+          "grazing": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.6743741048177083,
+            "changed_pixel_fraction": 0.178068359375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.20000002086162566
+            ],
+            "after_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.20000002086162566
+            ],
+            "resources": {
+              "geometries": 113,
+              "textures": 7
+            },
+            "draw_calls": 31,
+            "triangles": 28132,
+            "programs": 15
+          }
+        }
+      },
+      "kitchen": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.05589306640625,
+            "changed_pixel_fraction": 0.029307861328125,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.3999999761581421,
+              0.6099999934434885
+            ],
+            "after_draw_p50_p95_ms": [
+              0.45000001788139343,
+              0.5
+            ],
+            "resources": {
+              "geometries": 122,
+              "textures": 5
+            },
+            "draw_calls": 123,
+            "triangles": 39752,
+            "programs": 14
+          },
+          "detail": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.088540771484375,
+            "changed_pixel_fraction": 0.025062255859375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.20000004768371582
+            ],
+            "after_draw_p50_p95_ms": [
+              0.15000000596046448,
+              0.20000004768371582
+            ],
+            "resources": {
+              "geometries": 122,
+              "textures": 5
+            },
+            "draw_calls": 34,
+            "triangles": 13804,
+            "programs": 14
+          }
+        }
+      },
+      "solids": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.044090983072916666,
+            "changed_pixel_fraction": 0.02125537109375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 772,
+            "programs": 4
+          },
+          "end": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.31442708333333336,
+            "changed_pixel_fraction": 0.13703125,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 772,
+            "programs": 4
+          }
+        }
+      },
+      "control": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.0,
+            "changed_pixel_fraction": 0.0,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.19999998807907104
+            ],
+            "after_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.19999998807907104
+            ],
+            "resources": {
+              "geometries": 24,
+              "textures": 5
+            },
+            "draw_calls": 26,
+            "triangles": 8998,
+            "programs": 10
+          }
+        }
+      }
+    },
+    "appearance_acceptance": false,
+    "reason": "Ordinary table and bench lack joint natural-grain benefit; table flattens, bench adds regular bands. Independent review agrees.",
+    "scope": "Source/state/control/GL equality does not certify appearance or temporal stability; sequential draw samples are not formal budgets."
+  },
+  "movies": {
+    "baseline-wood_props": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-solid-wood-growth/video-baseline-wood_props/workflow.mp4",
+      "video_sha256": "75a42c3a162fe99c3ccbdbaab72bd97520553d9d43f4001201fdea88cd68dca1",
+      "video_bytes": 1444118,
+      "raw_frame_count": 387,
+      "raw_timestamp_span_seconds": 6.433098077774048,
+      "duration_seconds": 6.566667,
+      "decoded_frame_count": 197,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-solid-wood-growth/video-baseline-wood_props/decoded-contact.jpg",
+      "decoded_contact_sheet_sha256": "be4a568abf875f188243b8bc236e964be54ed7c3962a643f90efc2f6a790ee1f"
+    },
+    "baseline-park": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-solid-wood-growth/video-baseline-park/workflow.mp4",
+      "video_sha256": "7669660e75b2187eeb1f12a5a5525873271349f0e5eee2d5f1565adad4583d90",
+      "video_bytes": 2181478,
+      "raw_frame_count": 386,
+      "raw_timestamp_span_seconds": 6.433099031448364,
+      "duration_seconds": 6.566667,
+      "decoded_frame_count": 197,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-solid-wood-growth/video-baseline-park/decoded-contact.jpg",
+      "decoded_contact_sheet_sha256": "c5343ac0d59063bf5f3c353e2205e9e89073e81d5aeecfec39413fef108a5e98"
+    },
+    "candidate-wood_props": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-solid-wood-growth/video-candidate-wood_props/workflow.mp4",
+      "video_sha256": "66832fce4f615f3f84dac42f81e761ed3e2448775f642510d6aee373da3bc952",
+      "video_bytes": 1450446,
+      "raw_frame_count": 386,
+      "raw_timestamp_span_seconds": 6.433099031448364,
+      "duration_seconds": 6.566667,
+      "decoded_frame_count": 197,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-solid-wood-growth/video-candidate-wood_props/decoded-contact.jpg",
+      "decoded_contact_sheet_sha256": "ed67675d18c7c4e88d3fdf68b04c9b5efb00b0c6024e22d9c11d01857fd3c202"
+    },
+    "candidate-park": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-solid-wood-growth/video-candidate-park/workflow.mp4",
+      "video_sha256": "0f9ce3935743718e74ce51ae9f00118aae6dfcb43e48269436f7652f06be9c8d",
+      "video_bytes": 2215239,
+      "raw_frame_count": 387,
+      "raw_timestamp_span_seconds": 6.433099031448364,
+      "duration_seconds": 6.566667,
+      "decoded_frame_count": 197,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-solid-wood-growth/video-candidate-park/decoded-contact.jpg",
+      "decoded_contact_sheet_sha256": "e5b375d79f0f0a4de066fb1ffe8c5bc343157fe46a5d094334cb8670ebd8bf7b"
+    }
+  },
+  "integrity": {
+    "indexed_artifacts": 1632,
+    "indexed_bytes": 323621976,
+    "index_sha256": "98862567d74b1c76c70bb37ef451c81d4cbaa27c0573d4f7bbcac9d3822db07c",
+    "raw_frames_verified": 1546,
+    "decoded_samples_inspected": 24
+  },
+  "verification": {
+    "record_contract_tests_passed": 41,
+    "build": true,
+    "product_files_byte_identical": 408,
+    "wheel_bytes": 3925041,
+    "wheel_sha256": "2e294c7ca95389c763a04e8b79a61dd41100758299098403345262f0bb8b2ca9",
+    "preserved_original_wip_files": 13
+  },
+  "limits": [
+    "Capture/GL/source/state checks do not certify aesthetic benefit or temporal stability.",
+    "Four videos are actual paused scripted-camera movies, not native gameplay. Full decode plus six sampled stills per movie is not a frame-by-frame motion audit.",
+    "No candidate full suite, installed smoke, lifecycle/device certification, ABBA cost group or formal install/viewer budget after appearance rejection.",
+    "Sequential fixed-view draw samples are descriptive and sometimes below clock precision; they are not evidence of universal speed or a formal budget.",
+    "First helper paused before qa.Tab.navigate time>0 gate and timed out. Original output/helper preserved; corrected sequence only, frozen shader untouched.",
+    "Successful recordings used retained record-v1.py; subsequent cleanup robustness fix statically reviewed/py_compile only, no fault-injection certification."
+  ],
+  "goal_status": "active"
+}
