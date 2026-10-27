@@ -17,6 +17,7 @@ import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 import { canMove, moveAxes, moveSpeed } from "./padmap.js";
 import { createPlacementGesture, initCreation } from "./creation.js";
+import { placementCoordinates } from "./placement-coordinate.js";
 import { createPlacementPreview } from "./placement-preview.js";
 import { createScreenDrive } from "./screen-drive.js";
 
@@ -29,7 +30,8 @@ translatePage();
 
 const canvas = $("view");
 let screenDrive = null;
-const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel: cancelCreation, change: updateCreationPreview });
+const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel: cancelCreation,
+  change: updateCreationPreview, coordinateChange: changePlacementSpacing });
 const creationGesture = createPlacementGesture();
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1557,7 +1559,8 @@ function renderScreenDrive() {
   const robot = driveTarget();
   const wanted = screenDrivePreference === null ? coarsePointer.matches : screenDrivePreference === "1";
   $("show-screen-drive").checked = wanted;
-  const show = Boolean(wanted && robot && !lessonActive() && !loadingScene);
+  const editingPanel = narrow() && (!$("world-panel").hidden || !$("drawer").hidden);
+  const show = Boolean(wanted && robot && !editingPanel && !lessonActive() && !loadingScene);
   const ready = Boolean(ws?.readyState === WebSocket.OPEN && !paused && !busy && !document.hidden
     && renderedVersion === sceneDesc?.version && (stateVersion === null || stateVersion === sceneDesc.version));
   $("screen-drive-target").textContent = robot?.name ?? "";
@@ -1799,6 +1802,7 @@ function setDrawer(open) {
   storageSet("robotforge.drawer", open ? "1" : "0");
   shiftForDrawers();
   updateEmpty();
+  renderScreenDrive();
 }
 
 function setWorldPanel(open) {
@@ -1811,6 +1815,7 @@ function setWorldPanel(open) {
   storageSet("robotforge.world", open ? "1" : "0");
   shiftForDrawers();
   updateEmpty();
+  renderScreenDrive();
 }
 
 // The part of the window no panel covers. Left panels and right columns bound it sideways; a panel spanning most
@@ -1841,8 +1846,10 @@ function freeRect() {
   if (bar) top = Math.max(top, bar.bottom);
   const dock = box(document.querySelector(".dock"));
   if (dock) bottom = Math.min(bottom, dock.top);
-  const edit = box($("object-edit-bar"));
-  if (edit) bottom = Math.min(bottom, edit.top);
+  for (const id of ["object-edit-bar", "placement-bar"]) {
+    const edit = box($(id));
+    if (edit) bottom = Math.min(bottom, edit.top);
+  }
   return { left, right, top, bottom };
 }
 
@@ -1907,9 +1914,10 @@ function shiftForDrawers() {
   viewShiftTarget.y = roomy ? H / 2 - (r.top + r.bottom) / 2 : 0;
 }
 window.addEventListener("resize", shiftForDrawers);
+window.addEventListener("resize", renderScreenDrive);
 // Panels change size with what they show (a quiz answered, the record unfolded): follow them.
 const panelWatch = new ResizeObserver(() => shiftForDrawers());
-for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar"]) panelWatch.observe($(id));
+for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar", "placement-bar"]) panelWatch.observe($(id));
 
 function setHelp(open) {
   setOpen("help-toggle", "help", open);
@@ -1917,6 +1925,7 @@ function setHelp(open) {
     setOpen("drawer-toggle", "drawer", false);
     setOpen("world-toggle", "world-panel", false);
     shiftForDrawers();
+    renderScreenDrive();
   }
 }
 
@@ -2169,11 +2178,13 @@ function setPanelBusy(on) {
 // ------------------------------------------------------------ pick a local robot, click to place
 
 let placementVersion = 0, placementGeneration = null, placementWorldSha = null, creationClickUntil = 0, creationSelection = null;
-let lastAddition = null, creationSurface = null;
+let lastAddition = null, creationSurface = null, creationAnchor = null;
+const supportRay = new THREE.Raycaster();
 let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null, lastRobotEdit = null, lastTerrainEdit = null;
 let surfaceReselect = null;
 let terrainHighlight = null, terrainListKey = null;
 const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
+creationMarker.name = "placement-point-marker";
 const headingShape = new THREE.Shape();
 headingShape.moveTo(0.19, 0); headingShape.lineTo(0.1, 0.045); headingShape.lineTo(0.1, -0.045); headingShape.closePath();
 const creationHeading = new THREE.Mesh(new THREE.ShapeGeometry(headingShape), creationMarker.material);
@@ -2208,7 +2219,10 @@ function beginCreation() {
   setDrawer(false); setWorldPanel(false); setHelp(false);
   controls.enabled = true;
   canvas.classList.add("placing"); canvas.focus();
-  creationPoint({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+  // The orbit aim stays visible as panels move the projection; the window centre does not.
+  camera.updateMatrixWorld();
+  const aim = controls.target.clone().project(camera);
+  creationPoint({ clientX: (aim.x + 1) * window.innerWidth / 2, clientY: (1 - aim.y) * window.innerHeight / 2 });
   updateEmpty();
   updateUndo();
   renderScreenDrive();
@@ -2221,16 +2235,57 @@ function cancelCreation(force = false) {
   if (force) creationSelection?.reject(new Error(t("create_scene_changed")));
   creationGesture.invalidate();
   creator.clear(); creationMarker.visible = false;
-  creationSurface = null; placementPreview.clear();
+  creationSurface = creationAnchor = null; placementPreview.clear();
+  shiftForDrawers();
   canvas.classList.remove("placing"); controls.enabled = true;
   updateEmpty();
   renderDrive();
   updateUndo();
 }
 
-function clearCreationPoint() {
-  creator.point(null); creationSurface = null; creationMarker.visible = false;
+function setCreationPoint(point, status = null) {
+  creator.point(point, status); creationSurface = point; creationMarker.visible = !!point;
+  if (point) creationMarker.position.set(point[0], point[1], point[2] + 0.008);
   updateCreationPreview();
+}
+
+function clearCreationPoint(status = null) {
+  creationAnchor = null; setCreationPoint(null, status);
+}
+
+function resolveCreationAnchor() {
+  const anchor = creationAnchor;
+  if (!anchor || anchor.session !== creator.session() || anchor.version !== sceneDesc?.version
+      || anchor.generation !== stateGeneration) return { point: null, status: null };
+  const point = placementCoordinates(anchor.point, creator.spacing());
+  if (!point) return { point: null, status: "placement_coordinate_invalid" };
+  anchor.object.updateWorldMatrix(true, false);
+  if (anchor.matrix.some((v, i) => v !== anchor.object.matrixWorld.elements[i])) {
+    creationAnchor = null;
+    return { point: null, status: "placement_support_changed" };
+  }
+  if (creator.spacing() === "free") return { point, status: null };
+  if (anchor.up < 0.9999 || anchor.dynamic || robotOfBody.has(anchor.body) || anchor.object.userData.flex) {
+    return { point: null, status: "placement_snap_surface" };
+  }
+  // Recheck the snapped XY at the same thin height band: never jump off a table to the floor,
+  // onto another stair height, or through a different visible surface.
+  supportRay.set(new THREE.Vector3(point[0], point[1], anchor.point[2] + 0.002), new THREE.Vector3(0, 0, -1));
+  supportRay.near = 0; supportRay.far = 0.004;
+  const excluded = creator.editing()?.geoms || [];
+  const hit = worldRoot && supportRay.intersectObjects(worldRoot.children, true).find((h) =>
+    h.object.visible && !excluded.includes(h.object.userData.geom));
+  const up = hit?.face?.normal.clone().transformDirection(hit.object.matrixWorld);
+  if (!hit || hit.object !== anchor.object || up?.z < 0.9999 || !up || Math.abs(hit.point.z - anchor.point[2]) > 0.001) {
+    return { point: null, status: "placement_snap_outside" };
+  }
+  return { point: placementCoordinates([point[0], point[1], hit.point.z], creator.spacing()), status: null };
+}
+
+function changePlacementSpacing() {
+  creationGesture.invalidate();
+  const { point, status } = resolveCreationAnchor();
+  setCreationPoint(point, status);
 }
 
 function creationPoint(e) {
@@ -2247,12 +2302,13 @@ function creationPoint(e) {
   const valid = hit && up?.z >= 0.7 && (creator.placingTerrain()
     ? sceneDesc.geoms.find((g) => g.id === hit.object.userData.geom)?.type === "plane" && Math.abs(hit.point.z) <= 0.001
     : propPlacement ? !robotOfBody.has(body) : !dynamicSurface);
-  const point = valid ? hit.point.toArray().map((v) => +v.toFixed(4)) : null;
-  creator.point(point);
-  creationSurface = point;
-  creationMarker.visible = !!point;
-  if (point) creationMarker.position.set(point[0], point[1], point[2] + 0.008);
-  updateCreationPreview();
+  if (!valid) { clearCreationPoint(); return; }
+  hit.object.updateWorldMatrix(true, false);
+  creationAnchor = { point: hit.point.toArray(), object: hit.object, body, dynamic: !!dynamicSurface,
+    up: up.z, matrix: hit.object.matrixWorld.elements.slice(), session: creator.session(),
+    version: sceneDesc.version, generation: stateGeneration };
+  const { point, status } = resolveCreationAnchor();
+  setCreationPoint(point, status);
 }
 
 function updateCreationPreview() {
@@ -2515,6 +2571,13 @@ function waitForCreation(data, rendered = false) {
 
 async function placeEntity(item, pos) {
   if (busy || creationGesture.active() || !item || !pos) return;
+  if (creator.spacing() !== "free") {
+    const resolved = resolveCreationAnchor();
+    if (!resolved.point || resolved.point.some((v, i) => v !== pos[i])) {
+      clearCreationPoint(resolved.status || "placement_support_changed"); return;
+    }
+  }
+  pos = pos.slice();
   if (creator.repeating() && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
   if ((item.kind === "terrain" || item.kind === "terrain-edit") && (!Number.isInteger(placementGeneration) || !placementWorldSha)) { toast(t("loading_scene")); return; }
   const placementSession = creator.session();
@@ -2580,7 +2643,7 @@ async function placeEntity(item, pos) {
         creationGesture.invalidate();
         placementVersion = data.version; placementGeneration = data.generation ?? stateGeneration;
         creator.next(item.kind === "copy" ? { world_sha256: sceneDesc.object_edit.world_sha256 } : {});
-        creationSurface = null; creationMarker.visible = false; placementPreview.clear();
+        creationSurface = creationAnchor = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
       toast(t(item.kind === "terrain-edit" ? "terrain_edited" : item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain }));
       canvas.focus();

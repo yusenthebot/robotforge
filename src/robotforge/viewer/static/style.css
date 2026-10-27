@@ -799,7 +799,7 @@ input[type="range"]::-moz-range-thumb {
 .create-card > span, .object-card > span { display: grid; gap: 3px; min-width: 0; }
 .create-card strong, .object-card strong { font-size: 13px; }
 .create-card > span > span, .object-card > span > span { color: var(--muted); font-size: 12px; }
-.placement-bar { position: fixed; bottom: 104px; left: 50%; transform: translateX(-50%); width: min(620px, calc(100% - 32px)); padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); box-shadow: var(--shadow); display: flex; align-items: center; flex-wrap: wrap; gap: 10px; z-index: 5; }
+.placement-bar { position: fixed; bottom: 104px; left: 50%; transform: translateX(-50%); width: min(620px, calc(100% - 32px)); max-height: max(70px, min(50svh, calc(100svh - 280px))); overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); box-shadow: var(--shadow); display: flex; align-items: center; flex-wrap: wrap; gap: 10px; z-index: 5; }
 .placement-bar > div { flex: 1 1 260px; }
 .placement-bar .note { margin: 4px 0 0; }
 .placement-bar[aria-busy="true"] { opacity: 0.75; }
@@ -807,6 +807,12 @@ input[type="range"]::-moz-range-thumb {
 .placement-options .repeat-placement { margin: 0; min-height: 32px; }
 .prop-material-control { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .prop-material-control select { width: auto; min-height: 36px; padding: 5px 8px; }
+.placement-bar .placement-coordinates { flex: 1 1 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.placement-coordinate-readout { flex: 1 1 100%; min-width: 0; display: grid; grid-template-rows: 3em; font-size: 12px; line-height: 1.5; }
+.placement-coordinate-readout > * { grid-area: 1 / 1; min-width: 0; }
+#placement-position { font-variant-numeric: tabular-nums; }
+.placement-coordinate-readout:has(#placement-coordinate-status:not([hidden])) #placement-position { visibility: hidden; }
+.placement-bar #placement-coordinate-status { margin: 0; }
 #build-add-robot { margin-bottom: 10px; }
 
 .placement-bar .placement-options { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

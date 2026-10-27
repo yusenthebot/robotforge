@@ -173,6 +173,66 @@ def test_desktop_explicit_controls_keyboard_button_and_saved_preference(viewer):
     viewer("laptop", "en", scenario, world=world)
 
 
+@pytest.mark.parametrize("panel", ["world", "drawer"])
+@pytest.mark.parametrize("width,height", [(320, 568), (390, 844)])
+def test_phone_editor_panels_release_held_drive_and_preserve_preference(viewer, panel, width, height):  # noqa: F811
+    async def scenario(tab, server):
+        await tab.page.call(
+            "Emulation.setDeviceMetricsOverride", width=width, height=height, deviceScaleFactor=2, mobile=True
+        )
+        await ready(tab)
+        preference = await tab.eval("localStorage.getItem('robotforge.screen-drive')")
+        fwd = await point(tab, "fwd")
+        await touch(tab, "touchStart", [(1, *fwd)])
+        await until(lambda: command(server)[0] > 0)
+        # Keep the native pointer held while a native keyboard activation opens the panel.
+        await tab.run(
+            f"document.getElementById('{panel}-toggle').focus();window.__panelClick=false;"
+            f"document.getElementById('{panel}-toggle').addEventListener('click',e=>window.__panelClick=e.isTrusted,{{once:true}})"
+        )
+        for event in ["keyDown", "keyUp"]:
+            await tab.page.call(
+                "Input.dispatchKeyEvent",
+                type=event,
+                key="Enter",
+                code="Enter",
+                windowsVirtualKeyCode=13,
+                text="\r" if event == "keyDown" else "",
+            )
+        await until(lambda: command(server) == (0, 0))
+        assert await tab.eval("window.__panelClick && document.getElementById('screen-drive').hidden")
+        assert not await tab.eval("document.querySelector('#screen-drive [aria-pressed=true]') !== null")
+        assert await tab.eval("document.getElementById('show-screen-drive').checked")
+        assert await tab.eval("localStorage.getItem('robotforge.screen-drive')") == preference
+        await touch(tab, "touchEnd")
+        await click(tab, f"#{panel}-toggle")
+        await tab.until("!document.getElementById('screen-drive').hidden")
+        await asyncio.sleep(0.8)
+        assert command(server) == (0, 0)
+        assert not tab.errors
+
+    viewer("phone", "zh-CN", scenario, world=world)
+
+
+def test_open_editor_hides_drive_only_while_window_is_narrow(viewer):  # noqa: F811
+    async def scenario(tab, server):
+        await ready(tab)
+        await click(tab, "#world-toggle")
+        assert await tab.eval("document.getElementById('screen-drive').hidden")
+        for width, hidden in [(900, False), (700, True), (701, False), (390, True)]:
+            await tab.page.call(
+                "Emulation.setDeviceMetricsOverride", width=width, height=844, deviceScaleFactor=2, mobile=True
+            )
+            await tab.until(f"document.getElementById('screen-drive').hidden==={str(hidden).lower()}")
+            assert await tab.eval("document.getElementById('show-screen-drive').checked")
+            assert command(server) == (0, 0)
+        await click(tab, "#world-toggle")
+        await tab.until("!document.getElementById('screen-drive').hidden")
+        assert not tab.errors
+
+    viewer("phone", "en", scenario, world=world)
+
+
 @pytest.mark.parametrize("template", ["rover", "quadruped", "boat", "rov", "drone", "arm"])
 def test_shared_capability_axes_choose_the_visible_buttons(viewer, template):  # noqa: F811
     def build(pg):

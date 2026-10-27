@@ -1,0 +1,1142 @@
+{
+  "date": "2026-10-28",
+  "feature": "shared optional precise world-origin XY placement",
+  "source": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+  "frozen_inputs": 753,
+  "original_base_commit": "0b3f554592e9718dc50539b93327f31e60e5a487",
+  "integrated_base_commit": "123c1b8a6cbfc6273202686eb9297433ab69658a",
+  "tests": {
+    "browser-final": {
+      "total": 257,
+      "passed": 242,
+      "failed": 14,
+      "skipped": 1,
+      "sha256": "6fd38a646cb9f555b324fa128bf189ecee3fabd48ae2a4915f874d7379a14988"
+    },
+    "overlay-targeted": {
+      "total": 16,
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "sha256": "43c17bbb2ec43aa6b130ec20dbbb5a9ae7fc5c822af05741f361db2cfbebad0d"
+    },
+    "initial-marker": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "sha256": "2d80640bc67ffbee35b6cb3e8d9a8ed38dd2b0bacc3defa439e9fcb962303834"
+    },
+    "browser-integrated": {
+      "total": 143,
+      "passed": 141,
+      "failed": 1,
+      "skipped": 1,
+      "sha256": "6215cd072615ced14cbd17f3ba4c0751a8b63f6cd9e04a736d717efe611d036e"
+    },
+    "browser-surface": {
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "sha256": "fe424df3a1f01f2eea3e5478affc1e3fdc919555b0c45899fdaabe062ed4d60f"
+    },
+    "browser-remainder": {
+      "total": 111,
+      "passed": 111,
+      "failed": 0,
+      "skipped": 0,
+      "sha256": "740eba6f4c08ec31836692aa2178360708b9f1118a1490ce5ac4d85c7246bc56"
+    },
+    "backend-final": {
+      "total": 457,
+      "passed": 456,
+      "failed": 0,
+      "skipped": 1,
+      "sha256": "e5ba543e9327b5ce82c6dcea5fa860de35a564620d3c0e92d7d176eddde4ec31"
+    }
+  },
+  "browser_coverage": {
+    "product_source_sha256": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+    "selected_passed": 258,
+    "unique_optional_skips": [
+      ".py::tests.test_zenobench_mujoco"
+    ],
+    "node_provenance": {
+      "tests/test_viewer_build_flow_browser.py::test_plain_model_build_links_to_maps_and_enables_creation_after_real_map_load": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_exits_on_reset_disconnect_or_lesson_without_adding[disconnect]": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_exits_on_reset_disconnect_or_lesson_without_adding[lesson]": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_exits_on_reset_disconnect_or_lesson_without_adding[local_reset]": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_idle_external_zero_time_reset_and_edit_cancel_without_resubmitting": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_occupied_spot_keeps_parameters_and_accepts_new_explicit_location": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_props_preserves_parameters_requires_new_input_and_undoes_only_latest[laptop-en]": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_props_preserves_parameters_requires_new_input_and_undoes_only_latest[laptop-zh-CN]": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_props_preserves_parameters_requires_new_input_and_undoes_only_latest[phone-en]": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_props_preserves_parameters_requires_new_input_and_undoes_only_latest[phone-zh-CN]": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_repeat_waits_for_initial_generation_and_does_not_assume_legacy_reply_is_current": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_reset_after_commit_before_delayed_reply_cannot_rearm_repeat": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_scene_tabs_share_one_row_native_keyboard_does_not_drive_and_build_opens_robot_picker[laptop]": "browser-integrated",
+      "tests/test_viewer_build_flow_browser.py::test_scene_tabs_share_one_row_native_keyboard_does_not_drive_and_build_opens_robot_picker[phone]": "browser-integrated",
+      "tests/test_viewer_creation_browser.py::test_empty_world_to_local_robot_placement_cancel_and_map_loop[laptop-en]": "browser-integrated",
+      "tests/test_viewer_creation_browser.py::test_empty_world_to_local_robot_placement_cancel_and_map_loop[laptop-zh-CN]": "browser-integrated",
+      "tests/test_viewer_creation_browser.py::test_empty_world_to_local_robot_placement_cancel_and_map_loop[phone-en]": "browser-integrated",
+      "tests/test_viewer_creation_browser.py::test_empty_world_to_local_robot_placement_cancel_and_map_loop[phone-zh-CN]": "browser-integrated",
+      "tests/test_viewer_creation_browser.py::test_entering_placement_stops_held_keyboard_drive_and_suppresses_arm_pad": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_camera_button_finds_offscreen_robot_while_paused_and_stops_its_glide[laptop-en]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_camera_button_finds_offscreen_robot_while_paused_and_stops_its_glide[laptop-zh-CN]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_camera_button_finds_offscreen_robot_while_paused_and_stops_its_glide[phone-en]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_camera_button_finds_offscreen_robot_while_paused_and_stops_its_glide[phone-zh-CN]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_camera_header_stays_accessible_at_320_pixels[en]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_camera_header_stays_accessible_at_320_pixels[zh-CN]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_creation_cancel_keeps_building_camera_free_until_explicit_resume": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_delayed_same_size_rebuild_selection_and_reconnect_drop_old_camera_target": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_explicit_free_view_survives_repeated_desktop_input[gamepad]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_explicit_free_view_survives_repeated_desktop_input[keyboard]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_fixed_arm_has_focus_action_without_follow_or_control_commands": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_lesson_follow_is_independent_and_exiting_restores_free_world_view": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_manual_touch_camera_stays_free_while_forward_is_held": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_native_build_undo_and_keyboard_hint_share_narrow_hud[en]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_native_build_undo_and_keyboard_hint_share_narrow_hud[zh-CN]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_native_build_undo_does_not_cover_driving[320-en]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_native_build_undo_does_not_cover_driving[320-zh-CN]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_native_build_undo_does_not_cover_driving[390-en]": "browser-integrated",
+      "tests/test_viewer_driving_camera_browser.py::test_native_build_undo_does_not_cover_driving[390-zh-CN]": "browser-integrated",
+      "tests/test_viewer_fog_browser.py::test_camera_changes_underwater_preserve_attenuation_and_restore_above_fog": "browser-integrated",
+      "tests/test_viewer_fog_browser.py::test_empty_hint_returns_only_when_last_visible_terrain_is_removed": "browser-integrated",
+      "tests/test_viewer_fog_browser.py::test_small_prop_remains_visible_far_and_grazing_and_fog_contracts_again": "browser-integrated",
+      "tests/test_viewer_gamepad.py::test_a_pad_that_goes_away_stops_what_it_drove_and_the_page_says_so": "browser-integrated",
+      "tests/test_viewer_gamepad.py::test_the_hud_and_chip_stay_inside_a_phone_screen": "browser-integrated",
+      "tests/test_viewer_gamepad.py::test_the_keyboard_still_drives_with_a_pad_plugged_in": "browser-integrated",
+      "tests/test_viewer_gamepad.py::test_the_left_stick_drives_a_wheeled_rover_and_turns_it": "browser-integrated",
+      "tests/test_viewer_gamepad.py::test_the_left_stick_walks_the_dog_the_right_stick_turns_it_and_letting_go_stops_it": "browser-integrated",
+      "tests/test_viewer_gamepad.py::test_the_page_shows_what_is_being_recorded": "browser-integrated",
+      "tests/test_viewer_gamepad.py::test_the_sticks_jog_an_arm_and_a_and_b_close_and_open_its_gripper": "browser-integrated",
+      "tests/test_viewer_gamepad.py::test_y_switches_a_mobile_manipulator_between_driving_and_its_arm": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_either_invalid_image_uses_atomic_fallback_and_a_later_scene_can_retry[color]": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_either_invalid_image_uses_atomic_fallback_and_a_later_scene_can_retry[detail]": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_either_invalid_image_uses_atomic_fallback_and_a_later_scene_can_retry[dimensions]": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_first_world_draw_waits_for_both_wood_images": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_missing_optional_module_keeps_scene_available_and_warns_once": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_natural_images_survive_webgl_context_restoration": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_natural_wood_preserves_sync_api_shares_images_and_matches_preview": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_new_nonwood_scene_wins_over_old_delayed_wood_scene": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_nonwood_and_unused_catalog_or_checker_override_do_not_load_images": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_preview_before_scene_load_does_not_poison_natural_tile_cache": "browser-integrated",
+      "tests/test_viewer_ground_images_browser.py::test_timeout_does_not_replace_installed_fallback_when_images_arrive_late": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_face_off_tables_words_stay_inside_their_columns": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_joint_sliders_value_sits_on_its_names_baseline": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_lesson_rig_that_settles_after_its_first_poses_is_framed_as_it_stands": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_does_not_hide_another_robot[gait-laptop]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_does_not_hide_another_robot[gait-phone]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_does_not_hide_another_robot[gait-wide]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_does_not_hide_another_robot[humanoid_faceoff-laptop]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_does_not_hide_another_robot[humanoid_faceoff-phone]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_does_not_hide_another_robot[humanoid_faceoff-wide]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_seen_from_overhead_does_not_cover_its_robot": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight[arm_faceoff-zh-CN-3]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight[arm_planning-en-1]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight[ik_arm-en-2]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_new_step_starts_at_the_top_of_the_lesson_panel": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_parked_robot_does_not_fill_its_plots_with_wobble": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_quantity_that_cannot_go_negative_is_not_drawn_below_zero": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_robot_picked_on_a_phone_is_framed_with_nothing_in_between[half-wall]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_robot_picked_on_a_phone_is_framed_with_nothing_in_between[wall]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_signed_quantity_at_rest_is_drawn_round_zero": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_slider_value_has_a_space_before_its_unit": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_tag_moved_off_another_tag_does_not_land_on_what_the_lesson_marks": "browser-integrated",
+      "tests/test_viewer_layout.py::test_a_window_that_joins_a_lesson_frames_its_rig_as_a_reload_does": "browser-integrated",
+      "tests/test_viewer_layout.py::test_course_titles_on_a_phone_break_between_words[en]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_course_titles_on_a_phone_break_between_words[zh-CN]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_finishing_a_lesson_brings_the_lesson_complete_box_into_view": "browser-integrated",
+      "tests/test_viewer_layout.py::test_fit_view_fills_the_free_view_with_the_scene[laptop-None]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_fit_view_fills_the_free_view_with_the_scene[tablet-drawer]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_fit_view_fills_the_free_view_with_the_scene[tablet-world]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_fit_view_fills_the_free_view_with_the_scene[wide-None]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_fit_view_pressed_while_a_lesson_rig_settles_is_kept": "browser-integrated",
+      "tests/test_viewer_layout.py::test_on_a_phone_the_robots_drawer_leaves_the_robot_in_sight": "browser-integrated",
+      "tests/test_viewer_layout.py::test_plot_tabs_on_a_phone_show_their_whole_labels": "browser-integrated",
+      "tests/test_viewer_layout.py::test_the_docks_focus_rings_stay_off_their_neighbours[laptop]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_the_docks_focus_rings_stay_off_their_neighbours[phone]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_the_ik_target_raised_to_its_highest_is_not_under_a_name_tag[laptop]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_the_ik_target_raised_to_its_highest_is_not_under_a_name_tag[phone]": "browser-integrated",
+      "tests/test_viewer_layout.py::test_the_lesson_plots_end_on_the_lesson_panels_line_above_the_dock": "browser-integrated",
+      "tests/test_viewer_layout.py::test_the_motion_planning_target_shows_where_it_is": "browser-integrated",
+      "tests/test_viewer_layout.py::test_the_sensors_camera_on_a_phone_is_a_tab_and_leaves_the_rover_room": "browser-integrated",
+      "tests/test_viewer_layouts_browser.py::test_first_matching_poses_enable_layout_controls_without_another_refresh": "browser-integrated",
+      "tests/test_viewer_layouts_browser.py::test_reset_before_delayed_save_reply_reconciles_after_mutation": "browser-integrated",
+      "tests/test_viewer_layouts_browser.py::test_reset_during_first_pending_list_discards_its_old_generation_reply": "browser-integrated",
+      "tests/test_viewer_layouts_browser.py::test_save_map_restore_reload_and_drive[laptop-en]": "browser-integrated",
+      "tests/test_viewer_layouts_browser.py::test_save_map_restore_reload_and_drive[laptop-zh-CN]": "browser-integrated",
+      "tests/test_viewer_layouts_browser.py::test_save_map_restore_reload_and_drive[phone-en]": "browser-integrated",
+      "tests/test_viewer_layouts_browser.py::test_save_map_restore_reload_and_drive[phone-zh-CN]": "browser-integrated",
+      "tests/test_viewer_lesson_camera_browser.py::test_late_lesson_open_reply_refits_unless_user_moves_camera[False]": "browser-integrated",
+      "tests/test_viewer_lesson_camera_browser.py::test_late_lesson_open_reply_refits_unless_user_moves_camera[True]": "browser-integrated",
+      "tests/test_viewer_lighting_browser.py::test_driving_beyond_initial_shadow_bounds_keeps_coverage_and_reset_refits": "browser-integrated",
+      "tests/test_viewer_lighting_browser.py::test_real_shadow_distinguishes_contact_from_a_raised_object_and_can_be_disabled": "browser-integrated",
+      "tests/test_viewer_lighting_browser.py::test_shadow_rig_covers_transformed_planes_mocap_rotors_and_flexes": "browser-integrated",
+      "tests/test_viewer_material_filtering_browser.py::test_filter_preserves_resolved_detail_mean_tone_and_cache[rubber-0.0007]": "browser-integrated",
+      "tests/test_viewer_material_filtering_browser.py::test_filter_preserves_resolved_detail_mean_tone_and_cache[stone-0.025]": "browser-integrated",
+      "tests/test_viewer_material_filtering_browser.py::test_filter_preserves_resolved_detail_mean_tone_and_cache[wood-0.012]": "browser-integrated",
+      "tests/test_viewer_model_create_browser.py::test_native_model_controls_undo_save_restore_and_reload[laptop-en]": "browser-integrated",
+      "tests/test_viewer_model_create_browser.py::test_native_model_controls_undo_save_restore_and_reload[laptop-zh-CN]": "browser-integrated",
+      "tests/test_viewer_model_create_browser.py::test_native_model_controls_undo_save_restore_and_reload[phone-en]": "browser-integrated",
+      "tests/test_viewer_model_create_browser.py::test_native_model_controls_undo_save_restore_and_reload[phone-zh-CN]": "browser-integrated",
+      "tests/test_viewer_native_pbr_browser.py::test_actual_materials_use_native_zero_values_and_keep_registered_and_known_rf_priority[laptop]": "browser-integrated",
+      "tests/test_viewer_native_pbr_browser.py::test_actual_materials_use_native_zero_values_and_keep_registered_and_known_rf_priority[phone]": "browser-integrated",
+      "tests/test_viewer_native_pbr_browser.py::test_legacy_calls_partial_values_invalid_fields_and_exact_name_priority": "browser-integrated",
+      "tests/test_viewer_native_pbr_browser.py::test_native_pbr_does_not_replace_interior_image_alpha_or_uv": "browser-integrated",
+      "tests/test_viewer_native_pbr_browser.py::test_scene_replacement_and_context_restore_keep_current_native_materials": "browser-integrated",
+      "tests/test_viewer_native_textures_browser.py::test_failed_texture_fetch_preserves_old_world_and_native_retry_recovers": "browser-integrated",
+      "tests/test_viewer_native_textures_browser.py::test_imported_mesh_draws_its_interior_image_and_authored_uv_orientation": "browser-integrated",
+      "tests/test_viewer_native_textures_browser.py::test_native_image_decode_matches_legacy_srgb_values_on_the_gpu": "browser-integrated",
+      "tests/test_viewer_native_textures_browser.py::test_native_texture_transforms_share_pixels_and_reject_bad_bundles": "browser-integrated",
+      "tests/test_viewer_native_textures_browser.py::test_shared_mesh_materials_keep_distinct_images_plain_color_and_alpha": "browser-integrated",
+      "tests/test_viewer_native_textures_browser.py::test_superseded_texture_fetch_and_switches_do_not_keep_old_images": "browser-integrated",
+      "tests/test_viewer_object_copy_browser.py::test_authored_full_turns_copy_the_same_heading_within_request_bounds": "browser-integrated",
+      "tests/test_viewer_object_copy_browser.py::test_configured_copies_repeat_rotate_undo_save_restore_and_drive[laptop-en]": "browser-integrated",
+      "tests/test_viewer_object_copy_browser.py::test_configured_copies_repeat_rotate_undo_save_restore_and_drive[laptop-zh-CN]": "browser-integrated",
+      "tests/test_viewer_object_copy_browser.py::test_configured_copies_repeat_rotate_undo_save_restore_and_drive[phone-en]": "browser-integrated",
+      "tests/test_viewer_object_copy_browser.py::test_configured_copies_repeat_rotate_undo_save_restore_and_drive[phone-zh-CN]": "browser-integrated",
+      "tests/test_viewer_object_copy_browser.py::test_external_reset_before_delayed_copy_reply_cancels_repeat_without_resubmission": "browser-integrated",
+      "tests/test_viewer_object_copy_browser.py::test_native_copy_stacks_on_its_source_without_excluding_original_geoms": "browser-integrated",
+      "tests/test_viewer_object_copy_browser.py::test_occupied_copy_can_retry_and_cancel_only_discards_preview": "browser-integrated",
+      "tests/test_viewer_object_edit_browser.py::test_named_move_rotate_remove_undo_and_static_scene_selection[laptop-en]": "browser-integrated",
+      "tests/test_viewer_object_edit_browser.py::test_named_move_rotate_remove_undo_and_static_scene_selection[phone-zh-CN]": "browser-integrated",
+      "tests/test_viewer_object_edit_browser.py::test_touch_selection_orbit_cancel_and_external_reset_do_not_edit": "browser-integrated",
+      "tests/test_viewer_object_surface_browser.py::test_actual_late_noop_ack_preserves_only_current_undo[False]": "browser-surface",
+      "tests/test_viewer_object_surface_browser.py::test_actual_late_noop_ack_preserves_only_current_undo[True]": "browser-surface",
+      "tests/test_viewer_object_surface_browser.py::test_display_wait_context_loss_keeps_only_current_committed_undo[False]": "browser-surface",
+      "tests/test_viewer_object_surface_browser.py::test_display_wait_context_loss_keeps_only_current_committed_undo[True]": "browser-surface",
+      "tests/test_viewer_object_surface_browser.py::test_native_three_finishes_noop_undo_and_reopen[laptop-en-1280]": "browser-surface",
+      "tests/test_viewer_object_surface_browser.py::test_native_three_finishes_noop_undo_and_reopen[laptop-en-821]": "browser-surface",
+      "tests/test_viewer_object_surface_browser.py::test_native_three_finishes_noop_undo_and_reopen[phone-zh-CN-390]": "browser-surface",
+      "tests/test_viewer_objects_browser.py::test_fixed_imported_robot_surfaces_are_excluded_from_prop_support": "browser-remainder",
+      "tests/test_viewer_objects_browser.py::test_native_object_preview_scale_rotate_place_undo_and_cancel[laptop-en]": "browser-remainder",
+      "tests/test_viewer_objects_browser.py::test_native_object_preview_scale_rotate_place_undo_and_cancel[laptop-zh-CN]": "browser-remainder",
+      "tests/test_viewer_objects_browser.py::test_native_object_preview_scale_rotate_place_undo_and_cancel[phone-en]": "browser-remainder",
+      "tests/test_viewer_objects_browser.py::test_native_object_preview_scale_rotate_place_undo_and_cancel[phone-zh-CN]": "browser-remainder",
+      "tests/test_viewer_objects_browser.py::test_objects_can_stack_on_loose_blocks_and_rest_on_tables[laptop]": "browser-remainder",
+      "tests/test_viewer_objects_browser.py::test_objects_can_stack_on_loose_blocks_and_rest_on_tables[phone]": "browser-remainder",
+      "tests/test_viewer_objects_browser.py::test_occupied_prop_placement_can_retry_and_drive_selection_survives": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_all_entry_submissions_use_the_displayed_point_and_existing_inverse[copy]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_all_entry_submissions_use_the_displayed_point_and_existing_inverse[edit]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_all_entry_submissions_use_the_displayed_point_and_existing_inverse[model]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_all_entry_submissions_use_the_displayed_point_and_existing_inverse[object]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_all_entry_submissions_use_the_displayed_point_and_existing_inverse[robot]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_all_entry_submissions_use_the_displayed_point_and_existing_inverse[start]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_all_entry_submissions_use_the_displayed_point_and_existing_inverse[terrain-edit]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_all_entry_submissions_use_the_displayed_point_and_existing_inverse[terrain]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_every_placement_entry_exposes_common_controls_and_cancel_preserves_world[copy]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_every_placement_entry_exposes_common_controls_and_cancel_preserves_world[edit]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_every_placement_entry_exposes_common_controls_and_cancel_preserves_world[model]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_every_placement_entry_exposes_common_controls_and_cancel_preserves_world[object]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_every_placement_entry_exposes_common_controls_and_cancel_preserves_world[robot]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_every_placement_entry_exposes_common_controls_and_cancel_preserves_world[start]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_every_placement_entry_exposes_common_controls_and_cancel_preserves_world[terrain-edit]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_every_placement_entry_exposes_common_controls_and_cancel_preserves_world[terrain]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_grid_outside_support_and_dynamic_surface_reject_without_falling_to_floor": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_native_touch_repeat_preserves_spacing_clears_point_and_stays_reachable[320-568]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_native_touch_repeat_preserves_spacing_clears_point_and_stays_reachable[390-844]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_option_changes_keep_original_anchor_and_enter_submits_one_displayed_point": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_short_phone_scroll_and_coordinate_feedback_keep_the_placement_view_stable[en]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_short_phone_scroll_and_coordinate_feedback_keep_the_placement_view_stable[zh-CN]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_snapped_touch_cannot_survive_cancel_or_scene_change[cancel]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_snapped_touch_cannot_survive_cancel_or_scene_change[edit]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_snapped_touch_cannot_survive_cancel_or_scene_change[reset]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_submit_rechecks_support_and_never_changes_the_displayed_coordinate_silently[geometry]": "browser-remainder",
+      "tests/test_viewer_placement_browser.py::test_submit_rechecks_support_and_never_changes_the_displayed_coordinate_silently[matrix]": "browser-remainder",
+      "tests/test_viewer_prop_focus_browser.py::test_native_focus_frames_fixed_free_compound_and_tiny_props[laptop-en]": "browser-remainder",
+      "tests/test_viewer_prop_focus_browser.py::test_native_focus_frames_fixed_free_compound_and_tiny_props[phone-zh-CN]": "browser-remainder",
+      "tests/test_viewer_robot_edit_browser.py::test_actual_fixed_arm_moves_onto_tabletop_and_keeps_its_configuration": "browser-remainder",
+      "tests/test_viewer_robot_edit_browser.py::test_cancel_and_occupied_rejection_preserve_world_and_selected_robot": "browser-remainder",
+      "tests/test_viewer_robot_edit_browser.py::test_native_reposition_rotate_reset_and_one_use_undo[laptop-en]": "browser-remainder",
+      "tests/test_viewer_robot_edit_browser.py::test_native_reposition_rotate_reset_and_one_use_undo[laptop-zh-CN]": "browser-remainder",
+      "tests/test_viewer_robot_edit_browser.py::test_native_reposition_rotate_reset_and_one_use_undo[phone-en]": "browser-remainder",
+      "tests/test_viewer_robot_edit_browser.py::test_native_reposition_rotate_reset_and_one_use_undo[phone-zh-CN]": "browser-remainder",
+      "tests/test_viewer_robot_edit_browser.py::test_phone_320_start_controls_fit_and_remain_native_clickable[en]": "browser-remainder",
+      "tests/test_viewer_robot_edit_browser.py::test_phone_320_start_controls_fit_and_remain_native_clickable[zh-CN]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_async_scene_load_disables_old_buttons_until_a_fresh_pointer": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_capture_keeps_one_direction_outside_the_button_and_lost_capture_stops": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_desktop_explicit_controls_keyboard_button_and_saved_preference": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_gamepad_axis_priority_and_touch_release_keep_other_inputs": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[blur]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[cancel]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[close]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[creation]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[disconnect]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[external_reset]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[hidden]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[pause]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[reset]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_held_direction_does_not_survive_runtime_boundaries[select]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_open_editor_hides_drive_only_while_window_is_narrow": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_phone_editor_panels_release_held_drive_and_preserve_preference[320-568-drawer]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_phone_editor_panels_release_held_drive_and_preserve_preference[320-568-world]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_phone_editor_panels_release_held_drive_and_preserve_preference[390-844-drawer]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_phone_editor_panels_release_held_drive_and_preserve_preference[390-844-world]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_phone_two_fingers_drive_and_turn_release_independently[en]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_phone_two_fingers_drive_and_turn_release_independently[zh-CN]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_same_button_two_fingers_opposite_directions_and_keyboard_remain_independent": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_shared_capability_axes_choose_the_visible_buttons[arm]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_shared_capability_axes_choose_the_visible_buttons[boat]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_shared_capability_axes_choose_the_visible_buttons[drone]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_shared_capability_axes_choose_the_visible_buttons[quadruped]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_shared_capability_axes_choose_the_visible_buttons[rov]": "browser-remainder",
+      "tests/test_viewer_screen_drive_browser.py::test_shared_capability_axes_choose_the_visible_buttons[rover]": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_actual_sensor_picture_does_not_consume_or_pollute_dirty_main_depth[depth]": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_actual_sensor_picture_does_not_consume_or_pollute_dirty_main_depth[rgb]": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_actual_sensor_picture_does_not_consume_or_pollute_dirty_main_depth[segmentation]": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_actual_sensor_picture_does_not_consume_or_pollute_dirty_main_depth[stereo]": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_animated_worlds_conservatively_keep_original_depth_updates[flex]": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_animated_worlds_conservatively_keep_original_depth_updates[rotor]": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_main_context_restore_rebuilds_cached_shadow_and_preserves_rgb": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_static_depth_reuses_gpu_work_and_small_caster_motion_refreshes[False]": "browser-remainder",
+      "tests/test_viewer_shadow_cache_browser.py::test_static_depth_reuses_gpu_work_and_small_caster_motion_refreshes[True]": "browser-remainder",
+      "tests/test_viewer_startup_browser.py::test_context_loss_invalidates_submission_marker_until_restored_main_draw": "browser-remainder",
+      "tests/test_viewer_startup_browser.py::test_delayed_mesh_drops_poses_acks_and_only_latest_same_size_scene_draws": "browser-remainder",
+      "tests/test_viewer_startup_browser.py::test_failed_mesh_offers_working_native_retry_without_an_automatic_loop[laptop-en-http]": "browser-remainder",
+      "tests/test_viewer_startup_browser.py::test_failed_mesh_offers_working_native_retry_without_an_automatic_loop[phone-zh-CN-network]": "browser-remainder",
+      "tests/test_viewer_startup_browser.py::test_first_pose_precedes_all_world_draws_and_ring_measurement_even_at_time_zero": "browser-remainder",
+      "tests/test_viewer_surface_normals_browser.py::test_resolved_bump_strength_is_independent_of_output_resolution[ground_concrete]": "browser-remainder",
+      "tests/test_viewer_surface_normals_browser.py::test_resolved_bump_strength_is_independent_of_output_resolution[ground_grass]": "browser-remainder",
+      "tests/test_viewer_surface_normals_browser.py::test_resolved_bump_strength_is_independent_of_output_resolution[ground_wood]": "browser-remainder",
+      "tests/test_viewer_surface_normals_browser.py::test_resolved_bump_strength_is_independent_of_output_resolution[knurl]": "browser-remainder",
+      "tests/test_viewer_surface_normals_browser.py::test_resolved_bump_strength_is_independent_of_output_resolution[stone]": "browser-remainder",
+      "tests/test_viewer_surface_normals_browser.py::test_resolved_bump_strength_is_independent_of_output_resolution[wood]": "browser-remainder",
+      "tests/test_viewer_terrain_create_browser.py::test_committed_terrain_keeps_undo_after_reply_before_poses_and_real_context_loss": "browser-remainder",
+      "tests/test_viewer_terrain_create_browser.py::test_native_local_route_cancel_retry_undo_save_restore_reload[laptop-en]": "browser-remainder",
+      "tests/test_viewer_terrain_create_browser.py::test_native_local_route_cancel_retry_undo_save_restore_reload[phone-zh-CN]": "browser-remainder",
+      "tests/test_viewer_terrain_edit_browser.py::test_delayed_actual_noop_reply_keeps_only_current_generation_undo[False]": "browser-remainder",
+      "tests/test_viewer_terrain_edit_browser.py::test_delayed_actual_noop_reply_keeps_only_current_generation_undo[True]": "browser-remainder",
+      "tests/test_viewer_terrain_edit_browser.py::test_native_custom_terrain_cancel_retry_rotate_undo_and_layout_replay[laptop-en]": "browser-remainder",
+      "tests/test_viewer_terrain_edit_browser.py::test_native_custom_terrain_cancel_retry_rotate_undo_and_layout_replay[phone-zh-CN]": "browser-remainder",
+      "tests/test_viewer_terrain_edit_browser.py::test_terrain_move_receipt_survives_real_context_loss_and_display_timeout": "browser-remainder",
+      "tests/test_viewer_touch_build_browser.py::test_desktop_drag_orbits_right_drag_pans_wheel_zooms_and_click_still_places": "browser-remainder",
+      "tests/test_viewer_touch_build_browser.py::test_held_touch_cannot_place_after_cancel_or_scene_change_and_fresh_tap_recovers[cancel]": "browser-remainder",
+      "tests/test_viewer_touch_build_browser.py::test_held_touch_cannot_place_after_cancel_or_scene_change_and_fresh_tap_recovers[edit]": "browser-remainder",
+      "tests/test_viewer_touch_build_browser.py::test_held_touch_cannot_place_after_cancel_or_scene_change_and_fresh_tap_recovers[reset]": "browser-remainder",
+      "tests/test_viewer_touch_build_browser.py::test_phone_orbit_pinch_and_repeat_taps_do_not_add_during_camera_gestures[en]": "browser-remainder",
+      "tests/test_viewer_touch_build_browser.py::test_phone_orbit_pinch_and_repeat_taps_do_not_add_during_camera_gestures[zh-CN]": "browser-remainder",
+      "tests/test_viewer_touch_build_browser.py::test_touch_begun_while_sending_stays_ineligible_after_reply": "browser-remainder",
+      "tests/test_viewer_wood_browser.py::test_wood_grain_stays_longitudinal_in_each_mesh_frame[x]": "browser-remainder",
+      "tests/test_viewer_wood_browser.py::test_wood_grain_stays_longitudinal_in_each_mesh_frame[y]": "browser-remainder",
+      "tests/test_viewer_wood_browser.py::test_wood_grain_stays_longitudinal_in_each_mesh_frame[z]": "browser-remainder"
+    },
+    "allowed_partial_run_input_change": [
+      "tests/test_viewer_object_surface_browser.py"
+    ],
+    "scope": "Complete final non-slow browser node selection passed across serial runs on identical product/scripts/config bytes; not a single green full-suite invocation.",
+    "evidence": {
+      "browser-integrated.xml": "6215cd072615ced14cbd17f3ba4c0751a8b63f6cd9e04a736d717efe611d036e",
+      "browser-integrated.receipt.json": "586dd586d5a94883b68af82d952729fada1cc7c501270bacd5776973df1cd398",
+      "browser-surface.xml": "fe424df3a1f01f2eea3e5478affc1e3fdc919555b0c45899fdaabe062ed4d60f",
+      "browser-surface.receipt.json": "c1afd8da1f04094fa5c74809b3ad534222ae68ab9bdebbc8d0584ab5b94f25c2",
+      "browser-remainder.xml": "740eba6f4c08ec31836692aa2178360708b9f1118a1490ce5ac4d85c7246bc56",
+      "browser-remainder.receipt.json": "1febc830089dc6394de5e0ca9b16f3e1316a3621704054bd404753a486ff7e91",
+      "browser-final-collection.txt": "096a718b268992c430e1282fc8c043312c37c8f410f8cab6f1ef5c77fcdf3469",
+      "browser-remainder-selection.json": "33f5bc6e1441ebe6a62227977cf93aa685dbcb7f9c59390e481b0fef5a064105"
+    }
+  },
+  "framework": {
+    "cases": 7,
+    "python": "3.12.13",
+    "status": "pass"
+  },
+  "package": {
+    "wheel_bytes": 3937532,
+    "wheel_sha256": "b273db538735898baab93159af64d844d661bdf0df7e310872ce509a1e9b0479",
+    "production_files": 412,
+    "source_wheel_installed_exact": true,
+    "preserved_original_files": 13,
+    "original_hashes_exact": true,
+    "added_and_new_lines_scanned": 716,
+    "new_files_included": [
+      "src/robotforge/viewer/static/placement-coordinate.js",
+      "tests/test_placement_coordinates.py",
+      "tests/test_viewer_placement_browser.py"
+    ],
+    "secret_pattern_hits": {
+      "private_key": 0,
+      "known_token": 0,
+      "literal_secret_assignment": 0
+    },
+    "added_product_debug_statements": 0,
+    "scope": "Lightweight added-line review, not a bandit or pip-audit substitute.",
+    "upstream_wheel_bytes": 3935146,
+    "own_wheel_delta_bytes": 2386,
+    "changed_common_product_files": [
+      "robotforge/viewer/static/app.js",
+      "robotforge/viewer/static/creation.js",
+      "robotforge/viewer/static/i18n.js",
+      "robotforge/viewer/static/index.html",
+      "robotforge/viewer/static/style.css"
+    ],
+    "added_product_files": [
+      "robotforge/viewer/static/placement-coordinate.js"
+    ]
+  },
+  "budget": {
+    "statuses": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "metrics": {
+      "install": {
+        "wheel_kb": {
+          "value": 3845.2461,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.625,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.5
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5369,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.326
+        },
+        "fps": {
+          "value": 60.097,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 1.6,
+          "unit": "ms",
+          "better": "lower",
+          "median": 1.600000023841858,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1489,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 4.8,
+          "unit": "ms",
+          "better": "lower",
+          "median": 4.800000011920929,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.2,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 560.2
+        },
+        "idle_cpu_pct": {
+          "value": 4.6,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "machine": {
+      "system": "Darwin",
+      "release": "26.3.2",
+      "machine": "arm64",
+      "cpus": 18,
+      "python": "3.12.16",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "load": [
+        6.3,
+        5.4,
+        5.3
+      ]
+    },
+    "scope": "Original install/viewer categories only, unchanged thresholds; standard first-frame is original pre-opened Chrome/warm-disk best repeated sample, not first Malo download. Other budget categories not run; no universal speedup claim."
+  },
+  "fixed_controls": {
+    "baseline_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.16",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": null,
+      "git_dirty": false,
+      "active_source_sha256": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "candidate_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.16",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "123c1b8a6cbfc6273202686eb9297433ab69658a",
+      "git_dirty": true,
+      "active_source_sha256": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "cases": {
+      "malo": {
+        "scene_payload_exact": true,
+        "mesh_input_files": 32,
+        "model_input_files": 1,
+        "captured_arrays": 486,
+        "different_arrays": [
+          "mesh_pathadr",
+          "paths"
+        ],
+        "world_equal": true,
+        "mesh_files": [
+          {
+            "before": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-precise-placement/before/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+            "after": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-precise-placement/after/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+            "sha256": "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+          }
+        ],
+        "views": {
+          "normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 2.0914713541666667e-05,
+            "fraction_pixels_any_channel_changed": 6.103515625e-05,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000004768371582,
+              "raf_fps": 60.00300015000751
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000004768371582,
+              "raf_fps": 59.99999999999999
+            }
+          },
+          "detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 1.1102230246251565e-16,
+              "projection": 0.0,
+              "world": 3.3306690738754696e-16,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 5.126953125e-06,
+            "fraction_pixels_any_channel_changed": 4.8828125e-07,
+            "max_channel_delta": 23.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 59.99999999999999
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.09999999403953552,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00300015000751
+            }
+          }
+        },
+        "before_interactive_seconds": 3.522792041010689,
+        "after_interactive_seconds": 3.2144049169728532
+      },
+      "go2": {
+        "scene_payload_exact": true,
+        "mesh_input_files": 16,
+        "model_input_files": 4,
+        "captured_arrays": 486,
+        "different_arrays": [],
+        "world_equal": true,
+        "mesh_files": [],
+        "views": {
+          "normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 5.8675130208333336e-05,
+            "fraction_pixels_any_channel_changed": 4.39453125e-06,
+            "max_channel_delta": 34.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.003000150007495
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.3999999761581421,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 7.828776041666666e-05,
+            "fraction_pixels_any_channel_changed": 6.34765625e-06,
+            "max_channel_delta": 33.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 59.99999999999999
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.20000004768371582,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.00300015000751
+            }
+          }
+        },
+        "before_interactive_seconds": 1.9862626670510508,
+        "after_interactive_seconds": 1.8398372079827823
+      },
+      "panda": {
+        "scene_payload_exact": true,
+        "mesh_input_files": 67,
+        "model_input_files": 9,
+        "captured_arrays": 486,
+        "different_arrays": [],
+        "world_equal": true,
+        "mesh_files": [],
+        "views": {
+          "normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.000119384765625,
+            "fraction_pixels_any_channel_changed": 0.000358154296875,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.003000150007495
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.003000150007495
+            }
+          },
+          "detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 8.902994791666666e-05,
+            "fraction_pixels_any_channel_changed": 0.00026611328125,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.15500000417232485,
+              "raf_fps": 60.00300015000751
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00300015000751
+            }
+          }
+        },
+        "before_interactive_seconds": 1.7329178749932908,
+        "after_interactive_seconds": 2.0259800829808228
+      }
+    },
+    "scope": "Fixed existing scenes, same world, pose, camera and viewport. No geometry or material appearance change is intended in existing scenes. Warm asset cache and one pair of samples do not prove a universal loading/render speedup."
+  },
+  "native_workflows": {
+    "malo-laptop": {
+      "before": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "manifest_sha256": "f2465628188e4889190b940991abe36ac48f7f4d18fde7198e1181026b328c6d",
+        "media_qa_sha256": "f0f6323a858076e8fda6ade90ad34c04b2cebf69570e2dfcd3dd0dbaa43839b5",
+        "xy_errors_m": [
+          0.03889730067755338,
+          0.03317890896337612,
+          0.018648860555004358
+        ],
+        "duration_seconds": 11.233333,
+        "decoded_frames": 337,
+        "raw_frames": 416,
+        "video": "before-malo-laptop/workflow.mp4",
+        "video_sha256": "d5a61d74d6eda56120f1c5fe54074a800b911393b184633414cedbd1928415e6"
+      },
+      "after": {
+        "source": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+        "manifest_sha256": "fd8265951e0d24e0d9e7ac61aa83ea834bcea6e71b68f8d04a323b464fecc778",
+        "media_qa_sha256": "fc5ef3c379375e9a066af8efe5f5123339244abc3306c229db0fcd7dd38430c5",
+        "xy_errors_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "duration_seconds": 11.333333,
+        "decoded_frames": 340,
+        "raw_frames": 469,
+        "video": "after-malo-laptop/workflow.mp4",
+        "video_sha256": "a8749a4dddc6e2e16cb96bd41191d2f5c9c0c89fc45e5037482cd522660e7b1c"
+      }
+    },
+    "go2-laptop": {
+      "before": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "manifest_sha256": "8713b4d9b164f55fe4824106b061ba61a8572246e03922e143a0cd5834e5cdc2",
+        "media_qa_sha256": "8e2de2012159b2e6681b20eb5e7577dbe48068d078a383bc032ac9a0cbb41bd8",
+        "xy_errors_m": [
+          0.030375318928367156,
+          0.020549695861496384,
+          0.015625939971726566
+        ],
+        "duration_seconds": 12.033333,
+        "decoded_frames": 361,
+        "raw_frames": 415,
+        "video": "before-go2-laptop/workflow.mp4",
+        "video_sha256": "072e825d8ab523a86e37a9a54e6656a543c01b16baefccc210331150a5f27a6a"
+      },
+      "after": {
+        "source": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+        "manifest_sha256": "11e1c00a1f5a8296942e01467513a859327bd1a94edbec2405dc4bc756ce1318",
+        "media_qa_sha256": "ee3cb17cc10cad3d253241a22c3247ef766ed670c51ee15ce37b2d2fac7b9d93",
+        "xy_errors_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "duration_seconds": 11.6,
+        "decoded_frames": 348,
+        "raw_frames": 468,
+        "video": "after-go2-laptop/workflow.mp4",
+        "video_sha256": "818c99928a431bbf7b008eea69ccb041753a0d9fe3721d6ec8d5a2744ed670eb"
+      }
+    },
+    "panda-laptop": {
+      "before": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "manifest_sha256": "ebad362514bffcfdf747fe3886b0f509c25d41ba3eb5fb04bdac7d9499ad63d2",
+        "media_qa_sha256": "b5d2c82e542a72a6a29d7b9e58bcaacedc5b08b6c5b89dd880e17e4b8efc8c8d",
+        "xy_errors_m": [
+          0.023436723320464405,
+          0.013679546776118021,
+          0.01545477272560162
+        ],
+        "duration_seconds": 11.266667,
+        "decoded_frames": 338,
+        "raw_frames": 352,
+        "video": "before-panda-laptop/workflow.mp4",
+        "video_sha256": "9eaf3a5e96f39686d470fa872772cc235234f61b6260689198507fe7160a733a"
+      },
+      "after": {
+        "source": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+        "manifest_sha256": "345a6e8f227b78a8000cd0654116ecc483aeb41dd0cdd44a3274525f8f5e964e",
+        "media_qa_sha256": "63f1469b2f43d91f78c676b998db8dbcd5b97b08184c0492fb97a1d3763eb877",
+        "xy_errors_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "duration_seconds": 11.166667,
+        "decoded_frames": 335,
+        "raw_frames": 416,
+        "video": "after-panda-laptop/workflow.mp4",
+        "video_sha256": "ba549c673598d898f2575ac67a223fc029f08c692d9b68abcdd1bb949eb64776"
+      }
+    },
+    "go2-phone": {
+      "before": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "manifest_sha256": "3af5b52dfd09c5daebfd3f82a1aa54d38462402bfeb34d469cad2d9c0cdcaaf4",
+        "media_qa_sha256": "a218e203ee93ad757bdb1f6f4ae0ef27b3188d5fabf71715d5771ab18eb1e7c9",
+        "xy_errors_m": [
+          0.04418348107607651,
+          0.03740975808529093,
+          0.03390648905445696
+        ],
+        "duration_seconds": 10.5,
+        "decoded_frames": 315,
+        "raw_frames": 449,
+        "video": "before-go2-phone/workflow.mp4",
+        "video_sha256": "040ad6d64c13348662afcd17e6f3f9a18101d6db1ea10e3033251ab4f3e9b00b"
+      },
+      "after": {
+        "source": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+        "manifest_sha256": "579632f7b7661b86f8d86afe80a26101be2cd19c7fc8b95961ff63ce83d76c52",
+        "media_qa_sha256": "99c35ae91b89ce49f778c7238162fe93fdaf8914e5e5df415a09051cf4d0f6b5",
+        "xy_errors_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "duration_seconds": 9.7,
+        "decoded_frames": 291,
+        "raw_frames": 437,
+        "video": "after-go2-phone/workflow.mp4",
+        "video_sha256": "c261b127054583e3e3551ff6c9ec52821ae071c03a083ab2a01333788966be4d"
+      }
+    }
+  },
+  "receipts": {
+    "browser-surface": {
+      "sha256": "c1afd8da1f04094fa5c74809b3ad534222ae68ab9bdebbc8d0584ab5b94f25c2",
+      "seconds": 77.81559879198903,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "browser-remainder": {
+      "sha256": "1febc830089dc6394de5e0ca9b16f3e1316a3621704054bd404753a486ff7e91",
+      "seconds": 474.16483412502566,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "overlay-final": {
+      "sha256": "5022be3e6f7d9bfbba03c57429590ddea861126f8ca29de80af976eb84df6de5",
+      "seconds": 4.902206624974497,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "inventory-after": {
+      "sha256": "a314f12a8cccd3b9a53d9d4e07a75d0049b384d6368917883cea1bedf5fc4ecf",
+      "seconds": 3.741849582991563,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "fixed-before": {
+      "sha256": "636afa3fd505cdbb656a15153deeee3abaf9a3dba9fb0597484814aee5f6c453",
+      "seconds": 35.17806554096751,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "fixed-after": {
+      "sha256": "cdc505832310b3966a76abc82203997d6dd62c00efd72a26cf71697dba361f15",
+      "seconds": 35.038239792047534,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "fixed-analysis": {
+      "sha256": "145b7358aa340a2a42795f70b8c8a09a368f106e7a342479402869ac4f9e9fba",
+      "seconds": 2.0006511250394396,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "backend-final": {
+      "sha256": "eaa4fdf49c66599d764dd52f3d9fb76fe2f08d183e6e7b16bf5a3dd8363687f9",
+      "seconds": 44.95676854200428,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "smoke-source": {
+      "sha256": "d1638b4a2ecbe34ee5e014007edf34b9b24985798bc46546f8d7dcadb1f62bf2",
+      "seconds": 4.046994707954582,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "build-upstream": {
+      "sha256": "a55c516c75da915612decfabe212bbfb5e9e17b7f79114536e7ea236fe8c8397",
+      "seconds": 0.1921707090223208,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "build-final": {
+      "sha256": "63bde1f4c33d376378a69d5407eb0e8854ada53197f9bba3559675dc1e3dbe62",
+      "seconds": 0.14323866600170732,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "wheel-install": {
+      "sha256": "3c6e2938941dfbb43c1243f4cf901cefe2613cee078c5944c46595f3b3b0ebdb",
+      "seconds": 0.38996441703056917,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "smoke-installed": {
+      "sha256": "6ef60b336d467bc0cb96c416e8e6ebc783f298e0e68cba5684c7092e61b5cefd",
+      "seconds": 18.82346670801053,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "framework": {
+      "sha256": "e3d09dd72589982f97c70da6945679f10ed8707031687aa9d2dd7aa0e7b6279f",
+      "seconds": 1.9574530420359224,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "budget": {
+      "sha256": "d3ded609592f7887dc8afd2ca632dba9048c279e53d004cfa6ad738e645dd7b1",
+      "seconds": 25.52310195803875,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "static-final": {
+      "sha256": "24452ed998170be9e23d9df4c69ab7815000163e47a7904a13aa6d984fce08e6",
+      "seconds": 0.18633141700411215,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "audit": {
+      "sha256": "b9753abd4560245fef0d383e770f3d22bc7c6960718fa89329435a7dd416b8ea",
+      "seconds": 0.31240741699002683,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "native-malo-laptop": {
+      "sha256": "c9d7e1cfd08d0797679c087326b6c13543e7a97c1e71ef1ce2f13dedf02fb659",
+      "seconds": 15.547624666010961,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "native-go2-laptop": {
+      "sha256": "990610c7a410b813c85b5004187a76072ca6ae9a2ff8e1b4cebe41ca757fd6d0",
+      "seconds": 14.492967290978413,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "native-panda-laptop": {
+      "sha256": "466aa27e57fc63269b202b49c0fa6ef9a4da2521264bf85c42bea0c8e53b2432",
+      "seconds": 14.023798124981113,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "native-go2-phone": {
+      "sha256": "14a74f2e0824fea974fac6d451e18831f277f65e984d13d8c9ced988967d0fe8",
+      "seconds": 12.53541175002465,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "encode-before-malo-laptop": {
+      "sha256": "8e23106bbd8f36c724a44dc67fef53f815fa196aeeda01d3496552b363ea34c1",
+      "seconds": 3.1340455830213614,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "encode-before-go2-laptop": {
+      "sha256": "0754dbaa91678339739ffa6cf2434f40d6b4df61735a86f1e07b99cff2984fd5",
+      "seconds": 2.9442203330108896,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "encode-before-panda-laptop": {
+      "sha256": "3ed632dbd07a152028350be9500744ec2a1000ce715b9bdc423d80ccfae0ee04",
+      "seconds": 3.276219207968097,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "encode-before-go2-phone": {
+      "sha256": "d1c46f72c197697c5ccb455332fbfa0a78f2b6cc80231f30c683ab89ba8b1b8f",
+      "seconds": 1.2813250829931349,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "encode-after-malo-laptop": {
+      "sha256": "1e163c700b4e639875f8af78f11c9a08a0a5b3a475c87f44b86180c5c701e1c9",
+      "seconds": 3.344460208027158,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "encode-after-go2-laptop": {
+      "sha256": "f68cd109d9416d73ffaf0b0c231a8bc8087cd1e928d3996adc606acf226fbcf4",
+      "seconds": 2.8209172079805285,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "encode-after-panda-laptop": {
+      "sha256": "3c3883b453c8ae5bfdd72a88ce315e780e74c6890292639f0f2d17b323ea4355",
+      "seconds": 3.4823196660145186,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "encode-after-go2-phone": {
+      "sha256": "15e7a3c3ec09858988853b4de09f3c2a275e0b4319cff87054d883705c4b9775",
+      "seconds": 1.2875317090074532,
+      "returncode": 0,
+      "inputs_unchanged": true
+    }
+  },
+  "evidence": {
+    "directory": "../robotforge-evidence/2026-10-28-precise-placement",
+    "artifact_index_sha256": "444e7d0eb4937cc2088a2c70748e1d1e6297b075299e3b1fd167d18ac0561220",
+    "indexed_files": 8336,
+    "asset_files": 144
+  },
+  "limits": [
+    "Pointer tolerance study with fixed +/-2 CSS pixel perturbations and scripted setup cameras, not human speed, discovery or retry evidence.",
+    "Before native source0b3 and final source include independent upstream ZenoBench changes; fixed whole-scene/model/asset comparison binds actual used worlds. Placement framing intentionally changes when the bar is open.",
+    "Closed-UI shared materials/lighting retain appearance; no shader aesthetic gain claimed.",
+    "Complete regular Python suite and slow GPU suite not rerun for this frontend change; exact selected test coverage recorded.",
+    "Physical phone, Windows, other GPU drivers and optional USD/ZenoBench dynamics unverified.",
+    "Full MP4 decoding and six root-inspected samples each do not certify every frame visually; 30fps encoding is separate from application FPS."
+  ],
+  "retained_failures": [
+    "Initial new-test read-only layout_list accounting and local/world-Z geometry fault setup errors; corrected assertions retained.",
+    "First full browser14failed/242passed/1skipped due added placement bar obscuring old native targets; frozen inputs retained. All14 exact original assertions pass in follow-up, then complete final node selection passed across serial runs on one product source, not a single green full invocation.",
+    "Final full-browser attempt stopped at141passed/1failed/1skipped on original surface resource equality. Base/current probes both observed early readiness with28 to29 geometry and moving projection; settle_camera plus2RAF added only to test observation, original equality unchanged. Corrected full7case file and all unrun nodes passed.",
+    "Inherited short-phone inventory screen-drive obstruction reproduced on exact base, temporarily hide/clear drive while narrow editing panels are open.",
+    "Initial native count/camera/select acquisition failures and system-Python/JUnit path helper mistakes retained; no product test threshold or budget relaxed."
+  ]
+}
