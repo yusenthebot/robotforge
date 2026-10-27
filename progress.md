@@ -1,5 +1,50 @@
 # progress
 
+## Actual-world specular baseline (2026-10-28)
+
+No two actual material paths establish an attributable ordinary-distance specular defect; no compensation candidate or shader change.
+Unmodified Malo/Go2/Panda, DPR1/2, two lights and three distances:36stills,12fully decoded paused scripted-camera clips,72root decoded samples.
+All482model arrays and qpos/qvel/ctrl stay exact within each session; actual inventories contain no brushed/knurl materials.
+41record and9GPU filtering/metric-normal tests, Ruff/offline wheel pass;409product files and3928336Bwheel exact.
+Initial collector timestamp failure retained with its missing failed-stage metadata limit; no temporal, new budget or full-suite certification.
+[Report](docs/bench/2026-10-28-specular-baseline-screen.md).
+Next screen native precise-composition demand across props, terrain and robot starts before one default-off planar snapping candidate.
+Broad material/lightweight/play goal active; individual action-success tuning deferred.
+
+## Primitive surface exploration and inherited regression (2026-10-28)
+
+Independent persisted finishes reuse shared looks while keeping physical material and accents; explicit apply/reset and latest-pose Undo, no-op and protected failure recovery.
+Inherited one-use addition undo test expected obsolete error text; exact base reproduces failure, corrected full-file follow-up passes with stronger state assertions.
+Same-product-source split acceptance4170pass/128skip,4extraGPU,7canonical,source/fresh offline60-tool smoke and unchanged11/11budgets; initial full4169/128/1 retained, not one green full invocation.
+409source/wheel/installed files exact; three native Malo/Go2/Panda workflows strictly decode and18sampled frames inspected.
+Wheel+3295B,standard0.8826s first-frame budget sample; no new assets/deps/pass or shared-shader aesthetic gain claimed.
+[Report](docs/bench/2026-10-28-prop-surface-edit.md). Broad material/lightweight/play goal active; individual action-success tuning deferred.
+
+## Rejected independent wood color/relief (2026-10-28)
+
+The frozen external domain-warped color and independent micro-relief candidate smooths the surface but fails joint ordinary-distance quality: table flatter, bench improvement insufficient.
+Root and independent original-image review reject it; production remains byte-identical.
+24 actual stills, 2542 control checks, four strictly decoded paused camera movies and 24 inspected decoded samples retained; 41 record tests/Ruff/offline wheel pass.
+No candidate full-suite, channel-suite, temporal or original-budget certification; [report](docs/bench/2026-10-28-wood-color-relief-screen.md).
+Stop procedural wood tuning; next existing-prop surface editing with independent appearance, persisted Undo and explicit rebuild/reset semantics.
+Broad material/lightweight/play goal active, action-success tuning deferred.
+
+## Rejected solid-wood growth field (2026-10-28)
+
+One frozen external 3D ring/pith/fibre field fails ordinary table/bench quality: flatter large areas, more regular bands and embossed close-up rings.
+Root and independent review reject it; production source/assets remain byte-identical, no shader ships.
+Five worlds/24stills,2542comparison checks, four fully decoded paused scripted-camera movies and24inspected decoded samples retained; capture success is not aesthetic or temporal certification.
+Offline wheel408product files exact and41experiment-record tests pass; no candidate full-suite/lifecycle/ABBA/original-budget claim.
+[Report](docs/bench/2026-10-28-solid-wood-growth-screen.md). Next separate color figure and micro-relief; do not retune this frozen ring candidate. Broad material/lightweight/play goal active, single-action tuning deferred.
+
+## Authored terrain reposition (2026-10-28)
+
+Exact instance preview and relative quarter-turn move preserve original ramp/stair configuration, with source/target saved/live protection, one-use Undo and layout replay.
+Late no-op/reset Undo and transaction cleanup warnings are covered.
+Pre-integration219browser/1skip; final482backend/1USDskip and22native,7canonical,source/installed60-tool smoke and original11/11budgets pass; no final all-default-suite claim.
+Three actual Malo/Go2/Panda native workflows fully decode; six decoded samples each inspected,408source/wheel/installed product files exact.
+[Report](docs/bench/2026-10-28-terrain-reposition.md). Broad goal active; shared material appearance retained, action-success tuning deferred.
+
 ## Rejected short-distance contact occlusion (2026-10-27)
 
 Nine real-model contact/raised/environment groups do not show enough ordinary-distance gain from the frozen 6cm/25percent/12tap prototype; root and independent visual review reject it.

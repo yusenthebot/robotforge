@@ -149,6 +149,11 @@
         <h2 class="section-title spaced" data-i18n="local_terrain">Add local terrain</h2>
         <p class="note" data-i18n="local_terrain_lead">Combine pieces on clear ground. Adding or undoing pauses at saved starts.</p>
         <div class="create-list" id="terrain-create-list"></div>
+        <section id="edit-terrain-section" hidden>
+          <h3 data-i18n="existing_terrain">Move existing terrain</h3>
+          <p class="note" data-i18n="terrain_edit_lead">Keep each piece's dimensions and material. Moving or undoing pauses at saved starts.</p>
+          <div class="chips" id="edit-terrain-list"></div>
+        </section>
       </section>
       <h2 class="section-title spaced"><span data-i18n="terrain_replace">Replace all terrain</span></h2>
       <div class="choices" id="terrain-list"></div>
@@ -270,10 +275,18 @@
   <div class="placement-bar" id="object-edit-bar" hidden>
     <div><strong id="object-edit-title"></strong><p class="note" data-i18n="edit_prop_hint">Tap a prop or choose its name. Drag or pinch to look around.</p></div>
     <button class="pill" id="object-focus" type="button" data-i18n="camera_focus">Focus</button>
+    <button class="pill" id="object-surface" type="button" aria-expanded="false" aria-controls="object-surface-controls" data-i18n="prop_surface" hidden>Surface</button>
     <button class="pill" id="object-move" type="button" data-i18n="move_prop">Move / rotate</button>
     <button class="pill" id="object-copy" type="button" data-i18n="copy_prop">Duplicate</button>
     <button class="pill" id="object-remove" type="button" data-i18n="remove_prop">Remove</button>
     <button class="pill" id="object-edit-done" type="button" data-i18n="done_placing">Done</button>
+    <div class="placement-options" id="object-surface-controls" hidden>
+      <label class="prop-material-control"><span data-i18n="prop_surface">Surface</span>
+        <select id="object-surface-material"><option value="" data-i18n="surface_original">Original</option><option value="plastic" data-i18n="material_plastic">Plastic</option><option value="wood" data-i18n="material_wood">Wood</option><option value="steel" data-i18n="material_steel">Steel</option></select>
+      </label>
+      <button class="pill" id="object-surface-apply" type="button" data-i18n="surface_apply">Apply and reset</button>
+      <p class="note" data-i18n="surface_hint">Keeps current poses and physical material. Pauses and resets motion.</p>
+    </div>
   </div>
   <div class="banner" id="banner" role="status" hidden data-i18n="disconnected">Lost the connection to the simulator. Reconnecting.</div>
   <div class="toast" id="toast" role="alert"></div>

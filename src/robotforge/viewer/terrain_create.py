@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
@@ -67,9 +68,11 @@ def _overlap(a, b) -> bool:
     return min(a[1] - b[0], b[1] - a[0], a[3] - b[2], b[3] - a[2]) > -GAP
 
 
-def _clear_world(world: World, patch) -> None:
+def _clear_world(world: World, patch, *, excluding: str | None = None) -> None:
     box = terrain._world_bounds(patch)
     for other in world.terrain:
+        if other.name == excluding:
+            continue
         if _overlap(box, terrain._world_bounds(other)):
             raise PlaygroundError(f"that spot is occupied by {other.name}; choose clear ground")
     water = world.water
@@ -125,7 +128,19 @@ def handle(pg: Playground, message: dict) -> dict:
         return _commit(pg, store, request, candidate, patch, blocked)
 
 
-def _commit(pg, store, request, candidate: World, patch, blocked: set[str], *, removing: bool = False) -> dict:
+def _commit(
+    pg,
+    store,
+    request,
+    candidate: World,
+    patch,
+    blocked: set[str],
+    *,
+    removing: bool = False,
+    clearance=None,
+    excluding: str | None = None,
+    on_publish: Callable[[int, int, str], dict] | None = None,
+) -> dict:
     original = layouts._read(store.file, layouts.MAX_WORLD_BYTES)
     if layouts.sha(original) != request.world_sha256:
         raise PlaygroundError("the saved world changed; choose a spot again")
@@ -141,11 +156,16 @@ def _commit(pg, store, request, candidate: World, patch, blocked: set[str], *, r
         world = _check(pg, store, request)
         if store.file.read_bytes() != original:
             raise PlaygroundError("the saved world changed; choose a spot again")
-        blocked.update(
-            _occupants(
-                pg.session.model, copy.copy(pg.session.data), world, patch, excluding=patch.name if removing else None
+        for area in clearance if clearance is not None else (patch,):
+            blocked.update(
+                _occupants(
+                    pg.session.model,
+                    copy.copy(pg.session.data),
+                    world,
+                    area,
+                    excluding=excluding if excluding is not None else patch.name if removing else None,
+                )
             )
-        )
         if blocked:
             raise PlaygroundError(f"that spot is occupied by {', '.join(sorted(blocked))}; move away first")
         rollback = BuiltinLayoutState.capture(pg)
@@ -153,6 +173,31 @@ def _commit(pg, store, request, candidate: World, patch, blocked: set[str], *, r
             with layouts._install_world(store, prepared) as notes:
                 result = pg._load_world(compiled)
                 pg.session.paused = True
+                pg._places = None
+                response = {
+                    "version": pg.session.version,
+                    "generation": pg.session.generation,
+                    "paused": True,
+                }
+                digest = layouts.sha(prepared.after)
+                if on_publish is not None:
+                    response.update(on_publish(pg.session.version, pg.session.generation, digest))
+                elif not removing:
+                    receipt = TerrainAddition(
+                        store,
+                        pg.session.version,
+                        pg.session.generation,
+                        uuid4().hex,
+                        patch.name,
+                        patch.model_dump_json(),
+                        digest,
+                    )
+                    pg._play_addition = receipt
+                    response.update(
+                        terrain=patch.name,
+                        undo={"token": receipt.token, "version": receipt.version, "name": receipt.name},
+                    )
+            response["notes"] = [*result["notes"], *notes]
         except BaseException as exc:
             rollback.restore()
             try:
@@ -164,27 +209,6 @@ def _commit(pg, store, request, candidate: World, patch, blocked: set[str], *, r
                 pg._play_world_sha256 = None
                 raise PlaygroundError("terrain rollback failed; reopen the world before continuing") from exc
             raise
-        pg._play_addition = pg._play_edit = pg._play_robot_edit = pg._places = None
-        response = {
-            "version": pg.session.version,
-            "generation": pg.session.generation,
-            "notes": [*result["notes"], *notes],
-            "paused": True,
-        }
-        if not removing:
-            receipt = TerrainAddition(
-                store,
-                pg.session.version,
-                pg.session.generation,
-                uuid4().hex,
-                patch.name,
-                patch.model_dump_json(),
-                layouts.sha(prepared.after),
-            )
-            pg._play_addition = receipt
-            response.update(
-                terrain=patch.name, undo={"token": receipt.token, "version": receipt.version, "name": receipt.name}
-            )
         return response
 
 

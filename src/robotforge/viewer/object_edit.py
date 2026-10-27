@@ -83,7 +83,18 @@ def metadata(pg: Playground) -> dict:
                 continue
             geoms = [g for g in range(model.ngeom) if owners[g] == entry.name]
             objects.append(
-                {"name": entry.name, "shape": entry.shape, "size": entry.size, "yaw": entry.yaw, "geoms": geoms}
+                {
+                    "name": entry.name,
+                    "shape": entry.shape,
+                    "size": entry.size,
+                    "yaw": entry.yaw,
+                    "geoms": geoms,
+                    **(
+                        {"surface_material": entry.surface_material}
+                        if entry.shape in {"box", "sphere", "cylinder"}
+                        else {}
+                    ),
+                }
             )
         return {
             "objects": objects,

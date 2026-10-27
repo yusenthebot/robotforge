@@ -59,8 +59,10 @@ if TYPE_CHECKING:
     from robotforge.design import generator
     from robotforge.viewer.creation import Addition
     from robotforge.viewer.object_edit import Edit
+    from robotforge.viewer.object_surface import SurfaceEdit
     from robotforge.viewer.robot_edit import RobotEdit
     from robotforge.viewer.terrain_create import TerrainAddition
+    from robotforge.viewer.terrain_edit import TerrainEdit
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
 MAX_SIM_SECONDS = 60.0
@@ -126,8 +128,9 @@ class Playground:
     _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
     _play_addition: Addition | TerrainAddition | None = field(default=None, init=False, repr=False)
-    _play_edit: Edit | None = field(default=None, init=False, repr=False)
+    _play_edit: Edit | SurfaceEdit | None = field(default=None, init=False, repr=False)
     _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
+    _play_terrain_edit: TerrainEdit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
     _play_world_descriptor: str | None = field(default=None, repr=False)
     _layout_reset_hooks: tuple[Any, ...] = field(default=(), init=False, repr=False)
@@ -261,6 +264,7 @@ class Playground:
         def extras() -> dict[str, Any]:
             from robotforge.viewer.object_edit import metadata
             from robotforge.viewer.robot_edit import metadata as robot_metadata
+            from robotforge.viewer.terrain_edit import metadata as terrain_metadata
 
             world = self.current_world()
             robots = self.behaviors.robots()
@@ -269,6 +273,7 @@ class Playground:
                 "robots": robots,
                 "object_edit": metadata(self),
                 "robot_edit": robot_metadata(self),
+                "terrain_edit": terrain_metadata(self),
                 "task_contracts": task_contracts(world),
                 "learned": learned,
                 "world": world.name if world is not None else None,  # the page title; None for a loaded file
@@ -291,9 +296,11 @@ class Playground:
                 return self.add_model_for_play(msg)
             if action == "add_terrain":
                 return self.add_terrain_for_play(msg)
+            if action in {"edit_terrain", "undo_terrain_edit"}:
+                return self.edit_terrain_for_play(msg)
             if action in {"edit_robot_start", "undo_robot_start"}:
                 return self.edit_robot_start_for_play(msg)
-            if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object"}:
+            if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object", "set_object_surface"}:
                 return self.edit_object_for_play(msg)
             if action in {"add_object", "undo_add"}:
                 return self.object_for_play(msg)
@@ -518,11 +525,24 @@ class Playground:
         return handle(self, message)
 
     @_one_edit_at_a_time
+    def edit_terrain_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Move an authored ramp/stair block on clear ground, or undo its latest move."""
+        from robotforge.viewer.terrain_edit import handle
+
+        return handle(self, message)
+
+    @_one_edit_at_a_time
     def edit_object_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
         """Reposition/copy/remove an exact existing rigid prop, or undo that one edit."""
         from robotforge.viewer.object_edit import duplicate, edit, undo
+        from robotforge.viewer.object_surface import SurfaceEdit
+        from robotforge.viewer.object_surface import handle as surface
 
         action = message.get("action")
+        if action == "set_object_surface" or (
+            action == "undo_object_edit" and isinstance(self._play_edit, SurfaceEdit)
+        ):
+            return surface(self, message)
         if action == "duplicate_object":
             return duplicate(self, message)
         return undo(self, message) if action == "undo_object_edit" else edit(self, message)
@@ -1046,10 +1066,10 @@ class Playground:
 
         def change(w: World) -> None:
             obj = _find(w.objects, name, "object")
-            if all(value is None for value in fields.values()):
+            if all(value is None for value in fields.values()) and "surface_material" not in fields:
                 raise PlaygroundError(f"nothing to change: give {', '.join(fields)}")
             for key, value in fields.items():
-                if value is not None:
+                if value is not None or key == "surface_material":
                     setattr(obj, key, value)
 
         return _noted(self._edit(change), _yaw_note(fields.get("yaw")))
@@ -1217,6 +1237,7 @@ class Playground:
         descriptor = hashlib.sha256(World.from_yaml(raw.decode("utf-8")).model_dump_json().encode("utf-8")).hexdigest()
         self._play_world_sha256 = hashlib.sha256(raw).hexdigest() if descriptor == compiled.world_sha256 else None
         self.session.load_model(compiled.model, str(store.file))
+        self._play_addition = self._play_edit = self._play_robot_edit = self._play_terrain_edit = None
         self.last_doctor = compiled.doctor
         world = store.load()
         summary = self.describe()

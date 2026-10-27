@@ -65,6 +65,11 @@ BEHAVIORS = (
     "_layer_cache",
 )
 PLAYGROUND = (
+    "_play_addition",
+    "_play_edit",
+    "_play_robot_edit",
+    "_play_terrain_edit",
+    "_places",
     "_play_world_sha256",
     "_play_world_descriptor",
     "last_doctor",
