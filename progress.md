@@ -1,5 +1,13 @@
 # progress
 
+## Authored terrain reposition (2026-10-28)
+
+Exact instance preview and relative quarter-turn move preserve original ramp/stair configuration, with source/target saved/live protection, one-use Undo and layout replay.
+Late no-op/reset Undo and transaction cleanup warnings are covered.
+Pre-integration219browser/1skip; final482backend/1USDskip and22native,7canonical,source/installed60-tool smoke and original11/11budgets pass; no final all-default-suite claim.
+Three actual Malo/Go2/Panda native workflows fully decode; six decoded samples each inspected,408source/wheel/installed product files exact.
+[Report](docs/bench/2026-10-28-terrain-reposition.md). Broad goal active; shared material appearance retained, action-success tuning deferred.
+
 ## Rejected short-distance contact occlusion (2026-10-27)
 
 Nine real-model contact/raised/environment groups do not show enough ordinary-distance gain from the frozen 6cm/25percent/12tap prototype; root and independent visual review reject it.

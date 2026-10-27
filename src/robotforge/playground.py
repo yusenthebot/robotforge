@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     from robotforge.viewer.object_edit import Edit
     from robotforge.viewer.robot_edit import RobotEdit
     from robotforge.viewer.terrain_create import TerrainAddition
+    from robotforge.viewer.terrain_edit import TerrainEdit
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
 MAX_SIM_SECONDS = 60.0
@@ -128,6 +129,7 @@ class Playground:
     _play_addition: Addition | TerrainAddition | None = field(default=None, init=False, repr=False)
     _play_edit: Edit | None = field(default=None, init=False, repr=False)
     _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
+    _play_terrain_edit: TerrainEdit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
     _play_world_descriptor: str | None = field(default=None, repr=False)
     _layout_reset_hooks: tuple[Any, ...] = field(default=(), init=False, repr=False)
@@ -261,6 +263,7 @@ class Playground:
         def extras() -> dict[str, Any]:
             from robotforge.viewer.object_edit import metadata
             from robotforge.viewer.robot_edit import metadata as robot_metadata
+            from robotforge.viewer.terrain_edit import metadata as terrain_metadata
 
             world = self.current_world()
             robots = self.behaviors.robots()
@@ -269,6 +272,7 @@ class Playground:
                 "robots": robots,
                 "object_edit": metadata(self),
                 "robot_edit": robot_metadata(self),
+                "terrain_edit": terrain_metadata(self),
                 "task_contracts": task_contracts(world),
                 "learned": learned,
                 "world": world.name if world is not None else None,  # the page title; None for a loaded file
@@ -291,6 +295,8 @@ class Playground:
                 return self.add_model_for_play(msg)
             if action == "add_terrain":
                 return self.add_terrain_for_play(msg)
+            if action in {"edit_terrain", "undo_terrain_edit"}:
+                return self.edit_terrain_for_play(msg)
             if action in {"edit_robot_start", "undo_robot_start"}:
                 return self.edit_robot_start_for_play(msg)
             if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object"}:
@@ -514,6 +520,13 @@ class Playground:
     def add_terrain_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
         """Add a fixed local terrain preset on clear ground; pause at saved starts."""
         from robotforge.viewer.terrain_create import handle
+
+        return handle(self, message)
+
+    @_one_edit_at_a_time
+    def edit_terrain_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Move an authored ramp/stair block on clear ground, or undo its latest move."""
+        from robotforge.viewer.terrain_edit import handle
 
         return handle(self, message)
 
@@ -1217,6 +1230,7 @@ class Playground:
         descriptor = hashlib.sha256(World.from_yaml(raw.decode("utf-8")).model_dump_json().encode("utf-8")).hexdigest()
         self._play_world_sha256 = hashlib.sha256(raw).hexdigest() if descriptor == compiled.world_sha256 else None
         self.session.load_model(compiled.model, str(store.file))
+        self._play_addition = self._play_edit = self._play_robot_edit = self._play_terrain_edit = None
         self.last_doctor = compiled.doctor
         world = store.load()
         summary = self.describe()
