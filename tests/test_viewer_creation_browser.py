@@ -11,18 +11,50 @@ from test_viewer_layout import pytestmark, viewer  # noqa: F401, F811
 
 async def click(tab, selector=None, point=None):
     if selector:
-        point = await tab.eval(f"""(() => {{const e=document.querySelector({json.dumps(selector)});
-          e.scrollIntoView({{block:'center'}}); const r=e.getBoundingClientRect();
-          if(!r.width||!r.height)throw Error('hidden '+{json.dumps(selector)});
-          return [r.x+r.width/2,r.y+r.height/2];}})()""")
+        point = await tab.run(f"""
+          const selector={json.dumps(selector)}, deadline=performance.now()+3000;
+          let previous=null, stable=0;
+          document.querySelector(selector)?.scrollIntoView({{block:'center'}});
+          while(performance.now()<deadline) {{
+            await new Promise(requestAnimationFrame);
+            const e=document.querySelector(selector), r=e?.getBoundingClientRect();
+            const x=r?.x+r?.width/2, y=r?.y+r?.height/2;
+            const hit=r?.width>0&&r?.height>0&&x>=0&&y>=0&&x<innerWidth&&y<innerHeight
+              && e.contains(document.elementFromPoint(x,y));
+            stable=hit&&previous?.element===e&&Math.abs(previous.x-x)<.1&&Math.abs(previous.y-y)<.1
+              ? stable+1 : 0;
+            previous={{element:e,x,y}};
+            if(stable>=2) {{
+              window.__nativeClickDelivered=false;
+              // Native select popups complete their click only after a choice, which the caller makes next.
+              window.__nativeClickNeedsDelivery=!e.disabled&&e.tagName!=='SELECT';
+              window.__nativeClickListener=(event)=>{{
+                if(event.isTrusted&&e.contains(event.target))window.__nativeClickDelivered=true;
+              }};
+              document.addEventListener('click',window.__nativeClickListener,true);
+              return [x,y];
+            }}
+          }}
+          throw Error('no stable hit target '+selector);
+        """)
     x, y = point
-    if tab.size == "phone":
-        await tab.page.call("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": x, "y": y}])
-        await tab.page.call("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
-    else:
-        await tab.page.call("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y)
-        for kind in ("mousePressed", "mouseReleased"):
-            await tab.page.call("Input.dispatchMouseEvent", type=kind, x=x, y=y, button="left", clickCount=1)
+    try:
+        if tab.size == "phone":
+            await tab.page.call("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": x, "y": y}])
+            await tab.page.call("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+        else:
+            await tab.page.call("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y)
+            for kind in ("mousePressed", "mouseReleased"):
+                await tab.page.call("Input.dispatchMouseEvent", type=kind, x=x, y=y, button="left", clickCount=1)
+        if selector:
+            await tab.until("window.__nativeClickDelivered || !window.__nativeClickNeedsDelivery", timeout=3)
+    finally:
+        if selector:
+            await tab.run("""
+              document.removeEventListener('click',window.__nativeClickListener,true);
+              delete window.__nativeClickListener; delete window.__nativeClickNeedsDelivery;
+              delete window.__nativeClickDelivered;
+            """)
     await asyncio.sleep(0.15)
 
 

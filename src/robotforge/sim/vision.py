@@ -144,9 +144,14 @@ def dilate(mask: np.ndarray) -> np.ndarray:
     return np.logical_or.reduce(_shifts(mask, False))
 
 
-def clean(mask: np.ndarray) -> np.ndarray:
-    """Erode, then dilate (an "opening"): lone noisy pixels vanish, solid blobs keep their shape."""
-    return dilate(erode(mask))
+def clean(mask: np.ndarray, *, fill_gaps: bool = False) -> np.ndarray:
+    """Open the mask to remove specks; optionally close one- or two-pixel breaks in solid blobs.
+
+    Closing follows opening so isolated noise is removed before it can join a real blob. The default
+    keeps the original opening-only behavior for callers that need separated narrow features.
+    """
+    opened = dilate(erode(mask))
+    return erode(dilate(opened)) if fill_gaps else opened
 
 
 def blur(rgb: np.ndarray) -> np.ndarray:

@@ -999,3 +999,11 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
 - Physical/native v3 workflow and decoded 20.833333-second video, stdio MCP/script/navigation/refusal recovery, seven framework cases, source/installed smoke and original 11/11 install/viewer budgets pass.
 - Full regular/browser:3951passed/127skipped/1failed; all207browser and separate5sensor tests pass. Exact main export reproduces the same seeing evening-mask9/10 failure, with test unchanged. acceptance=false/merge_hold=true; draft PR only. Original copy WIP and failed driver attempts are preserved; broad goal remains active and action-success tuning stays deferred.
 - Details: docs/MALO.md and docs/bench/2026-10-27-malo-workspaces.md.
+
+## 2026-10-27 暗光掩码与原生输入复验
+
+暗光掩码增加可选细缝填合，保留默认开运算、随机种子、颜色阈值与原断言；实际相机同像素输入由 9/10 恢复为 10/10。
+首次完整执行 3956 通过、127 跳过、1 手机复制自动化失败；后续浏览器 206 通过、1 外部编辑后恢复选择失败，均保留。
+补强原生点击目标/送达和新场景绘制就绪检查后，同一产品源码的常规 3750 与浏览器 207 逐项分批验收通过，另五项传感器、七项框架和源码/新安装包冒烟通过。
+wheel 3,872,361 B，398 个包内/安装文件一致，原十三项未提交工作不变；不声称单次全量全绿。
+详见 docs/bench/2026-10-27-seeing-fix.md；下一步为已有道具材质与原生搭建选择器。
