@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 import mujoco
 
-PLAN_VERSION = 2
+PLAN_VERSION = 3
 VISUAL_GROUP = 2
 COLLISION_GROUP = 3  # hidden by the viewer, like MuJoCo Menagerie
 MAX_HULL_VERTICES = 64

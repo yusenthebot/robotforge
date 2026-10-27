@@ -45,10 +45,11 @@ from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.airframe import find_airframe
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
-from robotforge.behaviors.drive import DiffDrive
+from robotforge.behaviors.drive import DiffDrive, rover_drive
 from robotforge.behaviors.reach_in import LOADED_TILT, Hand
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
+from robotforge.behaviors.steering import SteeringDrive, UnsupportedSteering
 from robotforge.design import end_effectors, library, mechanisms, mounting
 from robotforge.design.world import ObjectEntry, RobotEntry, World
 from robotforge.sim.geometry import collides
@@ -68,6 +69,7 @@ MOBILE = (
 WALKERS = (
     quadruped.QuadrupedGait,
     DiffDrive,
+    SteeringDrive,
     humanoid.HumanoidController,
     WheelBalancer,
     SnakeGait,
@@ -906,8 +908,10 @@ class BehaviorManager:
             elif kind == Kind.AIRCRAFT:
                 ctrl = flight.FlightController(m, robot, self.home_qpos())
             else:
-                ctrl = DiffDrive(m, robot)
+                ctrl = rover_drive(m, robot, self.home_qpos())
         except (ValueError, KeyError) as exc:
+            if isinstance(exc, UnsupportedSteering):
+                raise BehaviorError(str(exc)) from exc
             if walker is None and self._kept_walk_or_none(robot) is not None:  # a body the gait code cannot walk
                 return self._rhythm_walker(robot, existing, create)
             if isinstance(exc, KeyError):  # a leg joint no motor drives: a linkage, as in Oli or Cassie
@@ -1002,7 +1006,7 @@ class BehaviorManager:
                 return {"robot": robot, "stopped": True, "hovering": True, "note": flight.STOP_NOTE}
             if _is_mover(ctrl):
                 ctrl.command(0.0, 0.0)  # keep the gait so a dog settles into a stand instead of collapsing
-                if isinstance(ctrl, DiffDrive):
+                if isinstance(ctrl, (DiffDrive, SteeringDrive)):
                     # Wheel speeds at rest now, not at the controller's next tick: an observe right after a stop
                     # showed the wheels still commanded, and agents zeroed them by hand (set_controls, simulate).
                     ctrl.update(self.session.model, self.session.data)
@@ -1074,7 +1078,7 @@ class BehaviorManager:
                 "add_robot's notes say how hard its servos work standing, and stronger servos help), or something "
                 "held it back (a wall or an object in the way, a slope); look with observe"
             )
-        if not isinstance(ctrl, DiffDrive):
+        if not isinstance(ctrl, (DiffDrive, SteeringDrive)):
             return f"{text}: something held it back (a wall or an object in the way, a slope); look with observe"
         m, d = self.session.model, self.session.data
         if ctrl.spin(m, d) > SHORTFALL_FRACTION:

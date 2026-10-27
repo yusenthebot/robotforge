@@ -165,19 +165,39 @@ def _draft(
     geo = Geometry(model, data)
     plan.base, draft.base_reason = _choose_base(staged, geo, base)
     plan.spawn_height, draft.lifted = _spawn_height(plan.base, geo)
-    plan.friction = _friction(staged)
+    plan.friction = _friction(staged, geo)
     movable = [j for j in staged.joints if j.type in MOVABLE and not j.mimic_of]
     _plan_actuators(staged, geo, draft, movable)
     plan.excludes = _plan_exclusions(urdf, home)
     return draft
 
 
-def _friction(staged: StagedUrdf) -> dict[str, float]:
+def _friction(staged: StagedUrdf, geo: Geometry) -> dict[str, float]:
     """Sliding friction per link: the author's Gazebo values, and slippery casters and skids."""
     out = {link: CASTER_FRICTION for link in staged.links if _PASSIVE.search(link)}
     named = wheel_joints(staged)
     wheels = [j for j in staged.joints if j.name in named]
-    if len(wheels) >= 3 and not out:  # skid steering
+    by_child = {j.child: j for j in staged.joints}
+
+    # Use the already posed geometry: URDF axes are local to rotated joint frames, and suspension may
+    # move at home. Only a yaw-like hinge is steering; pitch/roll rockers and sliders still skid-steer.
+    root = max(0, geo.body_id(staged.root))
+    up = geo.data.xmat[root].reshape(3, 3)[:, 2]
+
+    def steered(wheel: JointInfo) -> bool:
+        parent = by_child.get(wheel.parent)
+        while parent is not None:
+            joint = geo.joint_id(parent.name)
+            if (
+                parent.type in ("revolute", "continuous")
+                and joint >= 0
+                and abs(float(geo.data.xaxis[joint] @ up)) > 1e-4
+            ):
+                return True
+            parent = by_child.get(parent.parent)
+        return False
+
+    if len(wheels) >= 3 and not out and not any(steered(j) for j in wheels):  # skid steering
         out.update({j.child: SKID_STEER_FRICTION for j in wheels})
     out.update(staged.link_friction)
     return out

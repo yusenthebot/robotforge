@@ -8,6 +8,7 @@ import mujoco
 import numpy as np
 from pydantic import Field
 
+from robotforge.behaviors.steering import steering_binding
 from robotforge.control.tasks.base import Batch, Task, TaskError, TaskParams, home_qpos, smooth_abs
 
 
@@ -36,6 +37,15 @@ class DriveTo(Task):
         if root < 0:
             raise TaskError(f"robot {robot!r} is fixed to the world; drive_to needs {self.robot_hint}")
         self.qa, self.da = int(model.jnt_qposadr[root]), int(model.jnt_dofadr[root])
+        try:
+            modules = steering_binding(model, robot, home_qpos(model))
+        except ValueError as exc:
+            raise TaskError(str(exc)) from exc
+        if modules is not None:
+            raise TaskError(
+                "drive_to uses a two-wheel action space and does not support independent steering; "
+                "use move or go_to to drive this robot"
+            )
         self.left = self.robot.find(mujoco.mjtObj.mjOBJ_ACTUATOR, "left_wheel")
         self.right = self.robot.find(mujoco.mjtObj.mjOBJ_ACTUATOR, "right_wheel")
         if self.left < 0 or self.right < 0:
