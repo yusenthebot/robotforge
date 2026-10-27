@@ -1,0 +1,1109 @@
+{
+  "date": "2026-10-27",
+  "base_main": "8c1e5a39bd4ec641fa5d99a5d2c367aaa2aeb85a",
+  "active_source_sha256": "b6381c3d4add4ceae5b04bdef0d7aa74493f20217a9e1f0f2c14344940232b16",
+  "frozen_inputs": 738,
+  "production_files": 406,
+  "verification": {
+    "core": {
+      "source": "7842754e9328e9d87638cbf34c2e43bca6587f5d84e28cc36f50e01cf2090cc2",
+      "result": {
+        "tests": 3922,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 128,
+        "passed": 3794
+      },
+      "receipt_sha256": "e0807f986c484a2a62b14721c300f4a0e223ba2add58f650f23b47071fcc8aaa"
+    },
+    "final_browser": {
+      "source": "b6381c3d4add4ceae5b04bdef0d7aa74493f20217a9e1f0f2c14344940232b16",
+      "result": {
+        "tests": 212,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1,
+        "passed": 211
+      },
+      "receipt_sha256": "5dde009281b711a499c4d6db81becc4f4e961d840bb141d9ad797a093864c324"
+    },
+    "final_targeted": {
+      "tests": 24,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 24
+    },
+    "final_contracts": {
+      "tests": 44,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 44
+    },
+    "core_to_final": {
+      "core_source": "7842754e9328e9d87638cbf34c2e43bca6587f5d84e28cc36f50e01cf2090cc2",
+      "final_source": "b6381c3d4add4ceae5b04bdef0d7aa74493f20217a9e1f0f2c14344940232b16",
+      "changed_production_files": [
+        "src/robotforge/viewer/static/app.js"
+      ],
+      "all_other_production_files_exact": true,
+      "only_late_camera_refit_branch_changed": true,
+      "core_tests_exclude_browser": true,
+      "final_tests_revalidate_browser_and_viewer_contracts": true
+    },
+    "first_full_browser": {
+      "tests": 212,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 210
+    },
+    "scope_note": "Regular core run is on the earlier source; final product differs only by the late lesson refit branch. Full browser rerun is on final product and corrected readiness drivers. Neither is relabeled as one full final default-plus-browser run."
+  },
+  "budget": {
+    "started": "2026-10-27T21:13:48+08:00",
+    "sha": "8c1e5a3-dirty",
+    "quick": false,
+    "partial": true,
+    "covers": [
+      "install",
+      "viewer"
+    ],
+    "machine": {
+      "system": "Darwin",
+      "release": "26.3.2",
+      "machine": "arm64",
+      "cpus": 18,
+      "python": "3.12.16",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "load": [
+        26.7,
+        28.2,
+        26.4
+      ]
+    },
+    "load_after": [
+      19.8,
+      26.4,
+      25.8
+    ],
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3821.3828,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.5493,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.5
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.9187,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.604
+        },
+        "fps": {
+          "value": 60.1389,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.1,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.100000023841858,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1609,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 3.8,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.799999952316284,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 136.2,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 561.4
+        },
+        "idle_cpu_pct": {
+          "value": 4.6,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "budgets": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "imports.robotforge_cpu_ms": "not run",
+      "imports.cli_cpu_ms": "not run",
+      "imports.mcp_server_cpu_ms": "not run",
+      "imports.robotforge_heavy": "not run",
+      "imports.cli_heavy": "not run",
+      "imports.mcp_server_heavy": "not run",
+      "physics.dog_idle.steps_per_s": "not run",
+      "physics.dog_idle.controllers_share": "not run",
+      "physics.dog_walk.steps_per_s": "not run",
+      "physics.go2_idle.steps_per_s": "not run",
+      "physics.go2_idle.controllers_share": "not run",
+      "physics.go2_walk.steps_per_s": "not run",
+      "physics.go2_rl_idle.steps_per_s": "not run",
+      "physics.go2_rl_idle.controllers_share": "not run",
+      "physics.humanoid_idle.steps_per_s": "not run",
+      "physics.humanoid_idle.controllers_share": "not run",
+      "physics.arm_pick.steps_per_s": "not run",
+      "physics.warehouse_nav.steps_per_s": "not run",
+      "physics.objects_20.steps_per_s": "not run",
+      "physics.machine.steps_per_s": "not run",
+      "physics.dog_idle.peak_mb": "not run",
+      "physics.go2_walk.peak_mb": "not run",
+      "physics.warehouse_nav.peak_mb": "not run",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok",
+      "mcp.start_s": "not run",
+      "mcp.new_world_ms": "not run",
+      "mcp.add_robot_ms": "not run",
+      "mcp.move_ms": "not run",
+      "mcp.observe_ms": "not run",
+      "mcp.server_rss_mb": "not run",
+      "mcp.idle_cpu_pct": "not run"
+    }
+  },
+  "framework": {
+    "report": {
+      "issues": [],
+      "mode": "compare",
+      "source_changed": {
+        "active_source_sha256": {
+          "baseline": "258196f0c8df72d146af35b410c79bb0ec72e6fef6112e237572cee9fff0e7af",
+          "candidate": "b6381c3d4add4ceae5b04bdef0d7aa74493f20217a9e1f0f2c14344940232b16"
+        },
+        "git_commit": {
+          "baseline": "aae92839f5a8c91f4e143d4c90e893fa808309a2",
+          "candidate": "8c1e5a39bd4ec641fa5d99a5d2c367aaa2aeb85a"
+        }
+      },
+      "status": "pass"
+    },
+    "source": {
+      "active_source_sha256": "b6381c3d4add4ceae5b04bdef0d7aa74493f20217a9e1f0f2c14344940232b16",
+      "git_commit": "8c1e5a39bd4ec641fa5d99a5d2c367aaa2aeb85a",
+      "git_dirty": true,
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+      "plugins": [],
+      "python": "3.12.13"
+    },
+    "cases": 7
+  },
+  "package": {
+    "wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-detail-view/dist-final/robotforge-0.0.1-py3-none-any.whl",
+    "bytes": 3913096,
+    "sha256": "8645bf9b7571a5828ff763b888bbdcfe4c135e8cb416acfe9df5e741653e2222",
+    "source_files_exact": 406,
+    "no_packaged_cad": true,
+    "active_source_sha256": "b6381c3d4add4ceae5b04bdef0d7aa74493f20217a9e1f0f2c14344940232b16",
+    "installed_files_exact": 406
+  },
+  "screening": {
+    "probe-4096": {
+      "cases": {
+        "malo": {
+          "captured_arrays": 486,
+          "different_arrays": [
+            "mesh_pathadr",
+            "paths"
+          ],
+          "world_equal": true,
+          "mesh_files": [
+            {
+              "before": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-detail-view/probe-baseline/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+              "after": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-detail-view/probe-4096/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+              "sha256": "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+            }
+          ],
+          "views": {
+            "normal": {
+              "camera_errors": {
+                "eye": 3.907985046680551e-14,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 3.907985046680551e-14,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 0.004557861328125,
+              "fraction_pixels_any_channel_changed": 0.002418701171875,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            },
+            "detail": {
+              "camera_errors": {
+                "eye": 0.0,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 0.0,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 0.014235432942708333,
+              "fraction_pixels_any_channel_changed": 0.00637548828125,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            }
+          }
+        },
+        "go2": {
+          "captured_arrays": 486,
+          "different_arrays": [],
+          "world_equal": true,
+          "mesh_files": [],
+          "views": {
+            "normal": {
+              "camera_errors": {
+                "eye": 0.0,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 0.0,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 0.06327506510416667,
+              "fraction_pixels_any_channel_changed": 0.065805908203125,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            },
+            "detail": {
+              "camera_errors": {
+                "eye": 0.0,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 0.0,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 0.08642692057291666,
+              "fraction_pixels_any_channel_changed": 0.059419921875,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            }
+          }
+        },
+        "panda": {
+          "captured_arrays": 486,
+          "different_arrays": [],
+          "world_equal": true,
+          "mesh_files": [],
+          "views": {
+            "normal": {
+              "camera_errors": {
+                "eye": 0.0,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 0.0,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 0.00690185546875,
+              "fraction_pixels_any_channel_changed": 0.0035146484375,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            },
+            "detail": {
+              "camera_errors": {
+                "eye": 1.1102230246251565e-14,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 1.1102230246251565e-14,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 0.018778157552083334,
+              "fraction_pixels_any_channel_changed": 0.008570068359375,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            }
+          }
+        }
+      },
+      "decision": "reject",
+      "reason": "Near-view shadow edges improve at four times map pixels; ordinary-view benefit insufficient."
+    },
+    "probe-reflection": {
+      "cases": {
+        "malo": {
+          "captured_arrays": 486,
+          "different_arrays": [
+            "mesh_pathadr",
+            "paths"
+          ],
+          "world_equal": true,
+          "mesh_files": [
+            {
+              "before": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-detail-view/probe-baseline/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+              "after": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-detail-view/probe-reflection/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+              "sha256": "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+            }
+          ],
+          "views": {
+            "normal": {
+              "camera_errors": {
+                "eye": 2.4424906541753444e-14,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 2.4424906541753444e-14,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 13.676514892578124,
+              "fraction_pixels_any_channel_changed": 0.886827392578125,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            },
+            "detail": {
+              "camera_errors": {
+                "eye": 0.0,
+                "target": 1.1102230246251565e-16,
+                "projection": 0.0,
+                "world": 3.3306690738754696e-16,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 13.945436848958334,
+              "fraction_pixels_any_channel_changed": 0.95253125,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            }
+          }
+        },
+        "go2": {
+          "captured_arrays": 486,
+          "different_arrays": [],
+          "world_equal": true,
+          "mesh_files": [],
+          "views": {
+            "normal": {
+              "camera_errors": {
+                "eye": 0.0,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 0.0,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 11.309218505859375,
+              "fraction_pixels_any_channel_changed": 0.9604580078125,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            },
+            "detail": {
+              "camera_errors": {
+                "eye": 0.0,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 0.0,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 13.160968505859374,
+              "fraction_pixels_any_channel_changed": 0.969326416015625,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            }
+          }
+        },
+        "panda": {
+          "captured_arrays": 486,
+          "different_arrays": [],
+          "world_equal": true,
+          "mesh_files": [],
+          "views": {
+            "normal": {
+              "camera_errors": {
+                "eye": 0.0,
+                "target": 0.0,
+                "projection": 0.0,
+                "world": 0.0,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 11.112743326822917,
+              "fraction_pixels_any_channel_changed": 0.8336455078125,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            },
+            "detail": {
+              "camera_errors": {
+                "eye": 4.440892098500626e-15,
+                "target": 1.1102230246251565e-16,
+                "projection": 0.0,
+                "world": 4.440892098500626e-15,
+                "near": 0.0,
+                "far": 0.0
+              },
+              "mean_rgb_abs_delta_8bit": 12.27471630859375,
+              "fraction_pixels_any_channel_changed": 0.9353095703125,
+              "render_equal": true,
+              "memory_counts_equal": true,
+              "program_counts_equal": true
+            }
+          }
+        }
+      },
+      "decision": "reject",
+      "reason": "Lowering three fill panels produces only mild darkening, no clear material-quality improvement."
+    }
+  },
+  "workflow": {
+    "manifest_sha256": "9f6280586b53dbad1091cd8b7d7c1b671a2d2c4f09771c4e0b5b402990183b08",
+    "source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.16",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "8c1e5a39bd4ec641fa5d99a5d2c367aaa2aeb85a",
+      "git_dirty": true,
+      "active_source_sha256": "b6381c3d4add4ceae5b04bdef0d7aa74493f20217a9e1f0f2c14344940232b16",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "passed": true,
+    "inspection_invariants_exact": true,
+    "local_inputs_before": {
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/end_effectors/malo_pinch/gripper_camera_link.STL": {
+        "sha256": "da0aba3723ab38ac030b3384d795f5a315af4cabb2ba703031ff29f76fd48157",
+        "bytes": 18084
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/end_effectors/malo_pinch/gripper_left_finger_link.STL": {
+        "sha256": "857ca5f50714b11e43ba8ab2fdf16eaee548afc74b6160696a386ec1ecdb4678",
+        "bytes": 162184
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/end_effectors/malo_pinch/gripper_link.STL": {
+        "sha256": "6183c9a29302af6e4bd45a11f189f465510adab475e2b4f5b9040c4e39e67c28",
+        "bytes": 1500484
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/end_effectors/malo_pinch/gripper_right_finger_link.STL": {
+        "sha256": "7653b43118e450dc3f4a5301f1ab744f4c30af8f7aa72471abb8cb7bd25944fd",
+        "bytes": 160684
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/base_link.STL": {
+        "sha256": "9b4307b11dd22d274cc955594347577a368e8ab505f32fb6a7fd5bbd36d384d8",
+        "bytes": 8375334
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/fl_steering_link.STL": {
+        "sha256": "524e02e2cf810c16debbb7053cab821df800bf1f514894559878f04a3edfbb83",
+        "bytes": 141884
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/fl_wheel_link.STL": {
+        "sha256": "fa844d956692db57119c00e97d7fdcdf9224f5ab5b479b4f521015799bdb443d",
+        "bytes": 330484
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/fr_steering_link.STL": {
+        "sha256": "2444c9918a0ea6964a297f24c3e6d6f307765a848a50d9eb56ff6193ff108c72",
+        "bytes": 141884
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/fr_wheel_link.STL": {
+        "sha256": "ebd736710db8e547e7065eacd1b764cb1578efec031084fc078e51696a7e0430",
+        "bytes": 330484
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/head_link.STL": {
+        "sha256": "69fabefa311a1067076900215ff26695394e733d38e473cfd7fd6c28edc5ef5f",
+        "bytes": 980384
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/head_yaw_link.STL": {
+        "sha256": "b87b9d18e64be889bde142b181fd545047831df37122343cc6673f171ace1198",
+        "bytes": 1657684
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/left_arm_link_1.STL": {
+        "sha256": "5ff47073d828bf87becb253f3909155c49e6ad9f65f1fd4c784f8806ecdb8a40",
+        "bytes": 1257884
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/left_arm_link_2.STL": {
+        "sha256": "8a19029d457b74be443e8f50bec936574bef0cad4d857b8eb75b7e2acda25ea8",
+        "bytes": 478884
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/left_arm_link_3.STL": {
+        "sha256": "8b04618a1dd3506404aaecf07f143d43de90c50f543301a9bf36d7fb8f5ef55e",
+        "bytes": 1723034
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/left_arm_link_4.STL": {
+        "sha256": "6daaf72ebe4bdc32d14d9f9cd612a5355248e064490935619140582eb301782b",
+        "bytes": 728184
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/left_arm_link_5.STL": {
+        "sha256": "8d5672b6e3e8cbe717e41434a93b44cfbeb3bdf629c2c3cd94a057f40f0e6710",
+        "bytes": 2195184
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/left_arm_link_6.STL": {
+        "sha256": "405cc7c9f9fcc673c4a0be4acc1796614a53d4cb425bad9201ed6ecc61b47cf2",
+        "bytes": 1079284
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/left_arm_link_7.STL": {
+        "sha256": "5140758ec0b0b65b3997524b7c8f5fcf085b35a730e9c78aa743508ca0e3fd2e",
+        "bytes": 158684
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/right_arm_link_1.STL": {
+        "sha256": "473a1e2c4ddf46a9335010a327b9bd5c8b6f431f06df2326532745d013a11eff",
+        "bytes": 1258184
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/right_arm_link_2.STL": {
+        "sha256": "6d0dea6323a3147536d87b350776a5a1225467aedefb342617d2b9d311b1675e",
+        "bytes": 475584
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/right_arm_link_3.STL": {
+        "sha256": "15526be6fffad02c949ff08388b412a0ce340da0190eb8a854e00c75ff8d409e",
+        "bytes": 1723534
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/right_arm_link_4.STL": {
+        "sha256": "5da5cb1a240dabc67c0c297394d1bf7a0f4e290da3b9e53e43cfee955f96cc79",
+        "bytes": 727884
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/right_arm_link_5.STL": {
+        "sha256": "b67a70b59038b85f79b24a7b14407509059c0e9fc7a53c40629d9c83f6840bbd",
+        "bytes": 2195084
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/right_arm_link_6.STL": {
+        "sha256": "e304da35e1ead63d249185a6e50dd30c1deba2447e79c27802b282e08f03c30e",
+        "bytes": 1079684
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/right_arm_link_7.STL": {
+        "sha256": "8c3ab44f9d36b98950e4da202e2716d259b9ab909b19f043daba3aaa033509ee",
+        "bytes": 158684
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/rl_steering_link.STL": {
+        "sha256": "8532441cb997529aaa3bc8cb136ae5d2ab6f6aa768bf30657b6256f6e0f5a841",
+        "bytes": 141884
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/rl_wheel_link.STL": {
+        "sha256": "fa844d956692db57119c00e97d7fdcdf9224f5ab5b479b4f521015799bdb443d",
+        "bytes": 330484
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/rr_steering_link.STL": {
+        "sha256": "327a498463f70508c6056814680c23319ad30028571633c6bcf35f2f6e45ed2e",
+        "bytes": 141884
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/rr_wheel_link.STL": {
+        "sha256": "1287853f3d53a60c3e59ed58b830ffce85557c3d9b61fbe4f1958e999a26acab",
+        "bytes": 330484
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/stereo_camera_link.STL": {
+        "sha256": "1fd3cb8985ce7edd95a48814cc25ea6073d940546736cc8ee7d0a8c59459cea0",
+        "bytes": 100384
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/torso_lift_link.STL": {
+        "sha256": "f5ac21652de2d9f81f392b6f9216b66acd247a3abf2ad37e4c41c096e8e0e5ae",
+        "bytes": 1259584
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/meshes/robots/malo_edu/torso_link.STL": {
+        "sha256": "4d5dd1e751d36d87aa7b4755c1abe6ee778efa71f7f8be98be9a7fe82234163d",
+        "bytes": 4527884
+      },
+      "/Users/yusenthebot/dev/ZenoBench/robot_sources/zeno_malo_description-master/zeno_malo_edu.generated.urdf": {
+        "sha256": "93f5366c4573ac379779858b765c2fdd3578ad0802b35d003d415c42f8b0b95a",
+        "bytes": 40181
+      }
+    },
+    "local_inputs_after_exact": true,
+    "native_input_count": 43,
+    "all_native_trusted": true,
+    "reset": {
+      "before": 2,
+      "after": 3,
+      "qpos_ctrl_home_exact": true
+    },
+    "framing": {
+      "material_wood": {
+        "rect": {
+          "left": 0,
+          "right": 944,
+          "top": 50,
+          "bottom": 585.625
+        },
+        "points": [
+          [
+            313.4412914175845,
+            336.79172382133163,
+            0.995534025940844
+          ],
+          [
+            306.75675312339024,
+            236.1422670032396,
+            0.995343645547077
+          ],
+          [
+            355.4415755573624,
+            318.4713326478933,
+            0.9957375463850184
+          ],
+          [
+            350.75804758665174,
+            221.8040541401061,
+            0.9955642686126318
+          ],
+          [
+            624.6584536809987,
+            438.698881269406,
+            0.9944019436751296
+          ],
+          [
+            632.7936153434753,
+            316.90363319034896,
+            0.9941009648617871
+          ],
+          [
+            659.2548672225297,
+            410.36181093953286,
+            0.9947167389808382
+          ],
+          [
+            668.6495851534193,
+            294.27385917499043,
+            0.9944491707479556
+          ]
+        ],
+        "center": [
+          0.9999999937755046,
+          -0.6500000059597332,
+          0.11999999883081786
+        ],
+        "target": [
+          0.9999999937755044,
+          -0.6500000059597332,
+          0.11999999883081784
+        ],
+        "eye": [
+          2.1047674295785654,
+          -2.136414374131055,
+          0.8632071829164634
+        ]
+      },
+      "material_steel": {
+        "rect": {
+          "left": 0,
+          "right": 944,
+          "top": 50,
+          "bottom": 585.625
+        },
+        "points": [
+          [
+            483.9651858748995,
+            526.9364802827296,
+            0.9947463186189219
+          ],
+          [
+            486.34747893830354,
+            338.33947306998226,
+            0.9936937988755651
+          ],
+          [
+            315.92822634423976,
+            409.4961238358917,
+            0.9953576267808671
+          ],
+          [
+            289.06589690332396,
+            226.2487816379566,
+            0.9945529838040623
+          ],
+          [
+            625.4899262850328,
+            394.6385709395795,
+            0.9954349642790393
+          ],
+          [
+            651.3970922122013,
+            212.4265283129332,
+            0.9946589325816371
+          ],
+          [
+            462.65614990475996,
+            304.44423090549816,
+            0.9959044497088546
+          ],
+          [
+            461.2640644390009,
+            130.17299318006556,
+            0.9952894131041399
+          ]
+        ],
+        "center": [
+          0.30000001192092896,
+          -0.6499999761581421,
+          0.1599999964237213
+        ],
+        "target": [
+          0.30000001192092896,
+          -0.6499999761581421,
+          0.1599999964237213
+        ],
+        "eye": [
+          -0.45516776177449936,
+          -1.309270015442476,
+          0.9971564997637341
+        ]
+      },
+      "workbench": {
+        "rect": {
+          "left": 0,
+          "right": 944,
+          "top": 50,
+          "bottom": 585.625
+        },
+        "points": [
+          [
+            421.3313429673344,
+            517.0331164670673,
+            0.998290687298162
+          ],
+          [
+            413.877900124682,
+            376.23606321080865,
+            0.9980344414839132
+          ],
+          [
+            301.5596058377108,
+            430.4075659747879,
+            0.9984407350102623
+          ],
+          [
+            278.93386612833683,
+            291.8488864333993,
+            0.9982294101636248
+          ],
+          [
+            625.3846144206268,
+            338.43972641209746,
+            0.9986000363230365
+          ],
+          [
+            643.4684326848593,
+            204.53829885985152,
+            0.9984311331105716
+          ],
+          [
+            510.6727818920825,
+            278.9391330318976,
+            0.9987030997708829
+          ],
+          [
+            514.8686460178777,
+            149.2602117227658,
+            0.99855884796107
+          ]
+        ],
+        "center": [
+          1.25,
+          0.20000000298023227,
+          0.37499999145860424
+        ],
+        "target": [
+          1.25,
+          0.20000000298023224,
+          0.37499999145860424
+        ],
+        "eye": [
+          -1.1148106696697595,
+          -1.864506557536021,
+          2.996558670520965
+        ]
+      }
+    },
+    "native_orbit": {
+      "before": [
+        2.1047674295785654,
+        -2.136414374131055,
+        0.8632071829164634
+      ],
+      "after": [
+        -0.15361644323269896,
+        -1.6577347256157333,
+        1.3990369532061273
+      ]
+    },
+    "console_errors": [],
+    "runtime_errors": [],
+    "page_errors": [],
+    "gl_error": 0,
+    "chrome_exit_code": 0,
+    "server_thread_stopped": true,
+    "media": {
+      "source_manifest_sha256": "9f6280586b53dbad1091cd8b7d7c1b671a2d2c4f09771c4e0b5b402990183b08",
+      "helper_sha256": "8eb8663be8c014873b7d29c844d83db2bcb6035c0d8643a7385d78cd37afc72c",
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-detail-view/workflow/workflow.mp4",
+      "video_sha256": "24a5c28ffd9e174be8c140fe019270e9a252fe3d56ca7907d6ba32c3ea979f43",
+      "video_bytes": 2728117,
+      "raw_frame_count": 858,
+      "raw_timestamp_span_seconds": 17.665975093841553,
+      "raw_arrival_inversions": [],
+      "maximum_arrival_inversion_seconds": 0,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "encoding_cap_seconds": null,
+      "duration_capped": false,
+      "duration_seconds": 17.766667,
+      "expected_duration_from_raw_seconds": 17.73264176050822,
+      "decoded_frame_count": 533,
+      "decode_exit_code": 0,
+      "decode_stderr": "",
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1280,
+            "height": 800,
+            "r_frame_rate": "30/1",
+            "duration": "17.766667",
+            "nb_read_frames": "533"
+          }
+        ]
+      },
+      "decoded_contacts": [
+        {
+          "seconds": 0.35533334000000005,
+          "path": "t0.355.png",
+          "sha256": "0393f932bb6e10400d9b9e4b0cbb404d798ee4d9fa5dde342b0cd065a87f8170"
+        },
+        {
+          "seconds": 3.5533334000000005,
+          "path": "t3.553.png",
+          "sha256": "54d80cf69eea21e579f2cd735acf5eb3db2b7645c6641f1acb885566fc2954b6"
+        },
+        {
+          "seconds": 7.106666800000001,
+          "path": "t7.107.png",
+          "sha256": "81f2b9421826a45885c126a65813522b3662241106cccc4321d85da15269553b"
+        },
+        {
+          "seconds": 10.6600002,
+          "path": "t10.660.png",
+          "sha256": "fdc1b6051702ebe891de1cb0c8c98eee06d0ba68172d910d47951f45aa2be0ab"
+        },
+        {
+          "seconds": 14.213333600000002,
+          "path": "t14.213.png",
+          "sha256": "4f0c8a411b8453e2fefc262ee262ce5be43d6b89a861f5bbb60d0530495a30e0"
+        },
+        {
+          "seconds": 17.41133366,
+          "path": "t17.411.png",
+          "sha256": "db5702d212906c9c6cbf7249f45411c466638b13ec035f01aa1d0192078b3fbf"
+        }
+      ],
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-detail-view/workflow/decoded-contact.jpg",
+      "decoded_contact_sheet_sha256": "96fd0086b6507eae067a1f2a8ebd3b4ad63a0a35128a5985b849c18bcb8611b5",
+      "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+    },
+    "raw_media_qa_sha256": "378c58f54c01819519ebb98b77f779ec1c27887ee09550d64a7dcefb775d07f9"
+  },
+  "optional_tools": {
+    "mypy": false,
+    "pyright": false,
+    "bandit": false,
+    "pip_audit": false
+  },
+  "audit": {
+    "added_and_new_source_lines_scanned": 238,
+    "new_code_files_included": [
+      "tests/test_viewer_lesson_camera_browser.py",
+      "tests/test_viewer_prop_focus_browser.py",
+      "tests/viewer_camera.py"
+    ],
+    "secret_pattern_hits": {
+      "private_key": 0,
+      "known_token": 0,
+      "literal_secret_assignment": 0
+    },
+    "added_product_debug_statements": 0,
+    "preserved_original_files": 13,
+    "all_original_hashes_exact": true,
+    "scope": "Added-line lightweight patterns, not a bandit/pip-audit substitute."
+  },
+  "receipt_sha256": {
+    "build-final": "02ac9165e5a4203ceaf021a3f7aed0a948ff9152956e9b18b5d1a5686daa00aa",
+    "lint-confirmed": "aaa3d88394a4da52edcd5625f5227dbb938d99ee4daa43c85d5cf18648e48bbd",
+    "format-confirmed": "b493a7315877c01bc458fe528509891c4a15679629224dcad483af63d99b8f37",
+    "syntax-final": "eb169696abffba56a79f2a9406ed0ba91267e11cd871f4b49605f6f5f14c5016",
+    "viewer-contracts": "1b1869ee919479228408603188ab645e911bfc1d75f310b6a67b966cda3afb00",
+    "browser-confirmed": "5dde009281b711a499c4d6db81becc4f4e961d840bb141d9ad797a093864c324",
+    "layout-green": "b39c5ba2220859db17dec82a36d2cab645d3c998a8621b5f3832eefad82ee92c",
+    "budget": "e897b7912a60d24b06fa725b02f7c494e2f8bc6858a6fc79c1f50f6987b4b819",
+    "smoke-source": "74c08f04a93c865b818d1b4b27b3ddf7e657470e5729705c974760a53da09b23",
+    "export-runtime": "3ca314c3a38f143681eaa7ce303141663f5870bba106a25c13d2c9e2fbdd64b1",
+    "create-wheel-env": "f0aca9c60fef71b010c33bd7637cc4dd511fc55c9fa349666f6f9054040b6079",
+    "install-runtime": "dda0342747d9436392f522a7a1dda54290e901bc2d2b9a05e892f92931653b4f",
+    "install-wheel": "0f7e12d91143764b7add51a35b45c19c1f13fd9985e262c84f613d3d0b1ac72a",
+    "smoke-installed": "14f9be4b51357bdb01a623aae9859a3bedc0b89e71884cc0f205dc9f92b67b79",
+    "framework-py31213-direct": "3e95dacd0b28896cb2cf83b5503737d292a6b003c69d074e0c112f2367669d40"
+  },
+  "evidence_directory": "../robotforge-evidence/2026-10-27-detail-view",
+  "limits": [
+    "Broad quality/play goal remains active; no individual manipulation tuning.",
+    "Two visual probes rejected; no claimed new material-quality gain.",
+    "Mac/Chrome emulated phone, no physical phone or Windows/all-plugin certification.",
+    "Optional USD not installed. mypy/pyright/bandit/pip-audit unavailable, not passed.",
+    "Encoded 30fps is media encoding, not app FPS. Six decoded samples plus full decode do not establish full dynamic perceptual review."
+  ],
+  "prior_attempts": [
+    "Initial compatibility batch interrupted after3failed/78passed.",
+    "Strict JSON camera stability helper timed out on floating point rest noise; bounded numeric check replaced it.",
+    "Deterministic real late lesson reply failed rig containment before product refit fix.",
+    "First final browser invocation had1failed/210passed; phone-en layout Cancel focus sampled empty.",
+    "Five original phone-en diagnostic reruns passed; focus-loss sequence not reproduced, no fabricated cause.",
+    "Corrected driver waits for real visible confirmation and Cancel focus, retaining exact assertion; reload requires new document.",
+    "First diagnostic omitted browser marker and deselected; retained."
+  ]
+}
