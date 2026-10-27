@@ -61,10 +61,16 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def wrapper() -> Path:
-    """An executable that behaves like `$ISAACLAB_PYTHON`, written next to the cache."""
+    """An executable that behaves like `$ISAACLAB_PYTHON`, written next to the cache.
+
+    One per interpreter: two checkouts (a long sweep in one, development in the other) sharing a single
+    wrapper would each repoint it on launch, and the sweep's later episodes would run the other code."""
+    import hashlib
+
     from robotforge.design.menagerie import cache_root
 
-    path = cache_root() / "zenobench" / "bin" / "isaaclab-python"
+    tag = hashlib.sha1(sys.executable.encode()).hexdigest()[:10]
+    path = cache_root() / "zenobench" / "bin" / f"isaaclab-python-{tag}"
     path.parent.mkdir(parents=True, exist_ok=True)
     body = f'#!/bin/sh\nexec "{sys.executable}" -m robotforge.zenobench.python "$@"\n'
     if not path.exists() or path.read_text(encoding="utf-8") != body:

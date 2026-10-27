@@ -439,6 +439,21 @@ def test_moving_hulls_follow_physx_vertex_limits():
     assert _hull_vertex_count(_mesh_body_scene(body=False)) == 240  # static colliders keep exact pieces
 
 
+def test_each_interpreter_gets_its_own_launcher(monkeypatch, tmp_path):
+    import sys
+
+    from robotforge.design import menagerie
+    from robotforge.zenobench import python
+
+    monkeypatch.setattr(menagerie, "cache_root", lambda: tmp_path)
+    paths = []
+    for exe in ("/venvs/sweep/bin/python", "/venvs/dev/bin/python"):
+        monkeypatch.setattr(sys, "executable", exe)
+        paths.append(python.wrapper())
+    assert paths[0] != paths[1]  # a launch from one checkout never repoints the other's episodes
+    assert "/venvs/sweep/bin/python" in paths[0].read_text() and "/venvs/dev/bin/python" in paths[1].read_text()
+
+
 @pytest.fixture
 def isolated_shim(monkeypatch):
     """Install the stand-ins for one test, then put back every module and patch they replaced, so tests
