@@ -13,9 +13,38 @@ from test_viewer_objects_browser import choose_object
 READY = "window.__robotforge.scene?.version === window.__robotforge.renderedVersion"
 
 
+async def select_material(tab, value):
+    # macOS desktop Chrome uses a native popup for arrow keys; closed-select typeahead
+    # produces trusted input/change without depending on that OS popup's key handling.
+    await tab.run("""const e=document.getElementById('place-material');e.focus();
+      window.__materialChanges=[];window.__materialListener=event=>
+        window.__materialChanges.push({trusted:event.isTrusted,value:e.value});
+      e.addEventListener('change',window.__materialListener);""")
+    if tab.size == "phone":
+        steps = ["", "plastic", "wood", "steel"].index(value)
+        for key_name, code in [("Home", 36), *[("ArrowDown", 40)] * steps]:
+            for event in ("keyDown", "keyUp"):
+                await tab.page.call("Input.dispatchKeyEvent", type=event, key=key_name, windowsVirtualKeyCode=code)
+    else:
+        # Chromium accumulates printable keys for one second; start a new choice after that window.
+        await asyncio.sleep(1.05)
+        letter = await tab.eval(f"document.querySelector('#place-material option[value={value}]').textContent[0]")
+        for event in ("keyDown", "keyUp"):
+            await tab.page.call(
+                "Input.dispatchKeyEvent", type=event, key=letter, text=letter if event == "keyDown" else ""
+            )
+    assert await tab.eval("document.getElementById('place-material').value") == value
+    changes = await tab.eval("window.__materialChanges")
+    await tab.run("document.getElementById('place-material').removeEventListener('change',window.__materialListener)")
+    assert changes and all(change["trusted"] for change in changes)
+    assert changes[-1]["value"] == value
+
+
 async def place_at(tab, point):
     before = await tab.eval("window.__robotforge.scene.version")
-    await click(tab, point=await tab.eval(f"window.__robotforge.screenOfPoint({json.dumps(point)})"))
+    projected = await tab.eval(f"window.__robotforge.screenOfPoint({json.dumps(point)})")
+    assert await tab.eval(f"document.elementFromPoint({projected[0]},{projected[1]})?.id") == "view"
+    await click(tab, point=projected)
     await tab.until(f"{READY} && window.__robotforge.scene.version > {before} && !window.__robotforge.busy().busy")
 
 
@@ -23,8 +52,16 @@ async def place_at(tab, point):
 def test_repeat_props_preserves_parameters_requires_new_input_and_undoes_only_latest(viewer, size, lang):  # noqa: F811
     async def scenario(tab, server):
         await tab.eval("window.__robotforge.lookAt([4,-8,6],[0,0,0])")
+        await tab.run("""window.__sent=[];const old=WebSocket.prototype.send;WebSocket.prototype.send=function(s){
+          window.__sent.push(JSON.parse(s));return old.call(this,s)};""")
         await choose_object(tab, "pin")
         assert not await tab.eval("document.getElementById('place-repeat').checked")
+        assert not await tab.eval("document.getElementById('prop-material-control').hidden")
+        assert await tab.eval("[...document.getElementById('place-material').options].map(o=>o.textContent)") == (
+            ["Default", "Plastic", "Wood", "Steel"] if lang == "en" else ["默认", "塑料", "木材", "钢"]
+        )
+        for material in ("plastic", "wood", "steel"):
+            await select_material(tab, material)
         await click(tab, '[data-size="large"]')
         await click(tab, "#place-rotate")
         await click(tab, "#place-repeat")
@@ -42,6 +79,7 @@ def test_repeat_props_preserves_parameters_requires_new_input_and_undoes_only_la
             assert await tab.eval("document.getElementById('place-here').disabled")
             assert not await tab.eval("!!window.__robotforge.three().scene.getObjectByName('placement-size-preview')")
             assert await tab.eval("document.querySelector('[data-size=large]').getAttribute('aria-pressed')") == "true"
+            assert await tab.eval("document.getElementById('place-material').value") == "steel"
             # Held Enter and Enter without a new raycast cannot reuse the previous position.
             await tab.page.call("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter", autoRepeat=True)
             await key(tab, "Enter", kind="keyUp")
@@ -49,7 +87,8 @@ def test_repeat_props_preserves_parameters_requires_new_input_and_undoes_only_la
             await key(tab, "Enter", kind="keyUp")
             assert len(server.pg.store.load().objects) == i
         objects = server.pg.store.load().objects
-        assert all(o.yaw == 90 and o.size == pytest.approx([0.15, 0.36]) for o in objects)
+        assert all(o.material == "steel" and o.yaw == 90 and o.size == pytest.approx([0.15, 0.36]) for o in objects)
+        assert await tab.eval("window.__sent.filter(m=>m.action==='add_object').every(m=>m.material==='steel')")
         # Escape works even when the new native checkbox owns keyboard focus.
         await tab.eval("document.getElementById('place-repeat').focus()")
         await key(tab, "Escape")
@@ -57,6 +96,14 @@ def test_repeat_props_preserves_parameters_requires_new_input_and_undoes_only_la
         await click(tab, "#undo-add")
         await tab.until("!window.__robotforge.busy().busy && document.getElementById('undo-add').hidden")
         assert len(server.pg.store.load().objects) == 2
+        await choose_object(tab, "table")
+        assert await tab.eval("document.getElementById('prop-material-control').hidden")
+        await key(tab, "Escape")
+        await choose_object(tab, "pin")
+        assert await tab.eval("document.getElementById('place-material').value") == ""
+        await place_at(tab, [-1.2, 1.2, 0])
+        assert server.pg.store.load().objects[-1].material == "plastic"
+        assert await tab.eval("!('material' in window.__sent.filter(m=>m.action==='add_object').at(-1))")
         assert not tab.errors
 
     viewer(size, lang, scenario, world=lambda pg: None)
@@ -98,6 +145,7 @@ def test_scene_tabs_share_one_row_native_keyboard_does_not_drive_and_build_opens
         assert await tab.eval("document.querySelectorAll('#create-list .create-card').length") == 4
         await click(tab, '.create-card[data-template="rover"]')
         assert await tab.eval("document.getElementById('object-placement-controls').hidden")
+        assert await tab.eval("document.getElementById('prop-material-control').hidden")
         await key(tab, "Escape")
         await click(tab, "#world-toggle")
         await key(tab, "Escape")
@@ -182,12 +230,14 @@ def test_reset_after_commit_before_delayed_reply_cannot_rearm_repeat(viewer):  #
     async def scenario(tab, server):
         await instrument_wire(tab)
         await choose_object(tab, "ball")
+        await select_material(tab, "wood")
         await click(tab, "#place-repeat")
         await tab.run("window.__flow.holdReply=true")
         await click(tab, point=await tab.eval("window.__robotforge.screenOfPoint([1,0,0])"))
         await tab.until("window.__flow.replies.length === 1")
         assert len(server.pg.store.load().objects) == 1
         assert await tab.eval("window.__robotforge.busy().busy")
+        assert await tab.eval("document.getElementById('place-material').disabled")
         version = server.pg.session.version
         server.pg.session.reset()
         server.pg.session.paused = True
@@ -227,6 +277,7 @@ def test_repeat_occupied_spot_keeps_parameters_and_accepts_new_explicit_location
     async def scenario(tab, server):
         await tab.eval("window.__robotforge.lookAt([4,-8,6],[0,0,0])")
         await choose_object(tab, "barrier")
+        await select_material(tab, "plastic")
         await click(tab, '[data-size="large"]')
         await click(tab, "#place-rotate")
         await click(tab, "#place-repeat")
@@ -238,8 +289,11 @@ def test_repeat_occupied_spot_keeps_parameters_and_accepts_new_explicit_location
         )
         assert len(server.pg.store.load().objects) == 1
         assert not await tab.eval("document.getElementById('placement-bar').hidden")
+        assert await tab.eval("document.getElementById('place-material').value") == "plastic"
+        assert not await tab.eval("document.getElementById('place-material').disabled")
         await place_at(tab, [1, 0, 0])
         assert len(server.pg.store.load().objects) == 2
+        assert all(o.material == "plastic" for o in server.pg.store.load().objects)
         assert all(o.yaw == 90 and o.size == pytest.approx([1.2, 0.18, 0.33]) for o in server.pg.store.load().objects)
         await click(tab, "#place-cancel")
         assert await tab.eval("document.getElementById('placement-bar').hidden")

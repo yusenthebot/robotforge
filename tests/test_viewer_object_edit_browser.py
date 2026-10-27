@@ -42,6 +42,7 @@ def test_named_move_rotate_remove_undo_and_static_scene_selection(viewer, size, 
         assert await tab.eval("!!window.__robotforge.three().scene.getObjectByName('object-edit-highlight')")
         await click(tab, "#object-move")
         assert await tab.eval("document.querySelector('.repeat-placement').hidden")
+        assert await tab.eval("document.getElementById('prop-material-control').hidden")
         await click(tab, "#place-rotate")
         await click(tab, point=await tab.eval("window.__robotforge.screenOfPoint([1.5,0,0])"))
         await tab.until("!window.__robotforge.busy().busy && document.getElementById('placement-bar').hidden")
