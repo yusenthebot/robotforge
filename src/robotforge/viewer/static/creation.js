@@ -50,11 +50,13 @@ export function initCreation({ start, submit, cancel, change }) {
   const $ = (id) => document.getElementById(id);
   let item = null, point = null, sending = false, size = "normal", yaw = 0, session = 0;
   const repeat = $("place-repeat");
+  const material = $("place-material");
   const syncRepeat = () => { $("place-cancel").textContent = t(repeat.checked ? "done_placing" : "cancel_place"); };
   repeat.addEventListener("change", syncRepeat);
   const scales = { small: 0.75, normal: 1, large: 1.5 };
   const send = () => {
-    if (point && !sending && item) submit({ ...item, scale: size, yaw }, point);
+    if (point && !sending && item) submit({ ...item, scale: size, yaw,
+      ...(item.kind === "object" && item.name !== "table" && material.value ? { material: material.value } : {}) }, point);
   };
   const setOpen = (open) => {
     $("create-options").hidden = !open;
@@ -78,6 +80,8 @@ export function initCreation({ start, submit, cancel, change }) {
     // Authored worlds may contain many full turns; copy the same heading within the request's angle bounds.
     yaw = kind === "edit" ? entry.yaw : kind === "copy" || kind === "start" ? entry.yaw % 360 : 0; session++;
     repeat.checked = false; syncRepeat();
+    material.value = "";
+    $("prop-material-control").hidden = kind !== "object" || entry.name === "table";
     $("placement-hint").textContent = t(kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     $("place-rotate").textContent = t("rotate_place", { angle: yaw });
@@ -143,6 +147,7 @@ export function initCreation({ start, submit, cancel, change }) {
       for (const b of sizeButtons) b.disabled = value;
       $("place-rotate").disabled = value;
       repeat.disabled = value;
+      material.disabled = value;
       $("placement-bar").setAttribute("aria-busy", String(value));
     },
     progress(stage, fraction) {

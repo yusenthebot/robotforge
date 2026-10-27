@@ -993,7 +993,18 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
         geom["conaffinity"] = end_effectors.steel_affinity()
     if obj.fixed:
         g = spec.worldbody.add_geom(name=obj.name, pos=[x, y, z], quat=quat, rgba=rgba, **geom)
-        looks.dress(spec, spec.worldbody, obj.shape, obj.size, rgba, obj.name, [g], pos=[x, y, z], quat=quat)
+        looks.dress(
+            spec,
+            spec.worldbody,
+            obj.shape,
+            obj.size,
+            rgba,
+            obj.name,
+            [g],
+            pos=[x, y, z],
+            quat=quat,
+            material=obj.material,
+        )
         return
     body = spec.worldbody.add_body(name=obj.name, pos=[x, y, z], quat=quat)
     body.add_freejoint(name=obj.name)
@@ -1002,7 +1013,7 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
     rolls = obj.shape == "sphere"
     friction = [1.0, 0.02, BALL_ROLLING if rolls else 0.002]
     g = body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=friction, condim=6 if rolls else 4, **geom)
-    looks.dress(spec, body, obj.shape, obj.size, rgba, obj.name, [g])
+    looks.dress(spec, body, obj.shape, obj.size, rgba, obj.name, [g], material=obj.material)
 
 
 BALL_ROLLING = 0.005  # m: a ball's rolling friction coefficient (about a hard ball on a wooden top)

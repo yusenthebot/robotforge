@@ -43,6 +43,7 @@ async def journey(tab, server):
     )
     await click(tab, "#object-copy")
     assert not await tab.eval("document.querySelector('.repeat-placement').hidden")
+    assert await tab.eval("document.getElementById('prop-material-control').hidden")
     assert await tab.eval("[...document.querySelectorAll('.prop-size-control')].every(e=>e.hidden)")
     assert await tab.eval("""(()=>{const r=document.getElementById('placement-bar').getBoundingClientRect(),
       dock=document.querySelector('.dock').getBoundingClientRect();

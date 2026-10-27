@@ -29,6 +29,7 @@ STEEL_LIGHT = [0.74, 0.76, 0.78, 1.0]
 WATER_TINT = [0.22, 0.42, 0.55, 1.0]
 
 Look = Callable[["Placed", list[float], list[float], str], None]
+OBJECT_MATERIALS = {"plastic": "shell", "wood": "wood", "steel": "metal"}
 
 
 def seed_of(name: str) -> int:
@@ -55,6 +56,7 @@ def dress(
     covered: Sequence[mujoco.MjsGeom],
     pos: Sequence[float] = (0.0, 0.0, 0.0),
     quat: Sequence[float] | None = None,
+    material: str | None = None,
 ) -> None:
     """Draw `shape` on `body` and hide the primitives it covers. `pos` and `quat` place the prop's
     base frame in the body (for fixed objects that are plain geoms on the world body)."""
@@ -66,20 +68,25 @@ def dress(
         return
     for geom in covered:
         vis.hide(geom)
-    for preset, color, mesh in _drawn(shape, M._key(size), M._key(rgba), name, M._key(pos), M._key(quat)):
-        vis.add(body, preset, color, mesh)
+    authored = OBJECT_MATERIALS[material] if material is not None and shape in _PLAIN else None
+    for preset, color, mesh, surface in _drawn(shape, M._key(size), M._key(rgba), name, M._key(pos), M._key(quat)):
+        vis.add(body, authored if authored is not None and surface else preset, color, mesh)
     vis.finish()
 
 
 @functools.lru_cache(maxsize=1024)
 def _drawn(shape: str, size: tuple, rgba: tuple, name: str, pos: tuple, quat: tuple | None) -> tuple:
-    """A prop's parts as (preset, color, mesh), merged per material and color; cached, so a world
-    recompile (a robot moved, an object added) redraws nothing it has drawn before."""
+    """Parts as (preset, color, mesh, surface), merged per material, color and surface role.
+
+    A world recompile (a robot moved, an object added) redraws nothing it has drawn before.
+    """
     look = look_for(shape, name)
     rot = None if quat is None else M.quat_to_mat(quat)
     placed = Placed(pos, rot)
     look(placed, list(size), list(rgba), name)
-    return tuple((preset, list(color), M.merge(meshes)) for (preset, color), meshes in placed.parts.items())
+    return tuple(
+        (preset, list(color), M.merge(meshes), surface) for (preset, color, surface), meshes in placed.parts.items()
+    )
 
 
 class Placed:
@@ -87,15 +94,17 @@ class Placed:
 
     def __init__(self, pos: Sequence[float], rot: np.ndarray | None) -> None:
         self.pos, self.rot = np.asarray(pos, dtype=float), rot
-        self.parts: dict[tuple[str, tuple[float, ...]], list[M.Mesh]] = {}
+        self.parts: dict[tuple[str, tuple[float, ...], bool], list[M.Mesh]] = {}
 
-    def add(self, preset: str, rgba, mesh: M.Mesh, pos=(0.0, 0.0, 0.0), rot=None) -> None:
+    def add(self, preset: str, rgba, mesh: M.Mesh, pos=(0.0, 0.0, 0.0), rot=None, *, surface: bool = False) -> None:
         material_name(preset)  # fail early on a typo
         mesh = mesh.moved(pos, rot)
         if self.rot is not None or self.pos.any():
             mesh = mesh.moved(self.pos, self.rot)
         color = tuple(round(float(c), 4) for c in rgba)
-        self.parts.setdefault((preset, color), []).append(mesh)
+        # Basic objects distinguish their authored surface from attached decorative parts.
+        # Keep that role in the cache; material selection never mutates cached meshes or colors.
+        self.parts.setdefault((preset, color, surface), []).append(mesh)
 
 
 def look_for(shape: str, name: str) -> Look | None:
@@ -520,13 +529,13 @@ def _pallet(vis: Placed, size, rgba, name) -> None:
 def _block(vis: Placed, size, rgba, name) -> None:
     hx, hy, hz = (s / 2 for s in size)
     r = min(0.006, min(hx, hy, hz) * 0.18)
-    vis.add("shell", rgba, M.rounded_box(hx, hy, hz, r, segments=3))
+    vis.add("shell", rgba, M.rounded_box(hx, hy, hz, r, segments=3), surface=True)
 
 
 def _crate(vis: Placed, size, rgba, name) -> None:
     """A slatted wooden crate: planks on every side over a darker core."""
     hx, hy, hz = (s / 2 for s in size)
-    vis.add("wood", shade(rgba, 0.62), M.box(hx - 0.006, hy - 0.006, hz - 0.006))
+    vis.add("wood", shade(rgba, 0.62), M.box(hx - 0.006, hy - 0.006, hz - 0.006), surface=True)
     planks = []
     t = 0.006
     rows = max(2, round(2 * hz / 0.1))
@@ -547,18 +556,18 @@ def _crate(vis: Placed, size, rgba, name) -> None:
         y = -hy + pw / 2 + j * (pw + gap)
         for sz in (1, -1):
             planks.append(M.box(hx, pw / 2, t / 2, chamfer=0.0015).moved((0, y, sz * (hz - t / 2))))
-    vis.add("wood", rgba, M.merge(planks))
+    vis.add("wood", rgba, M.merge(planks), surface=True)
 
 
 def _steel(vis: Placed, size, rgba, name) -> None:
     """A steel block: brushed metal with crisp, slightly chamfered edges."""
     hx, hy, hz = (s / 2 for s in size)
-    vis.add("metal", rgba, M.box(hx, hy, hz, chamfer=min(0.004, hx * 0.08, hy * 0.08, hz * 0.08)))
+    vis.add("metal", rgba, M.box(hx, hy, hz, chamfer=min(0.004, hx * 0.08, hy * 0.08, hz * 0.08)), surface=True)
 
 
 def _fridge(vis: Placed, size, rgba, name) -> None:
     hx, hy, hz = (s / 2 for s in size)
-    vis.add("paint", rgba, M.rounded_box(hx, hy, hz, 0.02, segments=3, corner=0.025))
+    vis.add("paint", rgba, M.rounded_box(hx, hy, hz, 0.02, segments=3, corner=0.025), surface=True)
     # The door split (freezer on top) as a fine dark line on the front (-y) face, and a dark plinth.
     split = M.box(hx * 0.96, 0.002, 0.003).moved((0, -hy, hz * 0.35))
     plinth = M.box(hx * 0.9, 0.002, 0.03).moved((0, -hy, -hz + 0.035))
@@ -567,14 +576,14 @@ def _fridge(vis: Placed, size, rgba, name) -> None:
 
 def _handle(vis: Placed, size, rgba, name) -> None:
     hx, hy, hz = (s / 2 for s in size)
-    vis.add("metal", P.METAL, M.rounded_box(hx, hy, hz, min(hx, hy) * 0.9, segments=3))
+    vis.add("metal", P.METAL, M.rounded_box(hx, hy, hz, min(hx, hy) * 0.9, segments=3), surface=True)
 
 
 def _ball(vis: Placed, size, rgba, name) -> None:
     r = size[0] / 2
-    vis.add("shell", rgba, M.sphere(r, rings=16, segments=32))
+    vis.add("shell", rgba, M.sphere(r, rings=16, segments=32), surface=True)
     seam = M.torus(r * 0.995, r * 0.03, segments=48, sides=6)
-    vis.add("shell", shade(rgba, 0.6), M.merge([seam, seam.moved(rot=M.rot_x(math.pi / 2))]))
+    vis.add("shell", shade(rgba, 0.6), M.merge([seam, seam.moved(rot=M.rot_x(math.pi / 2))]), surface=True)
 
 
 def _apple(vis: Placed, size, rgba, name) -> None:
@@ -585,7 +594,7 @@ def _apple(vis: Placed, size, rgba, name) -> None:
         z = -r * math.cos(t) * 0.98
         dip = 0.16 * r * math.exp(-(((t - math.pi) / 0.35) ** 2)) + 0.08 * r * math.exp(-((t / 0.35) ** 2))
         prof.append((rad, z - dip if t > math.pi / 2 else z + dip))
-    vis.add("shell", rgba, M.lathe(prof, 28))
+    vis.add("shell", rgba, M.lathe(prof, 28), surface=True)
     stem = M.tube(
         np.array([[0, 0, r * 0.7], [0.0, 0.004, r * 1.0], [0.004, 0.008, r * 1.15]]), [0.0028, 0.0024, 0.002], 6
     )
@@ -600,11 +609,12 @@ def _citrus(vis: Placed, size, rgba, name) -> None:
         "shell",
         rgba,
         M.blob((r, r, r * 0.96), seed_of(name), amplitude=0.02, lumps=30, sharpness=12, rings=14, segments=24),
+        surface=True,
     )
 
 
 def _plain_sphere(vis: Placed, size, rgba, name) -> None:
-    vis.add("shell", rgba, M.sphere(size[0] / 2, rings=16, segments=32))
+    vis.add("shell", rgba, M.sphere(size[0] / 2, rings=16, segments=32), surface=True)
 
 
 def _cup(vis: Placed, size, rgba, name) -> None:
@@ -622,7 +632,7 @@ def _cup(vis: Placed, size, rgba, name) -> None:
         (0.0, -h / 2 + 0.008),
     ]
     rings = [M.at_z(M.circle(rr, 32), z) for rr, z in [(0.0, -h / 2), *prof]]
-    vis.add("ceramic", rgba, M.loft(rings, sharp=(1, 7)))
+    vis.add("ceramic", rgba, M.loft(rings, sharp=(1, 7)), surface=True)
 
 
 def _plate(vis: Placed, size, rgba, name) -> None:
@@ -638,7 +648,7 @@ def _plate(vis: Placed, size, rgba, name) -> None:
         (r * 0.6, -h / 2 + h * 0.62),
         (0.0, -h / 2 + h * 0.62),
     ]
-    vis.add("ceramic", rgba, M.lathe(prof, 48, sharp=(1, 7)))
+    vis.add("ceramic", rgba, M.lathe(prof, 48, sharp=(1, 7)), surface=True)
 
 
 def _jar(vis: Placed, size, rgba, name) -> None:
@@ -656,7 +666,7 @@ def _jar(vis: Placed, size, rgba, name) -> None:
         32,
         sharp=(1,),
     )
-    vis.add("ceramic", rgba, jar)
+    vis.add("ceramic", rgba, jar, surface=True)
     lid = M.cylinder(r * 0.9, lid_h, segments=32, bevel=lid_h * 0.3, z0=h / 2 - lid_h)
     knob = M.sphere(r * 0.2, rings=6, segments=12).moved((0, 0, h / 2 + r * 0.05))
     vis.add("wood", [0.7, 0.55, 0.38, 1.0], M.merge([lid, knob]))
@@ -673,7 +683,7 @@ def _can(vis: Placed, size, rgba, name) -> None:
         (r * 0.86, h / 2),
         (0.0, h / 2),
     ]
-    vis.add("shell", rgba, M.lathe(prof, 32))
+    vis.add("shell", rgba, M.lathe(prof, 32), surface=True)
     rims = [
         M.torus(r * 0.86, 0.0012, 32, 6).moved((0, 0, h / 2)),
         M.torus(r * 0.8, 0.001, 32, 6).moved((0, 0, -h / 2 + 0.001)),
@@ -685,14 +695,14 @@ def _can(vis: Placed, size, rgba, name) -> None:
 def _burner(vis: Placed, size, rgba, name) -> None:
     r, h = size[0] / 2, size[1]
     plate = M.cylinder(r, h, segments=40, bevel=h * 0.4, z0=-h / 2)
-    vis.add("dark", IRON, plate)
+    vis.add("dark", IRON, plate, surface=True)
     rings = [M.torus(r * k, h * 0.18, 40, 6).moved((0, 0, h / 2)) for k in (0.35, 0.6, 0.85)]
     vis.add("metal", [0.4, 0.4, 0.42, 1.0], M.merge(rings))
 
 
 def _plain_cylinder(vis: Placed, size, rgba, name) -> None:
     r, h = size[0] / 2, size[1]
-    vis.add("shell", rgba, M.cylinder(r, h, segments=32, bevel=min(0.004, r * 0.15, h * 0.15)))
+    vis.add("shell", rgba, M.cylinder(r, h, segments=32, bevel=min(0.004, r * 0.15, h * 0.15)), surface=True)
 
 
 _LOOKS: dict[str, Look] = {
