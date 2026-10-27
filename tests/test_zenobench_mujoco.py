@@ -6,6 +6,7 @@ ZenoBench checkout.
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -267,6 +268,28 @@ def test_film_rejects_an_unknown_target(monkeypatch, tmp_path):
     monkeypatch.setenv("ZENOBENCH_FILM_TARGET", "/World/nothing")
     with pytest.raises(ValueError, match="/World/nothing"):
         World(_scene(), options=OPTIONS).build()
+
+
+def test_free_bodies_lose_spin_at_physx_damping_rates():
+    stage = Usd.Stage.CreateInMemory()
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    UsdPhysics.Scene.Define(stage, "/World/PhysicsScene")
+    for name, x, rate in (("damped", 0.0, 3.0), ("default", 1.0, None)):
+        prim = _cube(stage, f"/World/{name}", (x, 0, 1), (0.05, 0.05, 0.05), body=True, mass=0.02)
+        prim.CreateAttribute("physxRigidBody:disableGravity", Sdf.ValueTypeNames.Bool).Set(True)
+        if rate is not None:  # what ZenoBench authors on cherry tomatoes and wooden blocks
+            prim.CreateAttribute("physxRigidBody:angularDamping", Sdf.ValueTypeNames.Float).Set(rate)
+    w = World(stage, options=usd_mjcf.Options(visuals=False))
+    w.build()
+    m, d = w.model, w.data
+    spin = {}
+    for name in ("damped", "default"):
+        dof = m.jnt_dofadr[m.body_jntadr[m.body(f"/World/{name}").id]]
+        d.qvel[dof + 5] = 10.0  # rad/s about z
+        spin[name] = dof + 5
+    w.step(120)  # 1 s
+    assert d.qvel[spin["damped"]] / 10.0 == pytest.approx(math.exp(-3.0), rel=0.1)
+    assert d.qvel[spin["default"]] / 10.0 == pytest.approx(math.exp(-0.05), rel=0.01)
 
 
 def test_sleeping_world_wakes_for_new_targets():

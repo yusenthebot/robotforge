@@ -34,6 +34,8 @@ log = logging.getLogger(__name__)
 COLLISION_GROUP = 3
 PATCH_RADIUS = 0.015  # m: typical contact patch radius, sets torsional friction
 VISUAL_GROUP = 1
+PHYSX_LINEAR_DAMPING = 0.0  # PhysX's defaults for a rigid body without authored damping, in 1/s
+PHYSX_ANGULAR_DAMPING = 0.05
 _TINY = 5e-4  # m: half thickness given to flat convex pieces so qhull accepts them
 
 
@@ -90,6 +92,8 @@ class Conversion:
     joints: dict[str, JointInfo] = field(default_factory=dict)  # by USD joint prim path
     planar: dict[str, Planar] = field(default_factory=dict)  # by anchor prim path
     articulations: dict[str, list[str]] = field(default_factory=dict)  # root body -> member bodies
+    # free body -> PhysX (linear, angular) velocity damping in 1/s: velocity decays as exp(-rate * t)
+    damping: dict[str, tuple[float, float]] = field(default_factory=dict)
     textures: int = 0
     stats: dict[str, int] = field(default_factory=dict)
 
@@ -360,6 +364,10 @@ class _Builder:
         if rec is None:
             body.add_freejoint()
             self.free.add(child)
+            self.out.damping[child] = (
+                float(_get(prim, "physxRigidBody:linearDamping", PHYSX_LINEAR_DAMPING)),
+                float(_get(prim, "physxRigidBody:angularDamping", PHYSX_ANGULAR_DAMPING)),
+            )
             return
         if jprim.IsA(UsdPhysics.FixedJoint):
             return

@@ -116,6 +116,7 @@ class World:
         if self._sun_tracks:  # the shadow map spans SUN_REACH around the robot instead of the whole model
             m.vis.map.shadowclip = min(1.0, SUN_REACH / max(float(m.stat.extent), 1e-6))
         m.opt.timestep = self.dt / self.substeps
+        self._damp(m, conv)
         m.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
         m.opt.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
         m.opt.impratio = _knob("ZENOBENCH_IMPRATIO", IMPRATIO)
@@ -147,6 +148,17 @@ class World:
         self._film = _Film.from_env(self)
         self._locks = _GraspLocks(self, self._lock_pairs) if self._lock_pairs else None
         log.info("world: %d bodies, %d joints, %d geoms (%s)", m.nbody, m.njnt, m.ngeom, conv.stats)
+
+    @staticmethod
+    def _damp(m: mujoco.MjModel, conv: usd_mjcf.Conversion) -> None:
+        """PhysX damps a rigid body's velocity at a rate (1/s) whatever its mass; a MuJoCo joint damps by a
+        force, so each free dof gets the rate times its mass or inertia. A cherry tomato that ZenoBench
+        gives angular damping 3 stops rolling within a second, as it does in Isaac."""
+        for body, (linear, angular) in conv.damping.items():
+            j = m.body_jntadr[m.body(body).id]
+            dof = m.jnt_dofadr[j]
+            m.dof_damping[dof : dof + 3] = linear * m.dof_M0[dof : dof + 3]
+            m.dof_damping[dof + 3 : dof + 6] = angular * m.dof_M0[dof + 3 : dof + 6]
 
     def _lights(self, spec, conv: usd_mjcf.Conversion) -> None:
         """Indoor light without a ceiling lamp model: a bright sky (the house has an open roof, as in
