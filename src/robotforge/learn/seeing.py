@@ -198,14 +198,13 @@ def look(layers: Layers, picture: np.ndarray, values: dict[str, float], owner: n
     """
     if values["balance"]:
         picture = vision.white_balance(picture)
-    if values["clean"]:  # the usual recipe: smooth the noise out of the picture, then open the mask
+    if values["clean"]:  # smooth the picture before removing mask specks and filling tiny breaks
         picture = vision.blur(picture)
     rng = vision.ColorRange(values["hue"], values["width"], values["sat"], values["val"])
     mask = vision.threshold(vision.to_hsv(picture), rng)
     if values["clean"]:
-        # open (specks vanish), then close: under the dim lamp noise also cracks the cube's own mask, and an
-        # opening alone split it into two blobs on one frame in ten
-        mask = vision.erode(vision.dilate(vision.clean(mask)))
+        # Dim-light noise can split the top and side of one cube along their shared edge.
+        mask = vision.clean(mask, fill_gaps=True)
     found = vision.blobs(mask, MIN_AREA)
     on = [_under(b, layers.geoms, owner) for b in found]
     estimate = size = None
@@ -430,12 +429,12 @@ STEPS = (
             "把灯光换成“傍晚台灯”（只有相机画面会变，3D 视图保留自己的灯光好让你看清）。"
             "暖黄的灯给每个像素都染了色：粉方块看起来也成了红色，画面更暗、噪点更多。\n"
             "看看掩码出了什么问题，然后修好它：打开“白平衡”（把整张图的平均颜色拉回灰色，相机的自动白平衡就是这么做的），"
-            "再打开“清理掩码”去掉零星的噪点，直到掩码里又只剩红方块。",
+            "再打开“清理掩码”去掉零星噪点、填合细小裂缝，直到掩码里又只剩红方块。",
             "Switch the light to 'Evening lamp' (only the camera's picture changes; the 3D view keeps its own light so "
             "you can still see). The warm lamp tints every pixel: the pink cube now looks red too, and the picture "
             "is darker and noisier.\nSee what goes wrong in the mask, then fix it: switch on 'white balance' (it "
             "pulls the picture's average color back to grey, as a camera's automatic white balance does) and "
-            "'clean the mask' to remove the specks of noise, until only the red cube is left.",
+            "'clean the mask' to remove noise specks and fill tiny breaks, until only the red cube is left.",
         ),
         done=_text(
             "颜色是物体和灯光一起决定的：台灯下红方块的色相约 8°，粉方块约 9°，光看色相分不开；"

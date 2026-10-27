@@ -1149,6 +1149,7 @@ function connect() {
     else if (msg.type === "robot_info") receiveRobotInfo(msg);
     else if (msg.type === "state") applyState(msg);
     else if (msg.type === "reply") onReply(msg);
+    else if (msg.type === "progress") pending.get(msg.id)?.progress?.(msg);
     else if (msg.type === "lesson") lessonUpdate(msg);
     else if (msg.type === "sensors") sensorsUpdate(msg);
     else if (msg.type === "map") mapUpdate(msg);
@@ -1240,7 +1241,7 @@ function renderTitle() {
 
 function renderRobotList() {
   renderEditableObjects();
-  creator.render(worldInfo.catalog?.robot_templates || [], worldInfo.isWorld && !sceneDesc?.lesson, busy, worldInfo.catalog?.object_presets || []);
+  creator.render(worldInfo.catalog?.robot_templates || [], worldInfo.isWorld && !sceneDesc?.lesson, busy, worldInfo.catalog?.object_presets || [], worldInfo.catalog?.robot_models || []);
   const list = $("robot-list");
   list.replaceChildren(
     ...robots.map((r) => {
@@ -2033,6 +2034,15 @@ $("show-collision").addEventListener("change", (e) => {
   lighting.bind(worldRoot, bodyNodes, sceneDesc);
   lighting.update(true);
 });
+// Reuse the existing environment and shadow map; this is a local view preference.
+function selectLighting(name) {
+  if (!lighting.select(name)) return;
+  for (const value of ["studio", "daylight"]) $("lighting-" + value).setAttribute("aria-pressed", String(value === name));
+  storageSet("robotforge.lighting", name);
+}
+for (const name of ["studio", "daylight"]) $("lighting-" + name).addEventListener("click", () => selectLighting(name));
+selectLighting(storageGet("robotforge.lighting") === "daylight" ? "daylight" : "studio");
+
 $("show-shadows").addEventListener("change", (e) => {
   sun.castShadow = e.target.checked;
 });
@@ -2083,14 +2093,14 @@ let requestSeq = 0;
 const pending = new Map(); // request id -> { resolve, reject }
 
 // Ask the server for something slow (a new map, a control mode); resolves with its reply.
-function request(msg) {
+function request(msg, progress) {
   return new Promise((resolve, reject) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       reject(new Error(t("disconnected")));
       return;
     }
     const id = ++requestSeq;
-    pending.set(id, { resolve, reject });
+    pending.set(id, { resolve, reject, progress });
     ws.send(JSON.stringify({ ...msg, id }));
   });
 }
@@ -2110,14 +2120,14 @@ function onReply(msg) {
 
 let busy = false;
 
-async function runChoice(button, msg, { frame = false, done } = {}) {
+async function runChoice(button, msg, { frame = false, done, progress } = {}) {
   if (busy) return;
   busy = true;
   wantFrame = frame;
   button.classList.add("busy");
   setPanelBusy(true);
   try {
-    const data = await request(msg); // not inside done?.(...): that skips its arguments when done is unset
+    const data = await request(msg, progress); // not inside done?.(...): that skips its arguments when done is unset
     await done?.(data);
   } catch (err) {
     wantFrame = false;
@@ -2383,17 +2393,30 @@ async function placeEntity(item, pos) {
   creationGesture.invalidate();
   creator.busy(true);
   const payload = item.kind === "robot" ? { action: "add_robot", template: item.name }
+    : item.kind === "model" ? { action: "add_model", source: item.source, model: item.name }
     : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw };
   await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
-    frame: item.kind === "robot",
+    frame: item.kind === "robot" || item.kind === "model",
+    progress: (event) => { if (placementSession === creator.session()) creator.progress(event.stage, event.fraction); },
     done: async (data) => {
       if (creator.repeating() && !Number.isInteger(data.generation)) {
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
-      await waitForCreation(data, creator.repeating() || item.kind === "edit" || item.kind === "copy" || item.kind === "start");
+      if (item.kind === "model") creator.progress("display");
+      try {
+        await waitForCreation(data, item.kind === "model" || creator.repeating() || item.kind === "edit" || item.kind === "copy" || item.kind === "start");
+      } catch (error) {
+        // A committed model stays undoable if only display completion timed out.
+        if (item.kind === "model" && placementSession === creator.session()
+            && stateVersion === data.version && stateGeneration === data.generation) {
+          lastAddition = data.undo || null;
+          cancelCreation(true);
+        }
+        throw error;
+      }
       if (placementSession !== creator.session()) return;
       lastAddition = data.undo || null;
       lastObjectEdit = data.undo_edit || null;
@@ -3004,6 +3027,7 @@ initLessons({
 });
 
 initSensors({
+  sensorLighting: lighting.sensorLighting,
   scene: scene3,
   renderer,
   camera,

@@ -27,8 +27,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from contextvars import ContextVar
 from http.client import HTTPException
 from pathlib import Path
 from typing import NamedTuple
@@ -67,6 +69,24 @@ _MISSING = re.compile(r"not our ref|couldn't find remote ref|not found|does not 
 
 class MenagerieError(ValueError):
     """User-facing: says what went wrong and what to do about it."""
+
+
+_CACHED_ONLY: ContextVar[bool] = ContextVar("robotforge_cached_assets_only", default=False)
+
+
+@contextmanager
+def cached_only() -> Iterator[None]:
+    """Reuse local assets without starting implicit downloads in this operation."""
+    token = _CACHED_ONLY.set(True)
+    try:
+        yield
+    finally:
+        _CACHED_ONLY.reset(token)
+
+
+def require_downloads_allowed(asset: str) -> None:
+    if _CACHED_ONLY.get():
+        raise MenagerieError(f"{asset} is not cached; download it explicitly before using this saved design")
 
 
 class FileEntry(NamedTuple):
@@ -139,6 +159,7 @@ def fetch(folder: str, progress: Progress | None = None) -> Path:
     found = local_folder(folder)
     if found is not None:
         return found
+    require_downloads_allowed(folder)
     if os.environ.get("ROBOTFORGE_MENAGERIE"):
         raise MenagerieError(f"{folder} is not in ROBOTFORGE_MENAGERIE={os.environ['ROBOTFORGE_MENAGERIE']}")
     report = progress or (lambda _f, _m: None)

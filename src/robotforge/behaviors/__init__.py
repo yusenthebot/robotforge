@@ -47,6 +47,10 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None, b
     marine = marine_kind(model, robot) if _floating(model, robot) else None
     if marine is not None:
         return Kind(marine)  # thrusters: a boat, or an ROV when some push up and down
+    from robotforge.behaviors.steering import has_steering
+
+    if has_steering(model, robot):
+        return Kind.ROVER  # binding reports unsupported geometry; never silently skid-steer these wheels
     from robotforge.behaviors.balance import find_balancer  # lazy: it imports this package
 
     if find_balancer(model, robot, home_pose(model)) is not None:
@@ -101,6 +105,10 @@ class WheelSet:
 
 def find_wheels(model: mujoco.MjModel, robot: str) -> WheelSet | None:
     """Find speed-controlled wheels with sideways axes on both sides of `robot`'s first body."""
+    from robotforge.behaviors.steering import has_steering
+
+    if has_steering(model, robot):
+        return None
     prefix = f"{robot}/"
     root = next(
         (

@@ -1,0 +1,99 @@
+{
+  "method": "All nonbrowser outcomes from initial full invocation plus browser cohort and final whole touch-file cohort after test-only native-input readiness hardening; production and config unchanged. This is not one green full invocation.",
+  "active_source_sha256": "8f6501b5cd96292cd09f219e859c4d0acb061d4b5cae4e5d9d7b864da1314630",
+  "initial_full": {
+    "passed": 3956,
+    "skipped": 127,
+    "failed": 1
+  },
+  "nonbrowser": {
+    "passed": 3750,
+    "skipped": 127
+  },
+  "browser_attempt": {
+    "passed": 206,
+    "failed": 1
+  },
+  "touch_final": {
+    "passed": 7
+  },
+  "final_browser": {
+    "passed": 207
+  },
+  "aggregate": {
+    "passed": 3957,
+    "skipped": 127
+  },
+  "single_full_invocation_green": false,
+  "production_identical": true,
+  "changed_test_files": [
+    "tests/test_viewer_creation_browser.py",
+    "tests/test_viewer_object_copy_browser.py",
+    "tests/test_viewer_touch_build_browser.py"
+  ],
+  "original_failure_retained": true,
+  "xml_sha256": {
+    "full.xml": "3e0905c3ceed8b012e1bd3577a42ff8d7696606d76112a205dedf195c34b88a3",
+    "browser-final.xml": "12d4c094223bb017dee3817092bc81a759810d419401066181ac739738740ea1",
+    "touch-final.xml": "9c92bcaea0337a85ff31fdc8528add0a14f1432db43a7abfa81a335880b79b65"
+  },
+  "status": "passed",
+  "sensor_slow_passed": 5,
+  "framework_cases_passed": 7,
+  "source_smoke_passed": true,
+  "installed_smoke_passed": true,
+  "package": {
+    "package_files": 398,
+    "wheel_source_exact": true,
+    "installed_source_exact": true,
+    "wheel_bytes": 3872361,
+    "wheel_sha256": "c8bab91ae8177337ca9c7bd7840f365a418dd18ec8dbf1358f3fd5b91399517f",
+    "malo_cad_packaged": false,
+    "original_wip_preserved": 13
+  },
+  "acceptance": true,
+  "merge_hold": false,
+  "limitations": [
+    "Original phone copy tap loss not reproduced in 14 diagnostic runs; no confirmed product cause claimed.",
+    "20 slow tests excluded from initial full run; 5 sensor cases run separately.",
+    "Optional mypy/pyright/bandit/pip-audit unavailable."
+  ],
+  "integrated_main_followup": {
+    "main": "4fc431bf19c03c32280801342f9c9a52b7192dcf",
+    "active_source_sha256": "372228d777bcf85b522305eef9c9aa594dac22f59a9d0b274b0e5e9079f5204f",
+    "frozen_inputs": 736,
+    "delta": {
+      "changed_existing_production": [
+        "cli.py"
+      ],
+      "added_production": [
+        "zenobench/__init__.py",
+        "zenobench/cli.py",
+        "zenobench/hulls.py",
+        "zenobench/python.py",
+        "zenobench/shim.py",
+        "zenobench/source.py",
+        "zenobench/usd_mjcf.py",
+        "zenobench/world.py"
+      ],
+      "changed_existing_test_scripts": [],
+      "source": "372228d777bcf85b522305eef9c9aa594dac22f59a9d0b274b0e5e9079f5204f"
+    },
+    "compatibility_passed": 103,
+    "usd_test_module_skipped": 1,
+    "zenobench_extra_installed_or_certified": false,
+    "original_budget_passed": 11,
+    "framework_passed": 7,
+    "source_and_installed_smoke_passed": true,
+    "package": {
+      "wheel": "dist-final/robotforge-0.0.1-py3-none-any.whl",
+      "package_files": 406,
+      "wheel_source_exact": true,
+      "installed_source_exact": true,
+      "wheel_bytes": 3906355,
+      "wheel_sha256": "8b6a5cdf791ca97c4e31ad1bef747bd141d1a85a03f378973451007534f65846",
+      "malo_cad_packaged": false
+    },
+    "scope": "Scoped additive-main integration checks; previous 3957/127 coverage belongs to earlier 8f65 source, not a full suite on this integrated source."
+  }
+}

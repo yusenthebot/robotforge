@@ -115,6 +115,7 @@ def fetch(
     found = None if whole else folder_path(name, commit, folder)
     if found is not None:
         return found
+    menagerie.require_downloads_allowed(folder or name)
     if os.environ.get("ROBOTFORGE_REPOS") and (Path(os.environ["ROBOTFORGE_REPOS"]).expanduser() / name).is_dir():
         raise CatalogueFetchError(f"{folder or name} is not in ROBOTFORGE_REPOS={os.environ['ROBOTFORGE_REPOS']}")
     report = progress or (lambda _f, _m: None)

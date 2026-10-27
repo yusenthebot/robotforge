@@ -10,8 +10,20 @@ import numpy as np
 from robotforge.behaviors import WheelSet, find_wheels
 
 
+def rover_drive(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray | None = None):
+    """Share steering discovery between all runtime rover entry points."""
+    from robotforge.behaviors.steering import SteeringDrive, steering_binding
+
+    modules = steering_binding(model, robot, home_qpos)
+    return SteeringDrive(model, robot, modules) if modules is not None else DiffDrive(model, robot)
+
+
 def drive_binding(model: mujoco.MjModel, robot: str) -> WheelSet:
     """Resolve the same wheel geometry used by the differential drive, without creating it."""
+    from robotforge.behaviors.steering import has_steering
+
+    if has_steering(model, robot):
+        raise ValueError(f"{robot}: wheels have steering joints; use the independent steering mover")
     has_template_wheels = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/left_wheel") >= 0
     if not has_template_wheels:
         wheels = find_wheels(model, robot)

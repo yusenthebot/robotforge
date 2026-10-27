@@ -51,8 +51,10 @@ def _describe(model, robot, kind, home_qpos, water, data) -> float:
         return gait.max_stride / gait.step_time
     if kind == Kind.ROVER:
         from robotforge.behaviors.drive import drive_binding, drive_speed
+        from robotforge.behaviors.steering import steering_binding, steering_speed
 
-        return drive_speed(model, drive_binding(model, robot))
+        modules = steering_binding(model, robot, home_qpos)
+        return steering_speed(modules) if modules is not None else drive_speed(model, drive_binding(model, robot))
     if kind == Kind.BALANCER:
         from robotforge.behaviors.balance import balance_speed, find_balancer
 

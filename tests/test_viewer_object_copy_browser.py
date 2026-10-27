@@ -91,6 +91,9 @@ async def journey(tab, server):
     await tab.until("!window.__robotforge.busy().busy && !document.getElementById('layout-save').disabled")
     assert not server.pg.store.load().objects
     await click(tab, '[data-layout-action="restore"]')
+    await tab.until(
+        "!document.getElementById('layout-confirm').hidden && !document.getElementById('layout-apply').disabled"
+    )
     await click(tab, "#layout-apply")
     await tab.until("!window.__robotforge.busy().busy && !document.getElementById('layout-save').disabled")
     assert server.pg.store.load().model_dump(mode="json") == variant
