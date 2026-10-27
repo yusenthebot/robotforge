@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 from robotforge.zenobench import shim, source
+from robotforge.zenobench.world import SUBSTEPS
 
 
 def prepare() -> Path:
@@ -23,7 +24,9 @@ def prepare() -> Path:
     if str(zb) not in sys.path:
         sys.path.insert(0, str(zb))
     os.environ.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
-    shim.install(shim.zeno_options(), substeps=int(os.environ.get("ZENOBENCH_SUBSTEPS", "4")))
+    # ZenoBench tools that start workers (verify_skills --jobs, env_service) run $ISAACLAB_PYTHON
+    os.environ.setdefault("ISAACLAB_PYTHON", str(wrapper()))
+    shim.install(shim.zeno_options(), substeps=int(os.environ.get("ZENOBENCH_SUBSTEPS", SUBSTEPS)))
     return zb
 
 

@@ -25,6 +25,8 @@ log = logging.getLogger(__name__)
 
 NOSLIP_ITERATIONS = 0  # 3 holds grasps but costs 4x per step with ~800 resting contacts
 IMPRATIO = 10.0  # friction-to-normal impedance: higher means less creep of pinched objects
+CONTACT_TIMECONST = 0.003  # s
+SUBSTEPS = 8  # per 1/120 s PhysX step: at 4, a pinched can slid out while the arm swung it up
 BASE_KP = 1.0e5  # 1/s^2: the base follows its anchor like a stiff joint
 BASE_KD = 1.0e3
 ISAAC_APERTURE_MM = 20.955  # Isaac Lab's default horizontal aperture
@@ -52,7 +54,7 @@ class CameraSpec:
 
 
 class World:
-    def __init__(self, stage, dt: float = 1 / 120, substeps: int = 4, options: usd_mjcf.Options | None = None):
+    def __init__(self, stage, dt: float = 1 / 120, substeps: int = SUBSTEPS, options: usd_mjcf.Options | None = None):
         self.stage = stage
         self.dt = dt
         self.substeps = substeps
@@ -108,11 +110,14 @@ class World:
         # pinch grasps: a no-slip pass, so a held object does not creep out of the soft finger contacts
         # while it is carried (MuJoCo 3.15 already gives convex pairs several contact points)
         m.opt.noslip_iterations = int(_knob("ZENOBENCH_NOSLIP", NOSLIP_ITERATIONS))
+        if _knob("ZENOBENCH_SLEEP", 1):  # resting objects sleep until touched: 4x faster in the kitchen
+            m.opt.enableflags |= mujoco.mjtEnableBit.mjENBL_SLEEP
         m.opt.iterations = 60
         m.opt.ls_iterations = 30
-        m.geom_solref[:] = (max(_knob("ZENOBENCH_SOLREF", 0.006), 2.1 * m.opt.timestep), 1.0)
-        m.geom_solimp[:, 0] = _knob("ZENOBENCH_SOLIMP0", 0.9)
-        m.geom_solimp[:, 1] = _knob("ZENOBENCH_SOLIMP1", 0.95)
+        # stiff contacts (PhysX contacts are rigid); a time constant needs at least two steps
+        m.geom_solref[:] = (max(_knob("ZENOBENCH_SOLREF", CONTACT_TIMECONST), 2.1 * m.opt.timestep), 1.0)
+        m.geom_solimp[:, 0] = _knob("ZENOBENCH_SOLIMP0", 0.95)
+        m.geom_solimp[:, 1] = _knob("ZENOBENCH_SOLIMP1", 0.99)
         self.model = m
         self.data = mujoco.MjData(m)
         self._index(conv)

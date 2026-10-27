@@ -125,6 +125,20 @@ def test_drive_tracks_target_and_anchor_drags_base():
     assert box[2] == pytest.approx(0.1, abs=5e-3)  # resting on the ground, not sinking
 
 
+def test_sleeping_world_wakes_for_new_targets():
+    stage = _scene()
+    w = World(stage, options=OPTIONS)
+    w.build()
+    w.step(1200)  # ten idle seconds: every island falls asleep
+    assert int(w.data.body_awake.sum()) == 0
+    w.set_target("/World/cab/joints/hinge", math.radians(-45))
+    w.step(240)
+    assert w.joint_q("/World/cab/joints/hinge") == pytest.approx(math.radians(-45), abs=0.02)
+    stage.GetPrimAtPath("/World/robot/base_anchor").GetAttribute("physics:localPos0").Set(Gf.Vec3f(-0.5, 0.0, 0.3))
+    w.step(240)
+    assert np.allclose(w.body_pose("/World/robot/base")[0], (-0.5, 0.0, 0.3), atol=3e-3)
+
+
 def test_prisms_reproduce_a_concave_room_exactly():
     # an L-shaped floor with one wall: concave, so a hull would fill the corner
     pts = np.array([[0, 0, 0], [4, 0, 0], [4, 1, 0], [1, 1, 0], [1, 4, 0], [0, 4, 0], [0, 0, 2], [4, 0, 2]], float)

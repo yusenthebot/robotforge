@@ -21,7 +21,7 @@ import types
 import numpy as np
 
 from robotforge.zenobench import usd_mjcf
-from robotforge.zenobench.world import CameraSpec, World
+from robotforge.zenobench.world import SUBSTEPS, CameraSpec, World
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class _State:
     stage = None
     world: World | None = None
     options = usd_mjcf.Options()
-    substeps = 4
+    substeps = SUBSTEPS
 
 
 STATE = _State()
@@ -559,7 +559,7 @@ def _module(name: str, **attrs) -> types.ModuleType:
     return mod
 
 
-def install(options: usd_mjcf.Options | None = None, substeps: int = 4) -> None:
+def install(options: usd_mjcf.Options | None = None, substeps: int = SUBSTEPS) -> None:
     """Register the stand-in modules. Real Isaac modules, if present, are left alone."""
     if options is not None:
         STATE.options = options

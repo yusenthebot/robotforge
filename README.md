@@ -211,6 +211,7 @@ The diagram's source is a single HTML file, [docs/diagrams/architecture.html](do
 - Manipulation and touch (grasp planning, peg in hole, force-limited turning): [docs/MANIPULATION.md](docs/MANIPULATION.md)
 - Training any robot with any algorithm, searches, the training view: [docs/TRAINING.md](docs/TRAINING.md)
 - Learned policies and UniLab training: [docs/UNILAB.md](docs/UNILAB.md)
+- ZenoBench (Zeno Malo house tasks) on MuJoCo, without Isaac Sim: [docs/ZENOBENCH.md](docs/ZENOBENCH.md)
 - How legged robots read the ground, with measured tables per robot: [docs/LEGGED.md](docs/LEGGED.md)
 - Mobile manipulation: how a base and an arm work together, what the jobs are and how often each robot gets them done: [docs/MOBILE.md](docs/MOBILE.md)
 - Packaging and verifying the plugins (maintainers): [docs/PLUGINS.md](docs/PLUGINS.md)

@@ -43,6 +43,7 @@ class Options:
     no_collision_bodies: tuple[str, ...] = ()  # body name suffixes whose colliders are dropped
     decompose: bool = True
     visuals: bool = True
+    textures: bool = True
 
 
 @dataclass
@@ -148,33 +149,36 @@ def _enabled(prim, name) -> bool:
 
 
 def _triangles(mesh) -> tuple[np.ndarray, np.ndarray]:
-    pts, faces, _ = _triangles_with_polygons(mesh)
+    pts, faces, _, _ = _triangles_with_polygons(mesh)
     return pts, faces
 
 
-def _triangles_with_polygons(mesh) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Fan-triangulated faces, and for each triangle the USD polygon it came from (for GeomSubsets)."""
+def _triangles_with_polygons(mesh) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Fan-triangulated faces; for each triangle the USD polygon it came from (for GeomSubsets) and its
+    three face-vertex corners (positions in faceVertexIndices, for faceVarying primvars such as UVs)."""
     pts = mesh.GetPointsAttr().Get()
     counts = mesh.GetFaceVertexCountsAttr().Get()
     idx = mesh.GetFaceVertexIndicesAttr().Get()
+    empty = np.zeros((0, 3), np.int64)
     if not pts or not counts or not idx:
-        return np.zeros((0, 3)), np.zeros((0, 3), np.int64), np.zeros(0, np.int64)
+        return np.zeros((0, 3)), empty, np.zeros(0, np.int64), empty
     pts = np.asarray(pts, np.float64)
     counts = np.asarray(counts, np.int64)
     idx = np.asarray(idx, np.int64)
     starts = np.r_[0, np.cumsum(counts)[:-1]]
-    tris, polys = [], []
+    corners, polys = [], []
     for k in np.unique(counts):
         if k < 3:
             continue
         which = np.flatnonzero(counts == k)
         s = starts[which]
         for j in range(1, k - 1):
-            tris.append(np.stack([idx[s], idx[s + j], idx[s + j + 1]], axis=1))
+            corners.append(np.stack([s, s + j, s + j + 1], axis=1))
             polys.append(which)
-    if not tris:
-        return pts, np.zeros((0, 3), np.int64), np.zeros(0, np.int64)
-    return pts, np.concatenate(tris), np.concatenate(polys)
+    if not corners:
+        return pts, empty, np.zeros(0, np.int64), empty
+    corners = np.concatenate(corners)
+    return pts, idx[corners], np.concatenate(polys), corners
 
 
 # ------------------------------------------------------------------ the converter
@@ -194,6 +198,8 @@ class _Builder:
         self._piece_volume: dict[str, float] = {}
         self._mesh_id = 0
         self._rgba_cache: dict[str, list[float]] = {}
+        self._materials: dict[str, str | None] = {}
+        self._textures: dict[str, str | None] = {}
         self._tex_cache: dict[str, list[float]] = {}
 
     # ---------------------------------------------------------- scan
@@ -582,12 +588,13 @@ class _Builder:
 
     def _visual_mesh(self, prim, parent, rel, rgba) -> int:
         """One render geom per material: GeomSubsets (Infinigen binds materials per face set) and the
-        rest of the mesh with the mesh's own material."""
+        rest of the mesh with the mesh's own material. Textured materials keep their UVs."""
         UsdGeom = self.UsdGeom
-        pts, faces, polys = _triangles_with_polygons(UsdGeom.Mesh(prim))
+        pts, faces, polys, corners = _triangles_with_polygons(UsdGeom.Mesh(prim))
         if len(faces) == 0:
             return 0
         pts = _apply(pts, rel)
+        uv = self._corner_uvs(prim, faces, corners)
         groups = []
         rest = np.ones(len(faces), bool)
         for subset in UsdGeom.Subset.GetAllGeomSubsets(UsdGeom.Imageable(prim)):
@@ -598,13 +605,13 @@ class _Builder:
             if not mask.any():
                 continue
             rest &= ~mask
-            groups.append((mask, self._rgba(subset.GetPrim(), fallback=rgba)))
+            groups.append((mask, self._rgba(subset.GetPrim(), fallback=rgba), subset.GetPrim()))
         if rest.any():
-            groups.append((rest, rgba))
+            groups.append((rest, rgba, prim))
         n = 0
-        for mask, color in groups:
+        for mask, color, bound in groups:
             used, local = np.unique(faces[mask], return_inverse=True)
-            v, f = simplify(pts[used], local.reshape(-1, 3))
+            v, f, keep = simplify(pts[used], local.reshape(-1, 3))
             if len(f) == 0:
                 continue
             mesh = self.spec.add_mesh()
@@ -615,9 +622,76 @@ class _Builder:
             mesh.inertia = mujoco.mjtMeshInertia.mjMESH_INERTIA_SHELL
             g = parent.add_geom()
             g.type, g.meshname = mujoco.mjtGeom.mjGEOM_MESH, mesh.name
-            g.group, g.contype, g.conaffinity, g.rgba, g.mass = VISUAL_GROUP, 0, 0, color, 0
+            g.group, g.contype, g.conaffinity, g.mass = VISUAL_GROUP, 0, 0, 0
+            material = self._texture_material(bound) if uv is not None and self.opt.textures else None
+            if material is not None:
+                mesh.usertexcoord = uv[mask][keep].astype(np.float32).reshape(-1)
+                mesh.userfacetexcoord = np.arange(len(f) * 3, dtype=np.int32)
+                g.material = material
+            else:
+                g.rgba = color
             n += 1
         return n
+
+    def _corner_uvs(self, prim, faces: np.ndarray, corners: np.ndarray) -> np.ndarray | None:
+        """(triangles, 3, 2) texture coordinates from the `st` primvar, or None."""
+        pv = self.UsdGeom.PrimvarsAPI(prim).GetPrimvar("st")
+        if not pv or not pv.HasValue():
+            return None
+        values = np.asarray(pv.Get(), np.float64)
+        if pv.IsIndexed():
+            values = values[np.asarray(pv.GetIndices(), np.int64)]
+        interp = pv.GetInterpolation()
+        if interp == "faceVarying" and len(values) > int(corners.max()):
+            return values[corners]
+        if interp in ("vertex", "varying") and len(values) > int(faces.max()):
+            return values[faces]
+        return None
+
+    def _texture_material(self, prim) -> str | None:
+        """A MuJoCo material with the prim's diffuse texture (downscaled), or None without one."""
+        mat, _ = self.UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()
+        if not mat:
+            return None
+        key = str(mat.GetPath())
+        if key in self._materials:
+            return self._materials[key]
+        color, texture, _ = self._shader_info(mat)
+        name = None
+        tex = self._texture(texture) if texture else None
+        if tex is not None:
+            name = f"mat{len(self._materials)}"
+            m = self.spec.add_material()
+            m.name = name
+            m.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = tex
+            m.rgba = (*(color or (1.0, 1.0, 1.0)), 1.0)
+            m.specular, m.shininess = 0.2, 0.2
+        self._materials[key] = name
+        return name
+
+    def _texture(self, path: str) -> str | None:
+        if path in self._textures:
+            return self._textures[path]
+        name = None
+        try:
+            from PIL import Image
+
+            with Image.open(Path(path)) as im:
+                im = im.convert("RGB")
+                if max(im.size) > TEXTURE_SIZE:
+                    im = im.resize((TEXTURE_SIZE, TEXTURE_SIZE), Image.Resampling.LANCZOS)
+                width, height = im.size
+                data = im.transpose(Image.Transpose.FLIP_TOP_BOTTOM).tobytes()  # UV v=0 is the bottom row
+            t = self.spec.add_texture()
+            name = t.name = f"tex{len(self._textures)}"
+            t.type = mujoco.mjtTexture.mjTEXTURE_2D
+            t.width, t.height, t.nchannel = width, height, 3
+            t.data = data
+            self.out.textures += 1
+        except (OSError, ValueError) as exc:
+            log.debug("texture %s unreadable: %s", path, exc)
+        self._textures[path] = name
+        return name
 
     def _rgba(self, prim, fallback: list[float] | None = None) -> list[float]:
         UsdShade = self.UsdShade
@@ -637,13 +711,14 @@ class _Builder:
             self._rgba_cache[key] = rgba
         return rgba
 
-    def _shader_rgba(self, mat) -> list[float] | None:
+    def _shader_info(self, mat) -> tuple[list[float] | None, str | None, float]:
+        """(constant diffuse color, diffuse texture path, opacity) of a UsdPreviewSurface or OmniPBR."""
         UsdShade = self.UsdShade
-        shaders = [s for s in self.Usd.PrimRange(mat.GetPrim()) if s.IsA(UsdShade.Shader)]
         color, texture, opacity = None, None, 1.0
-        for sp in shaders:
-            sh = UsdShade.Shader(sp)
-            for inp in sh.GetInputs():
+        for sp in self.Usd.PrimRange(mat.GetPrim()):
+            if not sp.IsA(UsdShade.Shader):
+                continue
+            for inp in UsdShade.Shader(sp).GetInputs():
                 name = inp.GetBaseName()
                 v = inp.Get()
                 if name in ("diffuseColor", "diffuse_color_constant", "base_color") and v is not None and color is None:
@@ -655,11 +730,14 @@ class _Builder:
                         texture = p
                 elif name == "opacity" and v is not None and not inp.HasConnectedSource():
                     opacity = float(v)
+        return color, texture, opacity
+
+    def _shader_rgba(self, mat) -> list[float] | None:
+        color, texture, opacity = self._shader_info(mat)
         if texture:
             tex = self._texture_mean(texture)
             if tex is not None:
-                tint = color or [1.0, 1.0, 1.0]
-                color = [tex[i] * (tint[i] if color else 1.0) for i in range(3)]
+                color = [tex[i] * (color[i] if color else 1.0) for i in range(3)]
         if color is None:
             return None
         return [*color, max(0.05, min(1.0, opacity))]
@@ -752,19 +830,21 @@ class _Builder:
         self.out.stats["joints"] = len(self.out.joints)
 
 
+TEXTURE_SIZE = 512  # px: Infinigen's 1024 px maps, halved, keep the model small
 VISUAL_MAX_FACES = 20000  # meshes above this are simplified for rendering
 VISUAL_CELLS = 250  # grid cells along the longest side of a simplified mesh
 
 
-def simplify(verts: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def simplify(verts: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Vertex clustering for a dense render mesh (Infinigen furniture has 10^5 faces): vertices in one
     grid cell merge into their mean, so detail below 1/250 of the mesh size goes away. Collision is not
-    affected; it is built from the full mesh."""
+    affected; it is built from the full mesh. Also returns which input faces survive, in order."""
+    every = np.arange(len(faces))
     if len(faces) <= VISUAL_MAX_FACES:
-        return verts, faces
+        return verts, faces, every
     cell = float(np.max(np.ptp(verts, axis=0))) / VISUAL_CELLS
     if cell <= 0:
-        return verts, faces
+        return verts, faces, every
     keys = np.floor(verts / cell).astype(np.int64)
     _, inverse = np.unique(keys, axis=0, return_inverse=True)
     inverse = inverse.reshape(-1)
@@ -773,11 +853,11 @@ def simplify(verts: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarr
     np.add.at(merged, inverse, verts)
     merged /= count[:, None]
     f = inverse[faces]
-    f = f[(f[:, 0] != f[:, 1]) & (f[:, 1] != f[:, 2]) & (f[:, 0] != f[:, 2])]
-    _, first = np.unique(np.sort(f, axis=1), axis=0, return_index=True)  # a face merged twice
-    kept = f[np.sort(first)]
-    used, local = np.unique(kept, return_inverse=True)
-    return merged[used], local.reshape(-1, 3)
+    alive = np.flatnonzero((f[:, 0] != f[:, 1]) & (f[:, 1] != f[:, 2]) & (f[:, 0] != f[:, 2]))
+    _, first = np.unique(np.sort(f[alive], axis=1), axis=0, return_index=True)  # a face merged twice
+    keep = alive[np.sort(first)]
+    used, local = np.unique(f[keep], return_inverse=True)
+    return merged[used], local.reshape(-1, 3), keep
 
 
 _DECOMPOSE = ("convexDecomposition", "none", "meshSimplification", "sdf")
