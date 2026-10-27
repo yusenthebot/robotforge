@@ -203,7 +203,9 @@ def look(layers: Layers, picture: np.ndarray, values: dict[str, float], owner: n
     rng = vision.ColorRange(values["hue"], values["width"], values["sat"], values["val"])
     mask = vision.threshold(vision.to_hsv(picture), rng)
     if values["clean"]:
-        mask = vision.clean(mask)
+        # open (specks vanish), then close: under the dim lamp noise also cracks the cube's own mask, and an
+        # opening alone split it into two blobs on one frame in ten
+        mask = vision.erode(vision.dilate(vision.clean(mask)))
     found = vision.blobs(mask, MIN_AREA)
     on = [_under(b, layers.geoms, owner) for b in found]
     estimate = size = None
