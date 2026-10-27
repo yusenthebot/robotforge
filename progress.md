@@ -1,5 +1,14 @@
 # progress
 
+## Rejected independent wood color/relief (2026-10-28)
+
+The frozen external domain-warped color and independent micro-relief candidate smooths the surface but fails joint ordinary-distance quality: table flatter, bench improvement insufficient.
+Root and independent original-image review reject it; production remains byte-identical.
+24 actual stills, 2542 control checks, four strictly decoded paused camera movies and 24 inspected decoded samples retained; 41 record tests/Ruff/offline wheel pass.
+No candidate full-suite, channel-suite, temporal or original-budget certification; [report](docs/bench/2026-10-28-wood-color-relief-screen.md).
+Stop procedural wood tuning; next existing-prop surface editing with independent appearance, persisted Undo and explicit rebuild/reset semantics.
+Broad material/lightweight/play goal active, action-success tuning deferred.
+
 ## Rejected solid-wood growth field (2026-10-28)
 
 One frozen external 3D ring/pith/fibre field fails ordinary table/bench quality: flatter large areas, more regular bands and embossed close-up rings.
