@@ -14,7 +14,7 @@ import pytest
 pxr = pytest.importorskip("pxr")
 pytest.importorskip("scipy")
 
-from pxr import Gf, Usd, UsdGeom, UsdPhysics  # noqa: E402
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics  # noqa: E402
 
 from robotforge.zenobench import hulls, usd_mjcf  # noqa: E402
 from robotforge.zenobench.world import World  # noqa: E402
@@ -266,6 +266,59 @@ def test_split_parts_and_convexity():
     assert hulls.inside_depth(box, h) == pytest.approx(0.0, abs=1e-9)
     faces = np.array([[0, 1, 2], [4, 5, 6]])
     assert len(hulls.split_parts(box, faces)) == 2
+
+
+def _cylinder_points(radius=0.03, length=0.3, sides=120):
+    a = np.linspace(0, 2 * math.pi, sides, endpoint=False)
+    ring = np.c_[np.zeros(sides), radius * np.cos(a), radius * np.sin(a)]
+    return np.r_[ring - (length / 2, 0, 0), ring + (length / 2, 0, 0)]
+
+
+def test_vertex_limit_coarsens_a_fine_hull_like_physx():
+    pts = _cylinder_points()
+    coarse = hulls.limit_vertices(pts, 64)
+    assert len(coarse) <= 64
+    h = hulls.hull(coarse)
+    # PhysX's default cooking cuts a bounding box down: the coarse hull still contains every point
+    assert (h.equations[:, :3] @ pts.T + h.equations[:, 3:4]).max() < 1e-6
+    assert hulls.hull(pts).volume < h.volume < 1.2 * hulls.hull(pts).volume
+    box = np.array([[x, y, z] for x in (0, 1) for y in (0, 1) for z in (0, 1)], float)
+    assert len(hulls.limit_vertices(box, 64)) == 8  # a hull within the limit is kept as it is
+
+
+def _mesh_body_scene(limit=None, body=True):
+    """A cylinder mesh collider (240 points) on a free body, cooked as a convex hull."""
+    stage = Usd.Stage.CreateInMemory()
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    UsdPhysics.Scene.Define(stage, "/World/PhysicsScene")
+    mesh = UsdGeom.Mesh.Define(stage, "/World/pin")
+    pts = _cylinder_points()
+    hull = hulls.hull(pts)
+    mesh.CreatePointsAttr([Gf.Vec3f(*map(float, p)) for p in pts])
+    mesh.CreateFaceVertexCountsAttr([3] * len(hull.simplices))
+    mesh.CreateFaceVertexIndicesAttr([int(i) for i in hull.simplices.ravel()])
+    prim = mesh.GetPrim()
+    UsdPhysics.CollisionAPI.Apply(prim)
+    UsdPhysics.MeshCollisionAPI.Apply(prim).CreateApproximationAttr("convexHull")
+    if limit is not None:
+        prim.CreateAttribute("physxConvexHullCollision:hullVertexLimit", Sdf.ValueTypeNames.Int).Set(limit)
+    if body:
+        UsdPhysics.RigidBodyAPI.Apply(prim)
+    return stage
+
+
+def _hull_vertex_count(stage, **options):
+    m = usd_mjcf.convert(stage, usd_mjcf.Options(visuals=False, **options)).spec.compile()
+    g = next(g for g in range(m.ngeom) if m.geom_type[g] == 7)  # the mesh
+    mid = m.geom_dataid[g]
+    return len(hulls.hull(m.mesh_vert[m.mesh_vertadr[mid] : m.mesh_vertadr[mid] + m.mesh_vertnum[mid]]).vertices)
+
+
+def test_moving_hulls_follow_physx_vertex_limits():
+    assert _hull_vertex_count(_mesh_body_scene()) <= 64  # PhysX's default limit
+    assert _hull_vertex_count(_mesh_body_scene(limit=16)) <= 16  # an authored one
+    assert _hull_vertex_count(_mesh_body_scene(), vertex_limit="off") == 240
+    assert _hull_vertex_count(_mesh_body_scene(body=False)) == 240  # static colliders keep exact pieces
 
 
 @pytest.fixture

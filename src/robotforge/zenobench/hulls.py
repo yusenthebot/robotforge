@@ -263,6 +263,54 @@ def _convex(poly: list[int], x: np.ndarray, y: np.ndarray) -> bool:
     return True
 
 
+PHYSX_HULL_VERTEX_LIMIT = 64  # PhysX's default hullVertexLimit for cooked convexes
+
+
+def limit_vertices(points: np.ndarray, limit: int = PHYSX_HULL_VERTEX_LIMIT) -> np.ndarray:
+    """The convex hull of `points` with at most `limit` vertices, cooked the way PhysX does.
+
+    PhysX keeps a hull that fits the limit. A finer one becomes the points' oriented bounding box, cut by
+    the hull's face planes until one more cut would exceed the limit: a coarser shape that still contains
+    every point. Each cut here takes the plane that the current shape overshoots most, which keeps the
+    result within about 10% of the hull's volume. A smooth 1000-vertex cylinder (a rolling pin) is a few
+    dozen sided prism in PhysX, and rolls with the bumps and losses of one."""
+    points = np.asarray(points, np.float64)
+    h = hull(points)
+    if h is None or len(h.vertices) <= limit:
+        return points if h is None else points[h.vertices]
+    corners = points[h.vertices]
+    centre = corners.mean(axis=0)
+    axes = np.linalg.eigh(np.cov((corners - centre).T))[1].T  # rows: the box's axes
+    span = (corners - centre) @ axes.T
+    cuts = [np.r_[a, -float(span[:, i].max()) - float(a @ centre)] for i, a in enumerate(axes)]
+    cuts += [np.r_[-a, float(span[:, i].min()) + float(a @ centre)] for i, a in enumerate(axes)]
+    planes = np.unique(np.round(h.equations, 9), axis=0)  # qhull's triangles of one face share a plane
+    best = _intersect(np.array(cuts), centre)
+    while best is not None:
+        overshoot = (planes[:, :3] @ best.T + planes[:, 3:4]).max(axis=1)
+        i = int(np.argmax(overshoot))
+        if overshoot[i] < 1e-6:  # the shape is the hull itself
+            break
+        trial = _intersect(np.array([*cuts, planes[i]]), centre)
+        if trial is None or len(trial) > limit:
+            break
+        cuts.append(planes[i])
+        best = trial
+    return best if best is not None else box_corners(points)
+
+
+def _intersect(halfspaces: np.ndarray, inside: np.ndarray) -> np.ndarray | None:
+    """Vertices of the polytope {x : n . x + d <= 0 for every row (n, d)}, duplicates merged."""
+    from scipy.spatial import HalfspaceIntersection, QhullError
+
+    try:
+        v = HalfspaceIntersection(halfspaces, inside).intersections
+    except (QhullError, ValueError):
+        return None
+    v = v[np.all(np.isfinite(v), axis=1)]
+    return np.unique(np.round(v, 7), axis=0)
+
+
 def box_corners(v: np.ndarray) -> np.ndarray:
     lo, hi = v.min(0), v.max(0)
     hi = np.maximum(hi, lo + 1e-4)

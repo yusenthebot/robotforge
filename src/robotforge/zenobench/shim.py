@@ -608,6 +608,6 @@ def zeno_options() -> usd_mjcf.Options:
     return usd_mjcf.Options(
         planar_anchors=("/World/ZenoMalo/base_anchor",),
         no_collision_bodies=("_wheel_link", "_steering_link"),
-        max_hull_vertices=int(os.environ.get("ZENOBENCH_MAXHULLVERT", "0")),
+        vertex_limit=os.environ.get("ZENOBENCH_HULL_LIMIT", "all"),
         capsule_pads=("_finger_link",) if os.environ.get("ZENOBENCH_CAPSULE_PADS", "0") == "1" else (),
     )

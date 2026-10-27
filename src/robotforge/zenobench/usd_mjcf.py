@@ -44,8 +44,13 @@ class Options:
     decompose: bool = True
     visuals: bool = True
     textures: bool = True
-    max_hull_vertices: int = 0  # cap for moving bodies' hulls (0: no cap)
+    # PhysX's hull vertex limit on moving bodies' convexes: "all", "objects" (free bodies only) or "off"
+    vertex_limit: str = "all"
     capsule_pads: tuple[str, ...] = ()  # body name suffixes whose box colliders become capsule rows
+
+    def __post_init__(self):
+        if self.vertex_limit not in ("all", "objects", "off"):
+            raise ValueError(f"vertex_limit must be 'all', 'objects' or 'off', not {self.vertex_limit!r}")
 
 
 @dataclass
@@ -207,6 +212,7 @@ class _Builder:
         self.mbody: dict[str | None, object] = {None: self.spec.worldbody}
         self.body_rigid: dict[str | None, tuple[np.ndarray, np.ndarray]] = {None: (np.eye(3), np.zeros(3))}
         self.moving: set[str] = set()
+        self.free: set[str] = set()
         self._piece_volume: dict[str, float] = {}
         self._mesh_id = 0
         self._rgba_cache: dict[str, list[float]] = {}
@@ -353,6 +359,7 @@ class _Builder:
             return
         if rec is None:
             body.add_freejoint()
+            self.free.add(child)
             return
         if jprim.IsA(UsdPhysics.FixedJoint):
             return
@@ -453,17 +460,19 @@ class _Builder:
                 continue
             material = self._physics_material(prim)
             if prim.IsA(UsdGeom.Gprim):
-                jobs.append((prim, owner, _get(prim, "physics:approximation", "none"), material))
+                approx = _get(prim, "physics:approximation", "none")
+                jobs.append((prim, owner, approx, material, self._vertex_limit(prim, owner, approx)))
                 continue
             approx = _get(prim, "physics:approximation", "convexHull")
+            limit = self._vertex_limit(prim, owner, approx)
             for m in self.Usd.PrimRange(prim, self.Usd.TraverseInstanceProxies()):
                 if m == prim or not m.IsA(UsdGeom.Mesh) or m.HasAPI(UsdPhysics.CollisionAPI):
                     continue
                 if self.owner(m) != owner or self._nearer_collider(m, prim):
                     continue
-                jobs.append((m, owner, approx, material))
+                jobs.append((m, owner, approx, material, limit))
         meshes = {}
-        for prim, owner, approx, _ in jobs:
+        for prim, owner, approx, _, _ in jobs:
             if prim.IsA(UsdGeom.Mesh):
                 pts, faces = _triangles(UsdGeom.Mesh(prim))
                 if len(pts) >= 4:
@@ -471,8 +480,8 @@ class _Builder:
                     static = owner not in self.moving
                     meshes[prim] = (_apply(pts, self._rel(prim, owner)), faces, decompose, static)
         _warm_cache([(p, f, st) for p, f, dec, st in meshes.values() if dec])
-        n_geoms = 0
-        for prim, owner, approx, material in jobs:
+        n_geoms = n_limited = 0
+        for prim, owner, approx, material, limit in jobs:
             if prim.IsA(UsdGeom.Mesh):
                 if prim not in meshes:
                     continue
@@ -481,6 +490,10 @@ class _Builder:
                     pieces = [hulls.box_corners(pts)]
                 else:
                     pieces = hulls.convex_pieces(pts, faces, decompose=decompose, static=static)
+                    if limit:
+                        coarse = [hulls.limit_vertices(p, limit) for p in pieces]
+                        n_limited += sum(len(c) < len(p) for c, p in zip(coarse, pieces, strict=True))
+                        pieces = coarse
                 parent = self.mbody.get(owner, self.spec.worldbody)
                 for i, piece in enumerate(pieces):
                     self._hull_geom(parent, _thicken(piece), material, owner in self.moving, f"{prim.GetPath()}#{i}")
@@ -488,6 +501,19 @@ class _Builder:
             else:
                 n_geoms += self._collider(prim, owner, approx, material)
         self.out.stats["collision_geoms"] = n_geoms
+        self.out.stats["vertex_limited_hulls"] = n_limited
+
+    def _vertex_limit(self, prim, owner, approx) -> int:
+        """PhysX's vertex limit for the convexes cooked from this collider, or 0 where none applies here.
+
+        A moving body's meshes are always cooked to convexes in PhysX; static ones keep the converter's
+        own exact pieces (slabs, fine hulls), which stand in for PhysX's triangle meshes."""
+        if owner not in self.moving or self.opt.vertex_limit == "off":
+            return 0
+        if self.opt.vertex_limit == "objects" and owner not in self.free:
+            return 0
+        api = "physxConvexDecompositionCollision" if approx == "convexDecomposition" else "physxConvexHullCollision"
+        return int(_get(prim, f"{api}:hullVertexLimit", hulls.PHYSX_HULL_VERTEX_LIMIT))
 
     def _nearer_collider(self, mesh, top) -> bool:
         p = mesh.GetParent()
@@ -575,8 +601,6 @@ class _Builder:
         mesh.name = f"hull{self._mesh_id}"
         self._mesh_id += 1
         mesh.uservert = np.asarray(piece, np.float32).reshape(-1)
-        if dynamic and self.opt.max_hull_vertices:
-            mesh.maxhullvert = self.opt.max_hull_vertices
         self._piece_volume[mesh.name] = hulls.hull_volume(piece)
         g = parent.add_geom()
         g.name = name
