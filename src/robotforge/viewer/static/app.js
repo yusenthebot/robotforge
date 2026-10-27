@@ -1839,6 +1839,8 @@ function freeRect() {
   if (bar) top = Math.max(top, bar.bottom);
   const dock = box(document.querySelector(".dock"));
   if (dock) bottom = Math.min(bottom, dock.top);
+  const edit = box($("object-edit-bar"));
+  if (edit) bottom = Math.min(bottom, edit.top);
   return { left, right, top, bottom };
 }
 
@@ -1905,7 +1907,7 @@ function shiftForDrawers() {
 window.addEventListener("resize", shiftForDrawers);
 // Panels change size with what they show (a quiz answered, the record unfolded): follow them.
 const panelWatch = new ResizeObserver(() => shiftForDrawers());
-for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views"]) panelWatch.observe($(id));
+for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar"]) panelWatch.observe($(id));
 
 function setHelp(open) {
   setOpen("help-toggle", "help", open);
@@ -2152,7 +2154,7 @@ function setPanelBusy(on) {
   renderLayouts();
   renderScreenDrive();
   renderRobotStart();
-  for (const id of ["object-move", "object-copy", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
+  for (const id of ["object-focus", "object-move", "object-copy", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
 }
 
 // ------------------------------------------------------------ pick a local robot, click to place
@@ -2295,7 +2297,7 @@ function beginObjectSelection(entry = null) {
   setWorldPanel(false); setDrawer(false); setHelp(false); canvas.focus();
   $("object-edit-title").textContent = entry?.name || t("select_prop");
   $("object-edit-bar").hidden = false;
-  $("object-move").disabled = $("object-copy").disabled = $("object-remove").disabled = !entry;
+  $("object-focus").disabled = $("object-move").disabled = $("object-copy").disabled = $("object-remove").disabled = !entry;
   if (entry) {
     objectHighlight = new THREE.Box3Helper(new THREE.Box3(), theme.amber);
     objectHighlight.name = "object-edit-highlight"; objectHighlight.material.depthTest = false;
@@ -2311,6 +2313,27 @@ function updateObjectHighlight() {
   objectHighlight.visible = !objectHighlight.box.isEmpty();
 }
 
+function focusObject() {
+  if (busy || !objectSelection || !hasSize() || placementVersion !== sceneDesc?.version
+      || placementGeneration !== stateGeneration || renderedVersion !== sceneDesc.version) return;
+  updateObjectHighlight();
+  if (!objectHighlight?.visible) return;
+  // Use current rendered geometry, including a free prop's motion and every part of a fixed prop.
+  const sphere = objectHighlight.box.getBoundingSphere(new THREE.Sphere());
+  const r = freeRect(), width = r.right - r.left, height = r.bottom - r.top;
+  if (width <= 80 || height <= 80) return;
+  const direction = camera.position.clone().sub(controls.target);
+  if (direction.lengthSq() < 1e-10) direction.set(1, -1.3, 0.8);
+  direction.normalize();
+  const d = fitDistance(Math.max(sphere.radius, 0.04)) * Math.max(window.innerWidth / width, window.innerHeight / height) * 1.15;
+  refitRig = null;
+  camera.near = Math.min(camera.near, Math.max(d / 400, 0.001));
+  camera.far = Math.max(camera.far, d * 40);
+  camera.updateProjectionMatrix();
+  moveCamera(sphere.center.clone().addScaledVector(direction, d), sphere.center, true);
+  canvas.focus();
+}
+
 function pickObjectForEdit(point) {
   setPointer(point);
   const hit = worldRoot && raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
@@ -2324,6 +2347,7 @@ function finishObjectSelection() {
   clearObjectSelection(); updateUndo(); updateEmpty(); renderDrive(); canvas.focus();
 }
 $("object-edit-done").addEventListener("click", finishObjectSelection);
+$("object-focus").addEventListener("click", focusObject);
 $("object-move").addEventListener("click", () => { if (!busy && objectSelection) creator.edit(objectSelection); });
 $("object-copy").addEventListener("click", () => {
   if (!busy && objectSelection) creator.duplicate({ ...objectSelection, world_sha256: sceneDesc.object_edit.world_sha256 });
@@ -2984,7 +3008,11 @@ initLessons({
     // A rig is measured where its robots stand: a scene whose first poses have not come yet has every body at the
     // origin, and the fit framed that instead (on a phone the third PID twin and the Panda ended off the screen).
     if (fit && pendingFit) fitWhenPosed = { eye, target };
-    else aimLessonCamera(eye, target, fit);
+    else {
+      aimLessonCamera(eye, target, fit);
+      // The lesson-open reply can follow first poses and replace their scheduled settling fit.
+      if (fit) refitRig = { eye, target, at: performance.now() + RIG_SETTLE_MS };
+    }
   },
   closePanels: () => {
     setHelp(false);
