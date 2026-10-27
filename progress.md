@@ -1,5 +1,18 @@
 # progress
 
+## Authored environment contribution fidelity (2026-10-28)
+
+Shared implicit environment now composes scene intensity with nondefault author multipliers, including diffuse/specular/clearcoat; grain/weave hooks, explicit maps, sensor lighting and context restoration retained.
+Default1 skips the hook; changing an initially default Three material later is outside this authoring-time contract, and invalid env fails fast.
+396targeted pytest,7canonical,source/fresh offline60-tool smoke,Ruff/format/JS parsing and original11/11budgets pass; no full-suite claim.
+80fixed stills retain24exact original-world canvas pairs; two positive workspaces explicitly add existing generated aluminium/lab arms, not raw-imported-model gains.
+Eight complete paused scripted-camera movies fully decode,48root samples inspected;485model/state fields preserved and paired mesh bytes checked.
+Wheel3940690B(+465B),413product files exact,original13WIP retained; no added requests/textures/passes/dependencies,alloy shader programs22→24.
+ABBA alloy browser-cold mean382.10→409.60ms,lab285.30→283.15ms; mixed costs and asynchronous RGB inventory limits retained.
+Paint roughness screen did not establish ordinary-distance gain; its env0 attempt was ineffective under Three's override, not a valid ablation.
+[Report](docs/bench/2026-10-28-environment-scale.md).
+Broad material/lightweight/creative-play goal active; individual action-success tuning deferred.
+
 ## Shared camera inspection and composition (2026-10-28)
 
 Native Top/Front/Side/Back presets preserve current target, distance and perspective across existing creation/edit flows; world axes, temporary history and no automatic complete fit are explicit.

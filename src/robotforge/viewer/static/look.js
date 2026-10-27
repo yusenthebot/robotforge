@@ -146,7 +146,30 @@ export function surfaceMaterial(materialName, color, opacity, surfaces, native) 
   }
   if (p.weave || p.texture === "weave" || p.texture === "cloth") addWeave(mat, p.textureScale, p.textureStrength, p.texture === "cloth");
   else if (p.texture) addGrain(mat, p.texture, p.textureScale, p.textureStrength);
+  addEnvironmentScale(mat, p.env ?? 1);
   return mat;
+}
+
+function addEnvironmentScale(mat, scale) {
+  if (!Number.isFinite(scale) || scale < 0) throw new Error("Surface env must be finite and non-negative");
+  if (scale === 1) return;
+  // Three replaces a material's intensity with scene.environmentIntensity for implicit maps.
+  // Multiply inside IBL instead, retaining scene lighting, sensor overrides and context restoration.
+  const chunk = THREE.ShaderChunk.envmap_physical_pars_fragment;
+  if ((chunk.match(/\benvMapIntensity\b/g) || []).length !== 2) throw new Error("Unsupported environment shader chunk");
+  const compile = mat.onBeforeCompile, key = mat.customProgramCacheKey();
+  mat.onBeforeCompile = (shader, renderer) => {
+    compile.call(mat, shader, renderer);
+    shader.uniforms.rfEnvMultiplier = {
+      // Explicit maps already use the material's own intensity; avoid applying it twice.
+      get value() { return mat.envMap ? 1 : mat.envMapIntensity; },
+    };
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float rfEnvMultiplier;")
+      .replace("#include <envmap_physical_pars_fragment>",
+        chunk.replace(/\benvMapIntensity\b/g, "(envMapIntensity * rfEnvMultiplier)"));
+  };
+  mat.customProgramCacheKey = () => `${key}-rf-env-scale-v1`;
 }
 
 // MuJoCo may rotate mesh vertices into a principal-axis frame. Keep fibres along the
