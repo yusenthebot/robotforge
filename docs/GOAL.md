@@ -85,6 +85,9 @@ Evolving。
 - 可选 extra `policy`：onnxruntime，用来在 robotforge 里回放 UniLab 等外部训练出的 ONNX 策略。
 - UniLab 作为外部训练后端，放在独立的 checkout 和虚拟环境里，通过命令行调用；不进入 robotforge 的依赖（它锁定 torch 2.7 和 mujoco-uni 3.8，与本项目的 mujoco 冲突）。
 
+ZenoBench（用户 2026-10-27 批准）：
+- 可选 extra `zenobench`：usd-core、scipy、opencv-python-headless、imageio、imageio-ffmpeg，用来读取 ZenoBench 的 USD 场景并原样运行它的代码。核心安装不包含。
+
 超出这个列表的新依赖属于 Gate。
 
 ## Gates：暂停并询问用户

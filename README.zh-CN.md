@@ -142,6 +142,7 @@ agent 通过 MCP 调用本地工具；Python 管理仿真、机器人能力、�
 - [传感器](docs/SENSORS.md) · [感知与建图](docs/PERCEPTION.md) · [导航](docs/NAVIGATION.md)
 - [算法](docs/ALGORITHMS.md) · [训练](docs/TRAINING.md) · [策略回放与 UniLab](docs/UNILAB.md)
 - [足式机器人](docs/LEGGED.md) · [人形机器人](docs/HUMANOID.md) · [操作](docs/MANIPULATION.md) · [移动操作](docs/MOBILE.md)
+- [ZenoBench 家务任务：不装 Isaac Sim，用 MuJoCo 跑](docs/ZENOBENCH.md)
 - [脚本、插件与导出](docs/EXTENDING.md) · [插件打包](docs/PLUGINS.md)
 - [当前状态](STATUS.md) · [开发进度](progress.md) · [0.0.1 快照说明](docs/RELEASE_0.0.1.md)
 

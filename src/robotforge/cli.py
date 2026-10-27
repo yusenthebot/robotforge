@@ -158,6 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     from robotforge.extend import cli as extend_cli  # `plugins` and `export`
 
     extend_cli.add_parsers(sub)
+    from robotforge.zenobench import cli as zenobench_cli  # `zenobench ...` (optional extra)
+
+    zenobench_cli.add_parsers(sub)
     for p in (p_open, sub.choices["demo"]):
         p.add_argument("--host", default="127.0.0.1")
         p.add_argument("--port", type=int, default=None, help=f"default: first free port from {DEFAULT_PORT}")
@@ -168,6 +171,9 @@ def main(argv: list[str] | None = None) -> int:
         return bridge_cli.run(args)
     if args.command in ("plugins", "export"):
         return extend_cli.run(args)
+    if args.command == "zenobench":
+        logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+        return zenobench_cli.run(args)
     if args.command == "mcp":
         from robotforge import mcp_server  # imported lazily: the viewer CLI does not need the MCP SDK
 

@@ -138,6 +138,7 @@ The diagram has an editable [HTML source](docs/diagrams/architecture.html).
 - [Sensors](docs/SENSORS.md) · [Perception and mapping](docs/PERCEPTION.md) · [Navigation](docs/NAVIGATION.md)
 - [Algorithms](docs/ALGORITHMS.md) · [Training](docs/TRAINING.md) · [Policy playback and UniLab](docs/UNILAB.md)
 - [Legged robots](docs/LEGGED.md) · [Humanoids](docs/HUMANOID.md) · [Manipulation](docs/MANIPULATION.md) · [Mobile manipulation](docs/MOBILE.md)
+- [ZenoBench house tasks on MuJoCo, without Isaac Sim](docs/ZENOBENCH.md)
 - [Scripts, plugins and export](docs/EXTENDING.md) · [Plugin packaging](docs/PLUGINS.md)
 - [Current status](STATUS.md) · [Progress](progress.md) · [0.0.1 snapshot notes](docs/RELEASE_0.0.1.md)
 

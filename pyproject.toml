@@ -27,6 +27,15 @@ rl = [
 ]
 # Play learned policies (ONNX), e.g. ones trained with UniLab: uv sync --extra policy
 policy = ["onnxruntime>=1.20"]
+# Run ZenoBench (Isaac Sim tasks for Zeno Malo) on MuJoCo without Isaac: uv sync --extra zenobench
+# usd-core reads the USD scenes; the rest are ZenoBench's own runtime imports.
+zenobench = [
+    "imageio>=2.37",
+    "imageio-ffmpeg>=0.6",
+    "opencv-python-headless>=4.11",
+    "scipy>=1.15",
+    "usd-core>=25.5",
+]
 
 [project.scripts]
 robotforge = "robotforge:main"

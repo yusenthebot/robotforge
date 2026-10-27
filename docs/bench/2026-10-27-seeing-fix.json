@@ -57,5 +57,43 @@
     "Original phone copy tap loss not reproduced in 14 diagnostic runs; no confirmed product cause claimed.",
     "20 slow tests excluded from initial full run; 5 sensor cases run separately.",
     "Optional mypy/pyright/bandit/pip-audit unavailable."
-  ]
+  ],
+  "integrated_main_followup": {
+    "main": "4fc431bf19c03c32280801342f9c9a52b7192dcf",
+    "active_source_sha256": "372228d777bcf85b522305eef9c9aa594dac22f59a9d0b274b0e5e9079f5204f",
+    "frozen_inputs": 736,
+    "delta": {
+      "changed_existing_production": [
+        "cli.py"
+      ],
+      "added_production": [
+        "zenobench/__init__.py",
+        "zenobench/cli.py",
+        "zenobench/hulls.py",
+        "zenobench/python.py",
+        "zenobench/shim.py",
+        "zenobench/source.py",
+        "zenobench/usd_mjcf.py",
+        "zenobench/world.py"
+      ],
+      "changed_existing_test_scripts": [],
+      "source": "372228d777bcf85b522305eef9c9aa594dac22f59a9d0b274b0e5e9079f5204f"
+    },
+    "compatibility_passed": 103,
+    "usd_test_module_skipped": 1,
+    "zenobench_extra_installed_or_certified": false,
+    "original_budget_passed": 11,
+    "framework_passed": 7,
+    "source_and_installed_smoke_passed": true,
+    "package": {
+      "wheel": "dist-final/robotforge-0.0.1-py3-none-any.whl",
+      "package_files": 406,
+      "wheel_source_exact": true,
+      "installed_source_exact": true,
+      "wheel_bytes": 3906355,
+      "wheel_sha256": "8b6a5cdf791ca97c4e31ad1bef747bd141d1a85a03f378973451007534f65846",
+      "malo_cad_packaged": false
+    },
+    "scope": "Scoped additive-main integration checks; previous 3957/127 coverage belongs to earlier 8f65 source, not a full suite on this integrated source."
+  }
 }
