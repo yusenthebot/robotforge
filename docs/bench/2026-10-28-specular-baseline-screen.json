@@ -1,0 +1,296 @@
+{
+  "date": "2026-10-28",
+  "decision": "do_not_start_compensation",
+  "candidate_implemented": false,
+  "product_runtime_changed": false,
+  "base_commit": "187f7ff7279dab4adbd96ad421b31a6cc81fdf3e",
+  "source_sha256": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+  "gate": "Unresolved bump slopes might cause visible specular instability. No candidate unless two real material paths show repeatable ordinary-distance defect.",
+  "gate_met": false,
+  "review": {
+    "decision": "do_not_start_compensation",
+    "gate_met": false,
+    "root": {
+      "reviewed_overview_stills": 36,
+      "reviewed_normal_original_files": 6,
+      "decoded_samples_inspected": 72,
+      "finding": "No two actual paths with an attributable ordinary-distance specular defect established. No temporal stability certification or absence-of-shimmer claim."
+    },
+    "independent": {
+      "agent": "wood_signal_review",
+      "overview_stills": 36,
+      "normal_original_files": 3,
+      "decoded_samples": 36,
+      "scope": "All six overview sheets; three DPR2 studio normal files; six DPR2 decoded sheets. Did not view DPR1 decoded sheets or full continuous videos.",
+      "finding": "Does not support compensation implementation. Malo/Panda coatings show smooth broad shading; Go2 crates mostly diffuse/rough. Silhouette, thin line or shadow changes do not establish bump variance defect."
+    },
+    "next_plan": "Screen native placement demand across props, terrain and robot starts; if beneficial, explicit default-off planar snapping with final-coordinate preview/submit agreement and revalidated support. No placement changes implemented in this round."
+  },
+  "cases": {
+    "malo": {
+      "1": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "model_arrays_exact_within_session": 482,
+        "state_arrays_exact_within_session": [
+          "qpos",
+          "qvel",
+          "ctrl"
+        ],
+        "views": 6,
+        "recorded_helper": "helper-snapshots/capture-v1.py",
+        "source_world_sha256": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+        "grain_programs_on_visible_flagged_meshes": [],
+        "brushed_or_knurl_any_mesh": false,
+        "ground_materials": [
+          "ground_concrete"
+        ]
+      },
+      "2": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "model_arrays_exact_within_session": 482,
+        "state_arrays_exact_within_session": [
+          "qpos",
+          "qvel",
+          "ctrl"
+        ],
+        "views": 6,
+        "recorded_helper": "helper-snapshots/capture-v2.py",
+        "source_world_sha256": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+        "grain_programs_on_visible_flagged_meshes": [],
+        "brushed_or_knurl_any_mesh": false,
+        "ground_materials": [
+          "ground_concrete"
+        ]
+      }
+    },
+    "go2": {
+      "1": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "model_arrays_exact_within_session": 482,
+        "state_arrays_exact_within_session": [
+          "qpos",
+          "qvel",
+          "ctrl"
+        ],
+        "views": 6,
+        "recorded_helper": "helper-snapshots/capture-v2.py",
+        "source_world_sha256": "a4c86e31af6c2eaf8922aabb6cefcb9545d315619d2eb931955a04323748c036",
+        "grain_programs_on_visible_flagged_meshes": [
+          "rf-grain-metric-stone-0.025000-0.2025-0.0990",
+          "rf-grain-metric-wood-0.012000-0.1170-0.1430-fibres-v3"
+        ],
+        "brushed_or_knurl_any_mesh": false,
+        "ground_materials": [
+          "ground_concrete"
+        ]
+      },
+      "2": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "model_arrays_exact_within_session": 482,
+        "state_arrays_exact_within_session": [
+          "qpos",
+          "qvel",
+          "ctrl"
+        ],
+        "views": 6,
+        "recorded_helper": "helper-snapshots/capture-v2.py",
+        "source_world_sha256": "a4c86e31af6c2eaf8922aabb6cefcb9545d315619d2eb931955a04323748c036",
+        "grain_programs_on_visible_flagged_meshes": [
+          "rf-grain-metric-stone-0.025000-0.2025-0.0990",
+          "rf-grain-metric-wood-0.012000-0.1170-0.1430-fibres-v3"
+        ],
+        "brushed_or_knurl_any_mesh": false,
+        "ground_materials": [
+          "ground_concrete"
+        ]
+      }
+    },
+    "panda": {
+      "1": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "model_arrays_exact_within_session": 482,
+        "state_arrays_exact_within_session": [
+          "qpos",
+          "qvel",
+          "ctrl"
+        ],
+        "views": 6,
+        "recorded_helper": "helper-snapshots/capture-v2.py",
+        "source_world_sha256": "7c97e3f0438578e625fae0a23003ba1b5908d332b25927f10f7545d9fb084fd5",
+        "grain_programs_on_visible_flagged_meshes": [],
+        "brushed_or_knurl_any_mesh": false,
+        "ground_materials": [
+          "ground_wood"
+        ]
+      },
+      "2": {
+        "source": "47f8fe814c536e7f24e2b8abbcc4fd2090a5101331d877262514ee4055a84939",
+        "model_arrays_exact_within_session": 482,
+        "state_arrays_exact_within_session": [
+          "qpos",
+          "qvel",
+          "ctrl"
+        ],
+        "views": 6,
+        "recorded_helper": "helper-snapshots/capture-v2.py",
+        "source_world_sha256": "7c97e3f0438578e625fae0a23003ba1b5908d332b25927f10f7545d9fb084fd5",
+        "grain_programs_on_visible_flagged_meshes": [],
+        "brushed_or_knurl_any_mesh": false,
+        "ground_materials": [
+          "ground_wood"
+        ]
+      }
+    }
+  },
+  "movies": {
+    "malo-dpr1-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/malo-dpr1/studio/workflow.mp4",
+      "video_sha256": "6e74c820a7320d7688c6b83ba2ffbf97e01f822f90e0bfb84e3e99c0934be6ec",
+      "raw_frames": 432,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "malo-dpr1-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/malo-dpr1/daylight/workflow.mp4",
+      "video_sha256": "356ae31a8f0d6490b95b75cd28fe9175dfa861d3ce69ffd6831974a0399f40cb",
+      "raw_frames": 432,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "malo-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/malo-dpr2/studio/workflow.mp4",
+      "video_sha256": "b48e9d1386667acd476ee72394e920436d4a09d66c0b8c880a682415c8b0cab4",
+      "raw_frames": 433,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "malo-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/malo-dpr2/daylight/workflow.mp4",
+      "video_sha256": "6a4328a2c3a1f113e658516bd04d30d248a076333fa012254bcfb0ac70fdd171",
+      "raw_frames": 434,
+      "encoded_duration": 7.333333,
+      "decoded_frames": 220,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "go2-dpr1-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/go2-dpr1/studio/workflow.mp4",
+      "video_sha256": "a17fa8487451c86aaed74e15940b092e3888105243fa9d95ff26a9dfa0cdf66c",
+      "raw_frames": 430,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "go2-dpr1-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/go2-dpr1/daylight/workflow.mp4",
+      "video_sha256": "d481f97c7309e11d78999c901eb701b23849b6ef8dcf762e429d27f910958018",
+      "raw_frames": 432,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "go2-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/go2-dpr2/studio/workflow.mp4",
+      "video_sha256": "759ae61a45fc3d3a90605691b3d917a4128474fa97f7efdddf726c115350fd34",
+      "raw_frames": 429,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "go2-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/go2-dpr2/daylight/workflow.mp4",
+      "video_sha256": "85bc0602c1fa4a21f0a12a369fea7828619bffc482d100eabba1baef4834dcf2",
+      "raw_frames": 429,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "panda-dpr1-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/panda-dpr1/studio/workflow.mp4",
+      "video_sha256": "333072e6297179a5b34c1dfb16b04b11a0020353d1659ff75de6af011d55bea1",
+      "raw_frames": 432,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "panda-dpr1-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/panda-dpr1/daylight/workflow.mp4",
+      "video_sha256": "4d8081379e98c289998110f8c95a8bdad50983e918fba557181c591185f468c4",
+      "raw_frames": 432,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "panda-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/panda-dpr2/studio/workflow.mp4",
+      "video_sha256": "957fa13df5d119d96102a38374e6ccdcea445e6d4c15465ea05adcd9012e7ba6",
+      "raw_frames": 432,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    },
+    "panda-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-specular-baseline/panda-dpr2/daylight/workflow.mp4",
+      "video_sha256": "5045bc0276ff15b0bf3484edc617b65356bbaf93aa9b789ea17c822d3cb47475",
+      "raw_frames": 432,
+      "encoded_duration": 7.3,
+      "decoded_frames": 219,
+      "decode_exit_code": 0,
+      "duplicates_within_segments": 0
+    }
+  },
+  "verification": {
+    "tests": {
+      "record-contracts": 41,
+      "gpu-baseline": 9
+    },
+    "frozen_inputs": 748,
+    "bound_external_inputs": 141,
+    "wheel_bytes": 3928336,
+    "wheel_sha256": "105905f202e37723ff4818f9669b194e9ead535b7faa3a1aa264afb41e8c8863",
+    "wheel_byte_identical_to_prior": true,
+    "product_files_exact": 409,
+    "ruff_and_format": true,
+    "preserved_original_wip_files": 13,
+    "optional_tool_availability": {
+      "mypy": false,
+      "pyright": false,
+      "bandit": false,
+      "pip_audit": false
+    }
+  },
+  "integrity": {
+    "indexed_files": 6314,
+    "indexed_bytes": 1110217326,
+    "index_sha256": "cd562993242ba21d20d48883f97d35a0b2f68c3990f90e5af8fdae8b9e1f73a0",
+    "raw_frames_verified_accepted": 5179,
+    "decoded_frames": 2629,
+    "root_decoded_samples_inspected": 72
+  },
+  "limits": [
+    "Zero candidate: no before/after appearance improvement or new performance-budget claim.",
+    "Six world/DPR sessions are not a complete scene or device audit; normal camera is an explicit fixed ordinary view, not automatic default framing.",
+    "Paused scripted-camera videos with three intentional cuts are not native gameplay. Full decode and sampled images do not certify temporal stability or absence of shimmer.",
+    "Projected box fractions are clipped AABB estimates, not visible pixel coverage, material masks or occlusion measurements.",
+    "Initial DPR2 failure retained; failed-stage timestamp metadata was not serialized, so its raw frames are not part of the accepted audited cohort.",
+    "Collector failure paths were not fault-injected; successful captures demonstrate their observed cleanup, not exception cleanup correctness.",
+    "No new full default suite, slow all-assets/sensors suites, installed smoke, ABBA, install/loading/FPS/memory, physical phone or Windows certification in this screen.",
+    "Prior PR40 same-product-source split acceptance and original 11 budgets remain prior results, not newly measured here.",
+    "Source frame intervals are retained subject to1/60second segment-tail padding and30fps quantization; each output duration is checked within0.15second."
+  ],
+  "next": "Screen native placement demand across props, terrain and robot starts; if beneficial, explicit default-off planar snapping with final-coordinate preview/submit agreement and revalidated support. No placement changes implemented in this round.",
+  "goal_status": "active"
+}

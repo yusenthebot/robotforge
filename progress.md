@@ -1,5 +1,16 @@
 # progress
 
+## Actual-world specular baseline (2026-10-28)
+
+No two actual material paths establish an attributable ordinary-distance specular defect; no compensation candidate or shader change.
+Unmodified Malo/Go2/Panda, DPR1/2, two lights and three distances:36stills,12fully decoded paused scripted-camera clips,72root decoded samples.
+All482model arrays and qpos/qvel/ctrl stay exact within each session; actual inventories contain no brushed/knurl materials.
+41record and9GPU filtering/metric-normal tests, Ruff/offline wheel pass;409product files and3928336Bwheel exact.
+Initial collector timestamp failure retained with its missing failed-stage metadata limit; no temporal, new budget or full-suite certification.
+[Report](docs/bench/2026-10-28-specular-baseline-screen.md).
+Next screen native precise-composition demand across props, terrain and robot starts before one default-off planar snapping candidate.
+Broad material/lightweight/play goal active; individual action-success tuning deferred.
+
 ## Primitive surface exploration and inherited regression (2026-10-28)
 
 Independent persisted finishes reuse shared looks while keeping physical material and accents; explicit apply/reset and latest-pose Undo, no-op and protected failure recovery.
