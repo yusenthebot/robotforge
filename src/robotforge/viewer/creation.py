@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 if TYPE_CHECKING:
     from robotforge.design.store import WorldStore
@@ -33,10 +33,17 @@ class ObjectPlacement(BaseModel):
 
     preset: Literal["ball", "block", "pin", "barrier", "table"]
     size: Literal["small", "normal", "large"] = "normal"
+    material: Literal["plastic", "wood", "steel"] | None = None
     yaw: Literal[0, 90, 180, 270] = 0
     pos: list[Coordinate] = Field(min_length=2, max_length=3)
     version: int = Field(ge=1)
     generation: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def supported_material(self) -> ObjectPlacement:
+        if self.preset == "table" and self.material is not None:
+            raise ValueError("table material cannot be changed")
+        return self
 
     @field_validator("yaw", mode="before")
     @classmethod
@@ -122,6 +129,8 @@ def place_object(pg: Playground, message: dict) -> dict:
 
     def entry(world: World, name: str) -> ObjectEntry:
         spec = {**OBJECTS[request.preset]}
+        if request.material is not None:
+            spec["material"] = request.material
         scale = SCALES[request.size]
         spec["size"] = [value * scale for value in spec["size"]]
         if "mass" in spec:

@@ -25,6 +25,7 @@ async def begin(tab, name="local_arm"):
         await click(tab, "#create-toggle")
     await click(tab, f'#model-list [data-model="{name}"]')
     await tab.until("!document.getElementById('placement-bar').hidden")
+    assert await tab.eval("document.getElementById('prop-material-control').hidden")
     await tab.run("window.__robotforge.lookAt([5,-7,5],[1,0,.1])")
     await asyncio.sleep(0.7)
     previous = None

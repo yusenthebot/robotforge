@@ -33,6 +33,7 @@ def test_all_server_owned_presets_scale_and_support_heights(pg, preset, size):  
     entry = pg.store.load().objects[0]
     expected = [s * SCALES[size] for s in OBJECTS[preset]["size"]]
     assert entry.size == expected and entry.yaw == 90
+    assert entry.material == OBJECTS[preset].get("material")
     expected_z = 0.8 + (0 if entry.shape == "table" else expected[-1] / 2)
     assert entry.pos == pytest.approx([0, 0, expected_z])
     assert reply["object"] == preset and len(reply["undo"]["token"]) == 32
@@ -70,6 +71,11 @@ def test_quarter_turns_and_ground_following(pg, yaw):  # noqa: F811
         {"pos": [0, True]},
         {"version": True},
         {"version": "2"},
+        {"material": "metal"},
+        {"material": "../wood"},
+        {"material": True},
+        {"material": 3},
+        {"preset": "table", "material": "wood"},
     ],
 )
 def test_invalid_request_cannot_change_saved_or_live_world(pg, patch):  # noqa: F811
@@ -99,6 +105,51 @@ def test_tabletop_touch_and_block_stacking_are_allowed(pg):  # noqa: F811
     add(pg, "block", [0, 0, 0.68])
     add(pg, "ball", [0.25, 0, 0.5])
     assert len(pg.store.load().objects) == 4
+
+
+@pytest.mark.parametrize("preset", ["ball", "block", "pin", "barrier"])
+@pytest.mark.parametrize("material", ["plastic", "wood", "steel"])
+def test_material_choice_survives_layout_and_copy_with_preset_settings(pg, preset, material):  # noqa: F811
+    from test_layouts import save, target
+    from test_viewer_object_copy import duplicate
+    from test_viewer_object_copy import undo as undo_copy
+
+    reply = add(pg, preset, material=material, size="large", yaw=90)
+    entry = pg.store.load().objects[0]
+    assert entry.material == material
+    expected_mass = OBJECTS[preset]["mass"] * SCALES["large"] ** 3 if "mass" in OBJECTS[preset] else None
+    assert entry.mass == expected_mass
+    assert entry.fixed == OBJECTS[preset].get("fixed", False)
+    saved = save(pg)
+    undo(pg, reply)
+    assert not pg.store.load().objects
+    target(pg, saved)
+    assert pg.store.load().objects == [entry]
+    copied = duplicate(pg, entry.name)
+    original, clone = pg.store.load().objects
+    assert original == entry and clone.material == material
+    undo_copy(pg, copied)
+    assert pg.store.load().objects == [entry]
+
+
+def test_failed_material_addition_keeps_world_and_receipt_and_can_retry(pg, monkeypatch):  # noqa: F811
+    from robotforge.design import store as store_module
+
+    reply = add(pg, material="wood")
+    original = store_module.compile_world
+    before, model, receipt = pg.store.file.read_bytes(), pg.session.model, pg._play_addition
+
+    def broken(*args, **kwargs):
+        raise ValueError("compile failed")
+
+    monkeypatch.setattr(store_module, "compile_world", broken)
+    with pytest.raises(ValueError, match="compile failed"):
+        add(pg, "block", [2, 0], material="steel")
+    assert pg.store.file.read_bytes() == before and pg.session.model is model and pg._play_addition == receipt
+    monkeypatch.setattr(store_module, "compile_world", original)
+    undo(pg, reply)
+    add(pg, "block", [2, 0], material="steel")
+    assert pg.store.load().objects[0].material == "steel"
 
 
 @pytest.mark.parametrize("preset", list(OBJECTS))

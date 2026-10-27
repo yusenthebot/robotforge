@@ -2397,7 +2397,8 @@ async function placeEntity(item, pos) {
     : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
-      : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw };
+      : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw,
+        ...(item.material ? { material: item.material } : {}) };
   await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
     frame: item.kind === "robot" || item.kind === "model",
     progress: (event) => { if (placementSession === creator.session()) creator.progress(event.stage, event.fraction); },

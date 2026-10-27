@@ -46,6 +46,7 @@ def test_native_reposition_rotate_reset_and_one_use_undo(viewer, size, lang):  #
         await begin(tab)
         assert await tab.eval("!document.getElementById('object-placement-controls').hidden")
         assert await tab.eval("document.querySelector('.repeat-placement').hidden")
+        assert await tab.eval("document.getElementById('prop-material-control').hidden")
         assert await tab.eval("Array.from(document.querySelectorAll('.prop-size-control')).every(e=>e.hidden)")
         await click(tab, "#place-rotate")
         await spot(tab, [2, 0, 0])
