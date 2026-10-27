@@ -1,5 +1,13 @@
 # progress
 
+## Local terrain composition (2026-10-27)
+
+Native ramp/stair placement preserves prior terrain and props, shares actual compile geometry with preview, checks saved/live occupancy, and keeps reset/pause semantics explicit.
+Single-add Undo and saved layouts support composition/replay; committed Undo survives a true display timeout/context-loss recovery. Existing Python/MCP and whole-terrain replacement interfaces remain compatible.
+Integrated frozen154677d6: scope-combined 4052pass/128skip; first full run retained one global-card-count assertion failure, corrected exact inventory scope and14filecases pass,7canonical,source/fresh offline installed60-tool smoke, original11/11install/viewer budgets.
+Wheel3919038B(+4368B),407files exact;standardcold0.9392s. Native rover/Malo movies and fixed3world comparisons retained.
+[Report](docs/bench/2026-10-27-local-terrain.md). Broad shared-material/lightweight/creative-play goal active; no individual action tuning or new material appearance gain claimed.
+
 ## Prop inspection and lesson camera regression (2026-10-27)
 
 Native selected-prop Focus makes shared wood/steel details easy to inspect, using actual current multi-part bounds and unobscured canvas.

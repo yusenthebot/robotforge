@@ -11,6 +11,8 @@ const paths = {
   pin: "M17 11c0-5 16-5 16 0v24c0 6-16 6-16 0z M17 11c0 5 16 5 16 0",
   barrier: "M5 19l32-8 8 5v15l-32 8-8-5z M5 19l8 5 32-8 M13 24v15",
   table: "M6 15l26-7 13 8-27 8z M8 18v19m10-13v19m24-24v17 M32 10v17",
+  ramp: "M4 34l15-20h12l15 20H4 M19 14v20m12-20v20 M4 34l7 5h29l6-5",
+  stairs: "M4 34h6v-7h6v-7h7v-6h8v6h7v7h6v7H4 M4 34l6 6h29l5-6",
 };
 
 // Observe pointers without taking them away from OrbitControls. Once a gesture becomes a drag,
@@ -82,12 +84,12 @@ export function initCreation({ start, submit, cancel, change }) {
     repeat.checked = false; syncRepeat();
     material.value = "";
     $("prop-material-control").hidden = kind !== "object" || entry.name === "table";
-    $("placement-hint").textContent = t(kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
+    $("placement-hint").textContent = t(kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     $("place-rotate").textContent = t("rotate_place", { angle: yaw });
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
-    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start";
-    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model";
+    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain";
+    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain";
     $("placement-title").textContent = t(kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
@@ -97,7 +99,7 @@ export function initCreation({ start, submit, cancel, change }) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = kind === "robot" || kind === "model" ? "create-card" : "object-card";
-    button.dataset[kind === "model" ? "model" : kind === "robot" ? "template" : "object"] = entry.name;
+    button.dataset[kind === "terrain" ? "terrain" : kind === "model" ? "model" : kind === "robot" ? "template" : "object"] = entry.name;
     if (kind === "model") button.dataset.source = entry.source;
     button.disabled = busy;
     const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -105,7 +107,7 @@ export function initCreation({ start, submit, cancel, change }) {
     const path = document.createElementNS(icon.namespaceURI, "path");
     path.setAttribute("d", paths[entry.name] || paths[entry.kind === "quadruped" ? "quadruped" : "arm"] || paths.block); icon.append(path);
     const copy = document.createElement("span"), title = document.createElement("strong"), desc = document.createElement("span");
-    const key = kind === "robot" ? "starter" : "prop";
+    const key = kind === "terrain" ? "local_terrain" : kind === "robot" ? "starter" : "prop";
     title.textContent = kind === "model" ? entry.title : tOr(`${key}_${entry.name}`, entry.name);
     desc.textContent = kind === "model" ? t(entry.local ? "model_local" : entry.downloaded ? "model_cached" : "model_download", { size: entry.download_mb }) : tOr(`${key}_${entry.name}_desc`, entry.summary || "");
     copy.append(title, desc); button.append(icon, copy);
@@ -117,7 +119,8 @@ export function initCreation({ start, submit, cancel, change }) {
     editing: () => item?.kind === "edit" || item?.kind === "start" ? item : null,
     edit: (entry) => begin(entry, "edit", entry.name),
     repositionRobot: (entry) => begin(entry, "start", entry.name),
-    heading: () => item?.kind === "start" ? yaw : null,
+    heading: () => item?.kind === "start" || item?.kind === "terrain" ? yaw : null,
+    placingTerrain: () => item?.kind === "terrain",
     duplicate: (entry) => begin(entry, "copy", entry.name),
     session: () => session,
     repeating: () => (item?.kind === "object" || item?.kind === "copy") && repeat.checked,
@@ -126,13 +129,16 @@ export function initCreation({ start, submit, cancel, change }) {
       point = null; $("place-here").disabled = true;
       $("placement-hint").textContent = t("place_next_hint");
     },
-    preview: () => item && item.kind !== "robot" && item.kind !== "start" && item.kind !== "model" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
+    preview: () => item?.kind === "terrain" ? { boxes: item.boxes, yaw }
+      : item && item.kind !== "robot" && item.kind !== "start" && item.kind !== "model" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
     open() { setOpen(true); $("model-list").querySelector("button")?.focus(); },
-    render(entries, editable, busy, objects = [], models = []) {
+    render(entries, editable, busy, objects = [], models = [], terrains = []) {
       $("create-section").hidden = !editable || !entries.length;
       $("create-list").replaceChildren(...entries.map((entry) => card(entry, "robot", busy)));
       $("model-list").replaceChildren(...models.map((entry) => card(entry, "model", busy)));
       $("object-list").replaceChildren(...(editable ? objects : []).map((entry) => card(entry, "object", busy)));
+      $("terrain-create-list").replaceChildren(...(editable ? terrains : []).map((entry) => card(entry, "terrain", busy)));
+      $("local-terrain-section").hidden = !editable;
       $("objects-note").hidden = editable;
       $("build-pick-map").hidden = editable;
       $("build-add-robot").hidden = !editable || !entries.length;

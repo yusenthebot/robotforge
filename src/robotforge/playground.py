@@ -60,6 +60,7 @@ if TYPE_CHECKING:
     from robotforge.viewer.creation import Addition
     from robotforge.viewer.object_edit import Edit
     from robotforge.viewer.robot_edit import RobotEdit
+    from robotforge.viewer.terrain_create import TerrainAddition
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
 MAX_SIM_SECONDS = 60.0
@@ -124,7 +125,7 @@ class Playground:
     # from the model, for the model they were made for (design/tasks/live.py)
     _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
-    _play_addition: Addition | None = field(default=None, init=False, repr=False)
+    _play_addition: Addition | TerrainAddition | None = field(default=None, init=False, repr=False)
     _play_edit: Edit | None = field(default=None, init=False, repr=False)
     _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
@@ -288,6 +289,8 @@ class Playground:
                 return self.add_robot_for_play(msg)
             if action == "add_model":
                 return self.add_model_for_play(msg)
+            if action == "add_terrain":
+                return self.add_terrain_for_play(msg)
             if action in {"edit_robot_start", "undo_robot_start"}:
                 return self.edit_robot_start_for_play(msg)
             if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object"}:
@@ -506,6 +509,13 @@ class Playground:
         from robotforge.viewer.creation import place_object, undo_addition
 
         return undo_addition(self, message) if message.get("action") == "undo_add" else place_object(self, message)
+
+    @_one_edit_at_a_time
+    def add_terrain_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Add a fixed local terrain preset on clear ground; pause at saved starts."""
+        from robotforge.viewer.terrain_create import handle
+
+        return handle(self, message)
 
     @_one_edit_at_a_time
     def edit_object_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
@@ -1992,11 +2002,13 @@ def viewer_catalog() -> dict[str, Any]:
     """What the viewer's World panel offers: scene presets, ground styles with their colors, terrain types."""
     from robotforge.viewer.creation import catalog, object_catalog
     from robotforge.viewer.model_create import catalog as model_catalog
+    from robotforge.viewer.terrain_create import catalog as terrain_catalog
 
     return {
         "robot_templates": catalog(),
         "robot_models": model_catalog(),
         "object_presets": object_catalog(),
+        "terrain_presets": terrain_catalog(),
         "scenes": [{"name": s["name"], "title": s["title"], "summary": s["summary"]} for s in scenes.catalog()],
         "grounds": {name: [round(c, 3) for c in style.rgba[:3]] for name, style in terrain.STYLES.items()},
         "terrains": ["flat", *(t for t in terrain.TYPES if t != "basin")],  # a hollow needs water: the lake scene
