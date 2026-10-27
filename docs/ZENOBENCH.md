@@ -21,6 +21,7 @@ ZenoBench 和 Isaac 打交道的地方很少，只有三个文件：`zeno_skills
   没装 PyTorch 时，一个很小的 NumPy 替身负责 ZenoBench 用到的几个 torch 调用。
   ZenoBench 是对着 Isaac Sim 自带的 NumPy 1.26 写的，有几处用二维向量做 `np.cross`，NumPy 2 已经不支持，shim 在 ZenoBench 进程里恢复了旧行为。
 - 画面：可视网格按材质（GeomSubset）拆开，漫反射贴图缩到 512 像素后带 UV 贴上；Infinigen 家具动辄十万个面，渲染用的网格按尺寸的 1/250 做顶点聚类，碰撞仍用原网格。
+  投影子的"太阳"跟着机器人底座走（方向在世界里不变），阴影贴图只覆盖机器人周围 5 米：整栋房子共用一张贴图时，机器人的影子边缘是锯齿状的色块。
 
 ZenoBench 没有自己的许可证，所以 robotforge 不附带它的任何代码和资产：`robotforge zenobench fetch` 在你的电脑上从上游仓库下载一个固定的、验证过的 commit（含 Git LFS 里约 800 MB 的场景）。
 机器人描述是 Apache-2.0，房子来自 Infinigen（BSD-3），物体来自 EmbodiedGen V2（Apache-2.0）。
@@ -95,6 +96,17 @@ uv run robotforge zenobench serve -- --port 8800
 
 `ZENOBENCH_RECORD_AT` 写一个 tick 号：仿真到这一步时，把编译好的模型（.mjb）和完整状态存下来，再记录之后 `ZENOBENCH_RECORD_TICKS` 个 tick（默认 1200）的控制量，文件名前缀由 `ZENOBENCH_RECORD_OUT` 指定。
 离线回放这一段（加载模型、恢复状态、逐 tick 套用控制量）只要几秒钟，可以在出问题的那一刻反复试不同的物理设置，而不用每次重跑几分钟的整个回合。
+
+ZenoBench 自己的录像机位在机器人身后，手在做什么常被身体挡住。
+`ZENOBENCH_FILM` 写一个 mp4 路径，会在真实运行时另录一路导演机位：每秒 30 帧（仿真时间），镜头跟着 `ZENOBENCH_FILM_TARGET` 里的刚体（prim 路径，逗号分隔时取中点，默认机器人底座），从机器人坐标系里一个固定的角度看过去。
+`ZENOBENCH_FILM_VIEW` 是方位角、仰角（度）和距离（米），默认 `35,25,2.2`，方位角 0 是机器人正前方，90 是它的左侧；`ZENOBENCH_FILM_SIZE` 默认 `960x540`。
+墙和固定的家具挡在中间时，镜头绕到离设定角度最近的、看得见的方向；四周都挡着（走廊里）才往近处拉。
+例如看 k_pin 里的擀面杖：
+
+```bash
+ZENOBENCH_FILM=runs/k_pin_film.mp4 ZENOBENCH_FILM_TARGET=/World/Tasks/rolling_pin/Asset/rolling_pin ZENOBENCH_FILM_VIEW=35,25,1.6 \
+    uv run robotforge zenobench python -- tools/verify_skills.py --id k_pin --jobs 1 --video --out runs/k_pin
+```
 
 ## 和 Isaac Sim 的结果对比
 

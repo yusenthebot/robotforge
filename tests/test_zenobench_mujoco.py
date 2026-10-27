@@ -210,6 +210,65 @@ def test_drive_tracks_target_and_anchor_drags_base():
     assert box[2] == pytest.approx(0.1, abs=5e-3)  # resting on the ground, not sinking
 
 
+def test_shadowed_sun_rides_with_the_robot_base():
+    w = World(_scene(), options=OPTIONS)
+    w.build()
+    m, d = w.model, w.data
+    sun = int(np.flatnonzero(m.light_castshadow)[0])
+    assert m.body(m.light_bodyid[sun]).name == "/World/robot/base"
+    assert m.vis.map.shadowclip < 1.0  # the shadow map spans the robot's surroundings, not the whole model
+    start = d.light_xpos[sun].copy()
+    anchor = w.stage.GetPrimAtPath("/World/robot/base_anchor")
+    anchor.GetAttribute("physics:localPos0").Set(Gf.Vec3f(0.0, 0.0, 0.3))  # 1 m along x, turning 90 deg
+    anchor.GetAttribute("physics:localRot0").Set(Gf.Quatf(math.cos(math.pi / 4), 0, 0, math.sin(math.pi / 4)))
+    w.step(240)
+    assert d.light_xpos[sun] - start == pytest.approx((1.0, 0.0, 0.0), abs=0.02)
+    sun_dir = np.array((0.35, 0.45, -1.0))
+    assert d.light_xdir[sun] == pytest.approx(sun_dir / np.linalg.norm(sun_dir), abs=1e-6)  # fixed in the world
+
+
+def test_film_writes_a_frame_every_four_ticks(monkeypatch, tmp_path):
+    import imageio.v2 as imageio
+    import imageio_ffmpeg
+
+    out = tmp_path / "film.mp4"
+    monkeypatch.setenv("ZENOBENCH_FILM", str(out))
+    monkeypatch.setenv("ZENOBENCH_FILM_TARGET", "/World/box")
+    monkeypatch.setenv("ZENOBENCH_FILM_SIZE", "64x48")
+    w = World(_scene(), options=OPTIONS)
+    try:
+        w.build()
+        w.step(40)
+    except Exception as exc:  # no OpenGL (headless CI): rendering is optional here
+        pytest.skip(f"offscreen rendering unavailable: {exc}")
+    w.close()
+    assert imageio_ffmpeg.count_frames_and_secs(str(out))[0] == 10
+    with imageio.get_reader(out) as reader:
+        assert reader.get_data(0).shape == (48, 64, 3)
+
+
+def test_film_keeps_walls_and_fixed_furniture_out_of_the_shot(monkeypatch, tmp_path):
+    monkeypatch.setenv("ZENOBENCH_FILM", str(tmp_path / "film.mp4"))
+    monkeypatch.setenv("ZENOBENCH_FILM_TARGET", "/World/box")
+    w = World(_scene(), options=OPTIONS)
+    w.build()
+    film = w._film
+    film.lookat = w.body_pose("/World/box")[0].copy()
+    film.elevation, film.distance = 0.0, 3.0
+    # the welded cabinet stands about 1.3 m from the box along +x+y; nothing is fixed along -x
+    toward = film.lookat - np.array([2.3, 1.0, film.lookat[2]])
+    assert film._free(math.degrees(math.atan2(toward[1], toward[0]))) < 1.5
+    assert film._free(0.0) == pytest.approx(3.0)  # the camera backs off along -x: open floor
+    w.close()
+
+
+def test_film_rejects_an_unknown_target(monkeypatch, tmp_path):
+    monkeypatch.setenv("ZENOBENCH_FILM", str(tmp_path / "film.mp4"))
+    monkeypatch.setenv("ZENOBENCH_FILM_TARGET", "/World/nothing")
+    with pytest.raises(ValueError, match="/World/nothing"):
+        World(_scene(), options=OPTIONS).build()
+
+
 def test_sleeping_world_wakes_for_new_targets():
     stage = _scene()
     w = World(stage, options=OPTIONS)

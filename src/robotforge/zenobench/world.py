@@ -32,6 +32,8 @@ SUBSTEPS = 8  # per 1/120 s PhysX step: at 4, a pinched can slid out while the a
 BASE_KP = 1.0e5  # 1/s^2: the base follows its anchor like a stiff joint
 BASE_KD = 1.0e3
 ISAAC_APERTURE_MM = 20.955  # Isaac Lab's default horizontal aperture
+SUN_HEIGHT = 2.5  # m above the robot's base: the shadowed sun's position, which centres its shadow map
+SUN_REACH = 5.0  # m around it that the shadow map covers (4096 texels: about 2.4 mm each)
 # offset frame (x forward, z up) -> MuJoCo camera frame (looks along -z, y up)
 _CAM_FROM_WORLD_CONVENTION = np.array([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
 
@@ -68,6 +70,8 @@ class World:
         self._renderers: dict[tuple[int, int], mujoco.Renderer] = {}
         self._trace: _Trace | None = None
         self._recorder: _Recorder | None = None
+        self._film: _Film | None = None
+        self._sun_tracks = False
         self._locks: _GraspLocks | None = None
         self._lock_pairs: list = []
 
@@ -93,7 +97,7 @@ class World:
             r = usd_mjcf._quat_mat(np.asarray(cam.rot, float)) @ _CAM_FROM_WORLD_CONVENTION
             c.quat = usd_mjcf._quat(r)
             c.fovy = cam.fovy_deg
-        self._lights(spec)
+        self._lights(spec, conv)
         self._lock_pairs = _GraspLocks.declare(spec, conv) if _knob("ZENOBENCH_GRASP_LOCK", 1) else []
         drives = [j for j in conv.joints.values() if j.drive is not None]
         planar = [n for p in conv.planar.values() for n in p.joints]
@@ -109,6 +113,8 @@ class World:
         spec.visual.quality.shadowsize = 4096
         spec.visual.map.znear = 0.002  # times the model extent (about 10 m): 2 cm, for the wrist cameras
         m = spec.compile()
+        if self._sun_tracks:  # the shadow map spans SUN_REACH around the robot instead of the whole model
+            m.vis.map.shadowclip = min(1.0, SUN_REACH / max(float(m.stat.extent), 1e-6))
         m.opt.timestep = self.dt / self.substeps
         m.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
         m.opt.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
@@ -138,12 +144,17 @@ class World:
         mujoco.mj_forward(m, self.data)
         self._trace = _Trace.from_env(self)
         self._recorder = _Recorder.from_env(self)
+        self._film = _Film.from_env(self)
         self._locks = _GraspLocks(self, self._lock_pairs) if self._lock_pairs else None
         log.info("world: %d bodies, %d joints, %d geoms (%s)", m.nbody, m.njnt, m.ngeom, conv.stats)
 
-    def _lights(self, spec) -> None:
+    def _lights(self, spec, conv: usd_mjcf.Conversion) -> None:
         """Indoor light without a ceiling lamp model: a bright sky (the house has an open roof, as in
-        Isaac's dome-lit scenes), soft ambient light, one shadowed sun and fill lights from the sides."""
+        Isaac's dome-lit scenes), soft ambient light, one shadowed sun and fill lights from the sides.
+
+        One shadow map over the whole house gives the robot's shadow stair-stepped, blotchy edges, so the
+        sun rides along with the robot's base (its direction stays fixed in the world) and its shadow map
+        covers only the few metres around the robot, in detail."""
         spec.visual.headlight.ambient = (0.42, 0.42, 0.42)
         spec.visual.headlight.diffuse = (0.38, 0.38, 0.38)
         spec.visual.headlight.specular = (0.03, 0.03, 0.03)
@@ -153,11 +164,20 @@ class World:
         sky.rgb1, sky.rgb2, sky.width, sky.height = (0.86, 0.9, 0.95), (0.62, 0.66, 0.7), 256, 1536
         sun = ((0.35, 0.45, -1.0), 0.45, True)
         fills = [((dx, dy, -0.7), 0.16, False) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+        base = next((p.body for p in conv.planar.values()), None)
+        self._sun_tracks = False
         for d, diffuse, shadow in [sun, *fills]:
-            light = spec.worldbody.add_light()
+            if shadow and base is not None:
+                # a tracking light keeps its world offset and direction: give both in the base's frame
+                rot = _world_rotation(spec.body(base))
+                light = spec.body(base).add_light()
+                light.mode = mujoco.mjtCamLight.mjCAMLIGHT_TRACK
+                light.pos, light.dir = rot.T @ (0.0, 0.0, SUN_HEIGHT), rot.T @ np.asarray(d)
+                self._sun_tracks = True
+            else:
+                light = spec.worldbody.add_light()
+                light.pos, light.dir = (0, 0, 6), d
             light.type = mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
-            light.dir = d
-            light.pos = (0, 0, 6)
             light.diffuse = (diffuse,) * 3
             light.specular = (0.05, 0.05, 0.05)
             light.castshadow = shadow
@@ -259,6 +279,8 @@ class World:
                 if len(self._vdof):
                     v = d.qvel[self._vdof]
                     d.qvel[self._vdof] = np.clip(v, -self._vmax, self._vmax)
+            if self._film is not None:
+                self._film.record()
 
     def contacts_of(self, body: str) -> list[tuple[str, float, float]]:
         """(other geom or body, distance, normal force) of every contact touching a body."""
@@ -319,9 +341,25 @@ class World:
         return r.render()
 
     def close(self) -> None:
+        if self._film is not None:
+            self._film.close()
         for r in self._renderers.values():
             r.close()
         self._renderers.clear()
+
+
+def _turn(a: float, b: float) -> float:
+    """The shortest turn in degrees from angle a to angle b."""
+    return (b - a + 180.0) % 360.0 - 180.0
+
+
+def _world_rotation(body) -> np.ndarray:
+    """A spec body's orientation in the world at the start pose (joints at zero)."""
+    rot = np.eye(3)
+    while body is not None and body.name != "world":
+        rot = usd_mjcf._quat_mat(np.asarray(body.quat, float)) @ rot
+        body = body.parent
+    return rot
 
 
 def _knob(name: str, default: float) -> float:
@@ -425,6 +463,134 @@ class _Recorder:
                 vmax=w._vmax,
             )
             self.state = None
+
+
+class _Film:
+    """Director's view: `ZENOBENCH_FILM=<out.mp4>` films the run at 30 frames per simulated second from a
+    camera that follows a body, or the middle of several (`ZENOBENCH_FILM_TARGET`, prim paths separated
+    by commas; default the robot's base), from a fixed angle in the robot's frame (`ZENOBENCH_FILM_VIEW`:
+    azimuth and elevation in degrees, distance in m; azimuth 0 faces the robot's front, 90 its left).
+    ZenoBench's own cameras ride behind the robot, whose body then hides what its hands are doing.
+    Walls and fixed furniture never block the view: when they would, the camera swings round to the
+    nearest clear angle, and only moves in closer when there is none (a corridor).
+    `ZENOBENCH_FILM_SIZE` is width x height (default 960x540)."""
+
+    EVERY = 4  # ticks per frame: 30 frames per second at 120 ticks per second
+    SMOOTHING = 0.06  # per frame: the camera trails its target by about half a second
+    FOVY = 45.0
+    SWINGS = (0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180)  # degrees off the chosen angle
+    CLEAR = 0.8  # of the chosen distance free of walls: an angle that counts as a clear view
+    CLEARANCE = 0.15  # m kept between the camera and a wall
+    NEAR = 0.5  # m around the target where fixed things are what the robot works at (a table), not walls
+
+    def __init__(self, world: World, path: str, targets: list[int], heading: int | None, view, size):
+        import imageio.v2 as imageio
+
+        self.world, self.targets, self.heading = world, targets, heading
+        self.azimuth, self.elevation, self.distance = view
+        self.width, self.height = size
+        m = world.model
+        m.vis.global_.offwidth = max(int(m.vis.global_.offwidth), self.width)
+        m.vis.global_.offheight = max(int(m.vis.global_.offheight), self.height)
+        self.writer = imageio.get_writer(path, fps=30, codec="libx264", quality=8, macro_block_size=2)
+        self.tick, self.lookat, self.yaw = 0, None, None
+        self.swing, self.reach = 0.0, self.distance
+        self.path = path
+        self._groups = np.zeros(6, np.uint8)
+        self._groups[usd_mjcf.COLLISION_GROUP] = 1
+        self._hit = np.zeros(1, np.int32)
+
+    @classmethod
+    def from_env(cls, world: World) -> _Film | None:
+        import atexit
+        import os
+
+        path = os.environ.get("ZENOBENCH_FILM", "")
+        if not path:
+            return None
+        base = next((p.body for p, *_ in world._planar), None)
+        names = [n for n in os.environ.get("ZENOBENCH_FILM_TARGET", "").split(",") if n] or ([base] if base else [])
+        missing = [n for n in names if not world.has_body(n)]
+        if not names or missing:
+            raise ValueError(f"ZENOBENCH_FILM_TARGET: no body {missing or '(none given and no robot base)'}")
+        view = [float(v) for v in os.environ.get("ZENOBENCH_FILM_VIEW", "35,25,2.2").split(",")]
+        size = [int(v) for v in os.environ.get("ZENOBENCH_FILM_SIZE", "960x540").lower().split("x")]
+        if len(view) != 3 or len(size) != 2:
+            raise ValueError("ZENOBENCH_FILM_VIEW is azimuth,elevation,distance; ZENOBENCH_FILM_SIZE is WxH")
+        m = world.model
+        heading = m.body(base).id if base else None
+        film = cls(world, path, [m.body(n).id for n in names], heading, view, size)
+        atexit.register(film.close)
+        log.info("film: %s, following %s", path, ", ".join(n.rsplit("/", 1)[-1] for n in names))
+        return film
+
+    def record(self) -> None:
+        self.tick += 1
+        if self.writer is None or self.tick % self.EVERY:
+            return
+        d = self.world.data
+        point = np.mean([d.xpos[b] for b in self.targets], axis=0)
+        yaw = 0.0
+        if self.heading is not None:
+            x = d.xmat[self.heading].reshape(3, 3)[:, 0]
+            yaw = math.degrees(math.atan2(x[1], x[0]))
+        if self.lookat is None:
+            self.lookat, self.yaw = point.copy(), yaw
+        else:
+            self.lookat += self.SMOOTHING * (point - self.lookat)
+            self.yaw += self.SMOOTHING * _turn(self.yaw, yaw)
+        # a free camera's azimuth is the direction it looks in: back at the robot from the chosen side
+        looking = self.yaw + self.azimuth + 180.0
+        clear = self.CLEAR * self.distance
+        if self._free(looking) >= clear:
+            target = 0.0  # the chosen angle is clear (again)
+        elif self._free(looking + self.swing) >= clear:
+            target = self.swing  # stay at the clear angle found before
+        else:
+            reach = {s: self._free(looking + s) for s in self.SWINGS}
+            target = next((s for s in self.SWINGS if reach[s] >= clear), max(self.SWINGS, key=reach.get))
+        self.swing += self.SMOOTHING * _turn(self.swing, target)
+        free = self._free(looking + self.swing)
+        # pull in at once when a wall comes between (never film its back), drift back out slowly
+        self.reach = free if free < self.reach else self.reach + self.SMOOTHING * (free - self.reach)
+        cam = mujoco.MjvCamera()
+        cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+        cam.lookat[:] = self.lookat
+        cam.azimuth = looking + self.swing
+        cam.elevation = -self.elevation
+        cam.distance = max(self.reach, 0.2)
+        option = mujoco.MjvOption()
+        option.geomgroup[:] = 0
+        option.geomgroup[usd_mjcf.VISUAL_GROUP] = 1
+        w = self.world
+        w.model.vis.global_.fovy = self.FOVY
+        r = w._renderer(self.height, self.width)
+        r.update_scene(d, camera=cam, scene_option=option)
+        self.writer.append_data(r.render())
+
+    def _free(self, azimuth: float) -> float:
+        """How far the camera can back away from its target, looking along `azimuth`, before a wall or
+        fixed furniture (moving bodies, the robot and what it holds, never count, nor does the furniture
+        right at the target: the target may sit under the tabletop the robot works at)."""
+        m, d = self.world.model, self.world.data
+        a, e = math.radians(azimuth), math.radians(-self.elevation)
+        back = -np.array([math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e)])
+        gone = 0.0
+        for _ in range(16):
+            x = mujoco.mj_ray(m, d, self.lookat + gone * back, back, self._groups, 1, -1, self._hit)
+            if x < 0 or gone + x >= self.distance:
+                return self.distance
+            gone += x
+            if gone > self.NEAR and m.body_weldid[m.geom_bodyid[self._hit[0]]] == 0:  # welded to the world
+                return max(0.0, gone - self.CLEARANCE)
+            gone += 1e-3
+        return self.distance
+
+    def close(self) -> None:
+        if self.writer is not None:
+            self.writer.close()
+            self.writer = None
+            log.info("film: wrote %s", self.path)
 
 
 LOCK_MIN_FORCE = 2.0  # N on each finger before a pinch counts as a grasp
