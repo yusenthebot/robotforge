@@ -1,5 +1,17 @@
 # progress
 
+## Shared concrete colour scale (2026-10-28)
+
+Ordinary Malo/Go2 ground views lose dominant broad grey clouds while retaining finer grain; concrete floors, existing dock and stairs share the colour path.
+One frozen candidate changes broad/fine colour weights0.06/0.02 to0.02/0.04, centred on actual fields and old decoded-linear mean; relief, roughness, UV, physics and APIs stay exact.
+Four attribution groups restore pixel-exactly;48original-world stills and12strict-decoded paused camera clips/72root samples cover two lights and explicit derived terrain, with original Panda static control.
+Finald2b2b40c has344targeted passes,7canonical under actual3.12.13,source/fresh offline60-tool smoke and one unchanged11/11install-viewer budget pass.
+Wheel3937886B(+354B),412source/wheel/installed product files exact, original13WIP hashes retained.
+ABBA browser-cache-cold Malo means309.4/342.4ms before/candidate; warm local disk and paused physics, no universal speedup or fresh-download claim.
+External still/movie source remainsba1d13 with frozen module binding to promoted source; no relabeled capture, full-suite, every-frame temporal or physical-phone certification.
+[Report](docs/bench/2026-10-28-concrete-scale.md).
+Broad visual/lightweight/creative-play goal remains active; individual action-success tuning deferred.
+
 ## Shared precise placement and native regressions (2026-10-28)
 
 Optional 0.10/0.25m world-origin XY spacing shares preview, readout and submitted positions across eight placement entries; free placement remains default.
