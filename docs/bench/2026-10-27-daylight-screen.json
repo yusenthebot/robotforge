@@ -1,0 +1,659 @@
+{
+  "schema": "robotforge.local_benchmark_report.v1",
+  "date": "2026-10-27",
+  "decision": "REJECT_VISUAL_CANDIDATE",
+  "production_runtime_changed": false,
+  "base_commit": "f59987a9544f627d75a03e60dcf96d217b13bd2a",
+  "baseline_source_sha256": "154677d641d7627062d44c0ed35ca49ccb816f4278ba3926bc45e4725deb43d7",
+  "candidate_source_sha256": "18facda9412945e5b8ec6cc29f562dbe5e50d5e7cd03878267a2428dd12cdddc",
+  "candidate_count": 1,
+  "frozen_plan_sha256": "7eb5d52fad2377af49d26ae864804666ebd58e17bb2622db16d8ba8195e10ac6",
+  "candidate_files": {
+    "src/robotforge/viewer/static/look.js": "da040b9b59ba4e6d050130715076cf74a5ab587937ca2ebf7b56b05f51168710",
+    "src/robotforge/viewer/static/lighting.js": "83f25e232d232b787238688ff5209ff460d68e3392c13f150980b75b90190b46"
+  },
+  "visual_review": "Root and independent review reject: darker/cooler ordinary views without shared readability gain; local continuous steel reflections insufficient.",
+  "controls_and_observations": {
+    "malo": {
+      "arrays": 486,
+      "different_arrays": [
+        "mesh_pathadr",
+        "paths"
+      ],
+      "path_pairs": [
+        {
+          "before": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-daylight-environment/before/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+          "after": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-daylight-environment/after/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+          "sha256": "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+        }
+      ],
+      "world_equal": true,
+      "views": {
+        "normal": {
+          "camera_errors": {
+            "eye": 2.220446049250313e-15,
+            "target": 0.0,
+            "projection": 0.0,
+            "world": 2.220446049250313e-15,
+            "near": 0.0,
+            "far": 0.0
+          },
+          "mean_rgb_abs_delta_8bit": 33.262727783203125,
+          "fraction_pixels_any_channel_changed": 0.858949462890625,
+          "before_memory": {
+            "geometries": 53,
+            "textures": 8
+          },
+          "after_memory": {
+            "geometries": 53,
+            "textures": 9
+          },
+          "before_programs": 19,
+          "after_programs": 19,
+          "before_cost": {
+            "draw_p50_ms": 0.10000002384185791,
+            "draw_p95_ms": 0.20000004768371582,
+            "raf_fps": 60.00300015000748
+          },
+          "after_cost": {
+            "draw_p50_ms": 0.10000002384185791,
+            "draw_p95_ms": 0.20000004768371582,
+            "raf_fps": 60.00300015000751
+          },
+          "before_environment": {
+            "uuid": "ee973a9b-4ff3-4879-97fd-dad5c1bc4d24",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ]
+          },
+          "after_environment": {
+            "uuid": "91c4d404-5313-428f-a1c0-c81e1e713a65",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ],
+            "screenTarget": {
+              "width": 768,
+              "height": 1024,
+              "type": 1016,
+              "format": 1023,
+              "depthBuffer": true
+            }
+          },
+          "posthoc_canvas_affine_color_diagnostic": {
+            "mean_residual_8bit": 8.957813188006675,
+            "p95_residual_8bit": 35.57180716797722,
+            "coefficient": [
+              [
+                1.0360617587008323,
+                0.07609967066776756,
+                0.0634906456919769
+              ],
+              [
+                -0.3125832044115878,
+                0.696116875080592,
+                -0.20761321405220384
+              ],
+              [
+                -0.10087054094838799,
+                -0.08498250582021481,
+                0.9207334870071523
+              ],
+              [
+                0.024713918265310546,
+                0.021920834491637543,
+                0.016250668729769074
+              ]
+            ],
+            "scope": "Fixed canvas80:700, subsampled every17pixel. Includes floor/background, not a perceptual or robot-only improvement metric. Not an acceptance threshold."
+          }
+        },
+        "detail": {
+          "camera_errors": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0,
+            "world": 0.0,
+            "near": 0.0,
+            "far": 0.0
+          },
+          "mean_rgb_abs_delta_8bit": 35.278283854166666,
+          "fraction_pixels_any_channel_changed": 0.931416015625,
+          "before_memory": {
+            "geometries": 53,
+            "textures": 8
+          },
+          "after_memory": {
+            "geometries": 53,
+            "textures": 9
+          },
+          "before_programs": 19,
+          "after_programs": 19,
+          "before_cost": {
+            "draw_p50_ms": 0.10000002384185791,
+            "draw_p95_ms": 0.20000002086162566,
+            "raf_fps": 59.99999999999999
+          },
+          "after_cost": {
+            "draw_p50_ms": 0.10000002384185791,
+            "draw_p95_ms": 0.19999998807907104,
+            "raf_fps": 60.00300015000748
+          },
+          "before_environment": {
+            "uuid": "ee973a9b-4ff3-4879-97fd-dad5c1bc4d24",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ]
+          },
+          "after_environment": {
+            "uuid": "91c4d404-5313-428f-a1c0-c81e1e713a65",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ],
+            "screenTarget": {
+              "width": 768,
+              "height": 1024,
+              "type": 1016,
+              "format": 1023,
+              "depthBuffer": true
+            }
+          },
+          "posthoc_canvas_affine_color_diagnostic": {
+            "mean_residual_8bit": 13.615425527219076,
+            "p95_residual_8bit": 39.04850912663095,
+            "coefficient": [
+              [
+                0.8712791340822128,
+                -0.016520041375907946,
+                0.012044498995968853
+              ],
+              [
+                0.08270005687644193,
+                0.9466090346054646,
+                -0.050791623756403566
+              ],
+              [
+                -0.22607307670647708,
+                -0.1598637775981703,
+                0.8741397945324911
+              ],
+              [
+                -0.025303119935829795,
+                -0.01333481359507458,
+                -0.005093769662128494
+              ]
+            ],
+            "scope": "Fixed canvas80:700, subsampled every17pixel. Includes floor/background, not a perceptual or robot-only improvement metric. Not an acceptance threshold."
+          }
+        }
+      },
+      "before_interactive_seconds": 3.4349540840485133,
+      "after_interactive_seconds": 3.550189958012197
+    },
+    "go2": {
+      "arrays": 486,
+      "different_arrays": [],
+      "path_pairs": [],
+      "world_equal": true,
+      "views": {
+        "normal": {
+          "camera_errors": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0,
+            "world": 0.0,
+            "near": 0.0,
+            "far": 0.0
+          },
+          "mean_rgb_abs_delta_8bit": 29.906673095703123,
+          "fraction_pixels_any_channel_changed": 0.9944453125,
+          "before_memory": {
+            "geometries": 140,
+            "textures": 6
+          },
+          "after_memory": {
+            "geometries": 140,
+            "textures": 7
+          },
+          "before_programs": 11,
+          "after_programs": 11,
+          "before_cost": {
+            "draw_p50_ms": 0.30000001192092896,
+            "draw_p95_ms": 0.3549999922513959,
+            "raf_fps": 60.00300015000751
+          },
+          "after_cost": {
+            "draw_p50_ms": 0.30000001192092896,
+            "draw_p95_ms": 0.3549999922513959,
+            "raf_fps": 60.00600060006
+          },
+          "before_environment": {
+            "uuid": "009e0c6c-7707-4515-ada1-30a91943624f",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ]
+          },
+          "after_environment": {
+            "uuid": "8232e9e0-00df-4634-a36a-681aa1c34460",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ],
+            "screenTarget": {
+              "width": 768,
+              "height": 1024,
+              "type": 1016,
+              "format": 1023,
+              "depthBuffer": true
+            }
+          },
+          "posthoc_canvas_affine_color_diagnostic": {
+            "mean_residual_8bit": 4.131009730900873,
+            "p95_residual_8bit": 15.273514636023549,
+            "coefficient": [
+              [
+                0.6435057784884874,
+                -0.2430772973656066,
+                -0.1298611243105679
+              ],
+              [
+                0.13994551741979017,
+                1.0823915953065875,
+                0.052327958078509075
+              ],
+              [
+                -0.2640381926897139,
+                -0.2647157373959701,
+                0.7629903605388042
+              ],
+              [
+                0.061218919548151986,
+                0.07463626511252348,
+                0.06762165393618666
+              ]
+            ],
+            "scope": "Fixed canvas80:700, subsampled every17pixel. Includes floor/background, not a perceptual or robot-only improvement metric. Not an acceptance threshold."
+          }
+        },
+        "detail": {
+          "camera_errors": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0,
+            "world": 0.0,
+            "near": 0.0,
+            "far": 0.0
+          },
+          "mean_rgb_abs_delta_8bit": 34.69975016276042,
+          "fraction_pixels_any_channel_changed": 0.9945380859375,
+          "before_memory": {
+            "geometries": 140,
+            "textures": 6
+          },
+          "after_memory": {
+            "geometries": 140,
+            "textures": 7
+          },
+          "before_programs": 11,
+          "after_programs": 11,
+          "before_cost": {
+            "draw_p50_ms": 0.20000001788139343,
+            "draw_p95_ms": 0.30000001192092896,
+            "raf_fps": 60.00300015000751
+          },
+          "after_cost": {
+            "draw_p50_ms": 0.19999998807907104,
+            "draw_p95_ms": 0.30000001192092896,
+            "raf_fps": 59.99999999999999
+          },
+          "before_environment": {
+            "uuid": "009e0c6c-7707-4515-ada1-30a91943624f",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ]
+          },
+          "after_environment": {
+            "uuid": "8232e9e0-00df-4634-a36a-681aa1c34460",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ],
+            "screenTarget": {
+              "width": 768,
+              "height": 1024,
+              "type": 1016,
+              "format": 1023,
+              "depthBuffer": true
+            }
+          },
+          "posthoc_canvas_affine_color_diagnostic": {
+            "mean_residual_8bit": 5.2466931017588605,
+            "p95_residual_8bit": 19.081959595485063,
+            "coefficient": [
+              [
+                0.605877613584256,
+                -0.22668431548462498,
+                -0.06899151095978413
+              ],
+              [
+                0.2706522937214589,
+                1.0924855245177378,
+                -0.04219996153639733
+              ],
+              [
+                -0.35668653699901376,
+                -0.30624648828566303,
+                0.7665179150145434
+              ],
+              [
+                0.04867864929244495,
+                0.06806262356584042,
+                0.06771007574420417
+              ]
+            ],
+            "scope": "Fixed canvas80:700, subsampled every17pixel. Includes floor/background, not a perceptual or robot-only improvement metric. Not an acceptance threshold."
+          }
+        }
+      },
+      "before_interactive_seconds": 2.2122374160098843,
+      "after_interactive_seconds": 1.9757917079841718
+    },
+    "panda": {
+      "arrays": 486,
+      "different_arrays": [],
+      "path_pairs": [],
+      "world_equal": true,
+      "views": {
+        "normal": {
+          "camera_errors": {
+            "eye": 0.0,
+            "target": 0.0,
+            "projection": 0.0,
+            "world": 0.0,
+            "near": 0.0,
+            "far": 0.0
+          },
+          "mean_rgb_abs_delta_8bit": 26.976612548828125,
+          "fraction_pixels_any_channel_changed": 0.837466064453125,
+          "before_memory": {
+            "geometries": 67,
+            "textures": 5
+          },
+          "after_memory": {
+            "geometries": 67,
+            "textures": 6
+          },
+          "before_programs": 8,
+          "after_programs": 8,
+          "before_cost": {
+            "draw_p50_ms": 0.10000002384185791,
+            "draw_p95_ms": 0.20000004768371582,
+            "raf_fps": 60.003000150007495
+          },
+          "after_cost": {
+            "draw_p50_ms": 0.15000000596046448,
+            "draw_p95_ms": 0.19999998807907104,
+            "raf_fps": 60.003000150007495
+          },
+          "before_environment": {
+            "uuid": "d130c5a6-b205-4b9c-8e6d-ab5e81f55caa",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ]
+          },
+          "after_environment": {
+            "uuid": "93ea9831-2ad2-49b1-936a-a38a880ecdfe",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ],
+            "screenTarget": {
+              "width": 768,
+              "height": 1024,
+              "type": 1016,
+              "format": 1023,
+              "depthBuffer": true
+            }
+          },
+          "posthoc_canvas_affine_color_diagnostic": {
+            "mean_residual_8bit": 1.1443521171103919,
+            "p95_residual_8bit": 2.7473592418976303,
+            "coefficient": [
+              [
+                0.31985122183603076,
+                -0.15985856420501554,
+                -0.30303561176767496
+              ],
+              [
+                0.16392910676417552,
+                0.5357627346594083,
+                0.3268916235551743
+              ],
+              [
+                0.32698590783395415,
+                0.4916915445348881,
+                0.9046590298113553
+              ],
+              [
+                0.0062173708906823315,
+                0.003936761131376165,
+                0.008406190562791774
+              ]
+            ],
+            "scope": "Fixed canvas80:700, subsampled every17pixel. Includes floor/background, not a perceptual or robot-only improvement metric. Not an acceptance threshold."
+          }
+        },
+        "detail": {
+          "camera_errors": {
+            "eye": 4.440892098500626e-16,
+            "target": 1.1102230246251565e-16,
+            "projection": 0.0,
+            "world": 4.440892098500626e-16,
+            "near": 0.0,
+            "far": 0.0
+          },
+          "mean_rgb_abs_delta_8bit": 31.31375,
+          "fraction_pixels_any_channel_changed": 0.944783935546875,
+          "before_memory": {
+            "geometries": 67,
+            "textures": 5
+          },
+          "after_memory": {
+            "geometries": 67,
+            "textures": 6
+          },
+          "before_programs": 8,
+          "after_programs": 8,
+          "before_cost": {
+            "draw_p50_ms": 0.10000002384185791,
+            "draw_p95_ms": 0.19999998807907104,
+            "raf_fps": 59.99999999999999
+          },
+          "after_cost": {
+            "draw_p50_ms": 0.10000002384185791,
+            "draw_p95_ms": 0.19999998807907104,
+            "raf_fps": 60.00300015000751
+          },
+          "before_environment": {
+            "uuid": "d130c5a6-b205-4b9c-8e6d-ab5e81f55caa",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ]
+          },
+          "after_environment": {
+            "uuid": "93ea9831-2ad2-49b1-936a-a38a880ecdfe",
+            "type": 1016,
+            "image": [
+              768,
+              1024
+            ],
+            "screenTarget": {
+              "width": 768,
+              "height": 1024,
+              "type": 1016,
+              "format": 1023,
+              "depthBuffer": true
+            }
+          },
+          "posthoc_canvas_affine_color_diagnostic": {
+            "mean_residual_8bit": 3.70929178216031,
+            "p95_residual_8bit": 11.085174538246985,
+            "coefficient": [
+              [
+                0.7111337029200194,
+                -0.13214656433115965,
+                -0.09782294193343778
+              ],
+              [
+                -0.21723032644355067,
+                0.7469071317042257,
+                -0.023299078221461624
+              ],
+              [
+                0.31971763137135334,
+                0.2482011312401252,
+                1.0428465257320898
+              ],
+              [
+                -0.031599551865756706,
+                -0.0157436992096732,
+                0.002710009591385443
+              ]
+            ],
+            "scope": "Fixed canvas80:700, subsampled every17pixel. Includes floor/background, not a perceptual or robot-only improvement metric. Not an acceptance threshold."
+          }
+        }
+      },
+      "before_interactive_seconds": 1.757157250016462,
+      "after_interactive_seconds": 1.7567164999782108
+    }
+  },
+  "additional_texture": {
+    "count_per_renderer": 1,
+    "width": 768,
+    "height": 1024,
+    "format": "RGBA half-float",
+    "depth_buffer": true,
+    "nominal_color_pixel_bytes": 6291456,
+    "measured_vram": false,
+    "excluded": "depth, driver overhead, transient generation allocations"
+  },
+  "videos": {
+    "movie-before-malo": {
+      "video_sha256": "29bd532aa31b92fb8a3fdaf75714340b6095cf6abea6bb18bd006d83d1e73bc0",
+      "video_bytes": 1087056,
+      "raw_frame_count": 361,
+      "raw_timestamp_span_seconds": 5.999779939651489,
+      "duration_seconds": 6.133333,
+      "decoded_frame_count": 184,
+      "decode_exit_code": 0,
+      "path": "movie-before-malo/workflow.mp4",
+      "scope": "Actual paused browser render, scripted camera, no native gameplay input; 6 sampled decoded frames inspected by root."
+    },
+    "movie-before-go2": {
+      "video_sha256": "3388859539d360b99dd76eec4b528c98671768d964698df5a945ef97a23f1629",
+      "video_bytes": 1253206,
+      "raw_frame_count": 360,
+      "raw_timestamp_span_seconds": 5.983114004135132,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-go2/workflow.mp4",
+      "scope": "Actual paused browser render, scripted camera, no native gameplay input; 6 sampled decoded frames inspected by root."
+    },
+    "movie-before-panda": {
+      "video_sha256": "4ea63c7dd0162fd2a749eb44b14640cb7ac9c307808cdcca0a74c1f9106f4125",
+      "video_bytes": 1362848,
+      "raw_frame_count": 360,
+      "raw_timestamp_span_seconds": 5.983114004135132,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-panda/workflow.mp4",
+      "scope": "Actual paused browser render, scripted camera, no native gameplay input; 6 sampled decoded frames inspected by root."
+    },
+    "movie-after-malo": {
+      "video_sha256": "36e43eed73f8f8bc679db0b1a32c94e4d9b6f72f2577d854b1aa266bf13ff779",
+      "video_bytes": 1048706,
+      "raw_frame_count": 360,
+      "raw_timestamp_span_seconds": 5.983114004135132,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-malo/workflow.mp4",
+      "scope": "Actual paused browser render, scripted camera, no native gameplay input; 6 sampled decoded frames inspected by root."
+    },
+    "movie-after-go2": {
+      "video_sha256": "43d0abca3b92dbe35e5cc6f0b6797de1e0d13910895566d7063aaaf19eacc30a",
+      "video_bytes": 1146575,
+      "raw_frame_count": 360,
+      "raw_timestamp_span_seconds": 5.983114004135132,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-go2/workflow.mp4",
+      "scope": "Actual paused browser render, scripted camera, no native gameplay input; 6 sampled decoded frames inspected by root."
+    },
+    "movie-after-panda": {
+      "video_sha256": "374b17ea82c93a1ef4444ca8ad353c4a4e9b4ff4e6dd2583da20f09c59a59c14",
+      "video_bytes": 1236731,
+      "raw_frame_count": 360,
+      "raw_timestamp_span_seconds": 5.983113050460815,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-panda/workflow.mp4",
+      "scope": "Actual paused browser render, scripted camera, no native gameplay input; 6 sampled decoded frames inspected by root."
+    }
+  },
+  "verification": {
+    "build": "offline wheel built",
+    "product_files_byte_identical": 407,
+    "ruff_check": "passed",
+    "ruff_format": "698 files unchanged",
+    "documentation_scope_tests": {
+      "tests": 98,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "optional_tools": {
+      "mypy": null,
+      "pyright": null,
+      "bandit": null,
+      "pip-audit": null
+    },
+    "integrity_checks": 3484,
+    "integrity_failures": [],
+    "original_WIP_files_preserved": 13
+  },
+  "limitations": [
+    "External visual prototype; not production lifecycle/context/sensor certification.",
+    "Single sequential warm observations, paused physics; not cold loading, active simulation FPS or performance improvement.",
+    "Candidate full suite, installed smoke and original 11 budgets not run after visual rejection; earlier PR34 validation stays scoped to unchanged production source.",
+    "Complete raw timestamp inputs preserved; CFR encoding resamples, decoded still samples do not certify every dynamic frame.",
+    "Post-hoc canvas color residuals are diagnostics, not acceptance scores.",
+    "This is a local benchmark report, not a registered experiment-run manifest."
+  ],
+  "evidence_relative_to_checkout": "../robotforge-evidence/2026-10-27-daylight-environment",
+  "goal_remains_active": true,
+  "single_action_success_tuning": "deferred"
+}
