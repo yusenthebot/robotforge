@@ -1,5 +1,14 @@
 # progress
 
+## Primitive surface exploration and inherited regression (2026-10-28)
+
+Independent persisted finishes reuse shared looks while keeping physical material and accents; explicit apply/reset and latest-pose Undo, no-op and protected failure recovery.
+Inherited one-use addition undo test expected obsolete error text; exact base reproduces failure, corrected full-file follow-up passes with stronger state assertions.
+Same-product-source split acceptance4170pass/128skip,4extraGPU,7canonical,source/fresh offline60-tool smoke and unchanged11/11budgets; initial full4169/128/1 retained, not one green full invocation.
+409source/wheel/installed files exact; three native Malo/Go2/Panda workflows strictly decode and18sampled frames inspected.
+Wheel+3295B,standard0.8826s first-frame budget sample; no new assets/deps/pass or shared-shader aesthetic gain claimed.
+[Report](docs/bench/2026-10-28-prop-surface-edit.md). Broad material/lightweight/play goal active; individual action-success tuning deferred.
+
 ## Rejected independent wood color/relief (2026-10-28)
 
 The frozen external domain-warped color and independent micro-relief candidate smooths the surface but fails joint ordinary-distance quality: table flatter, bench improvement insufficient.

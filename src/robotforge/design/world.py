@@ -250,6 +250,8 @@ class ObjectEntry(_Strict):
     fixed: bool = False
     # What a loose box, ball or can is made of: its default mass, and steel is what an electromagnet holds.
     material: Literal["plastic", "wood", "steel"] | None = Field(None, exclude_if=_unset)
+    # A finish changes only the drawn surface; density and magnetic affinity still use material.
+    surface_material: Literal["plastic", "wood", "steel"] | None = Field(None, exclude_if=_unset)
     speed: float | None = Field(
         None, ge=-0.5, le=0.5, description="m/s a conveyor's belt runs at (conveyors only)", exclude_if=_unset
     )
@@ -322,6 +324,8 @@ class ObjectEntry(_Strict):
             )
         if self.material is not None and self.shape not in ("box", "sphere", "cylinder"):
             raise ValueError(f"object {self.name!r}: material is for loose boxes, balls and cylinders")
+        if self.surface_material is not None and self.shape not in ("box", "sphere", "cylinder"):
+            raise ValueError(f"object {self.name!r}: surface_material is for boxes, balls and cylinders")
         if self.seed is not None or self.params:
             self._generated_fields()
         return self
@@ -1003,7 +1007,7 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
             [g],
             pos=[x, y, z],
             quat=quat,
-            material=obj.material,
+            material=obj.surface_material or obj.material,
         )
         return
     body = spec.worldbody.add_body(name=obj.name, pos=[x, y, z], quat=quat)
@@ -1013,7 +1017,7 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
     rolls = obj.shape == "sphere"
     friction = [1.0, 0.02, BALL_ROLLING if rolls else 0.002]
     g = body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=friction, condim=6 if rolls else 4, **geom)
-    looks.dress(spec, body, obj.shape, obj.size, rgba, obj.name, [g], material=obj.material)
+    looks.dress(spec, body, obj.shape, obj.size, rgba, obj.name, [g], material=obj.surface_material or obj.material)
 
 
 BALL_ROLLING = 0.005  # m: a ball's rolling friction coefficient (about a hard ball on a wooden top)
