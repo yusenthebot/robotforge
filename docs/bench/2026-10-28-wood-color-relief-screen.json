@@ -1,0 +1,460 @@
+{
+  "date": "2026-10-28",
+  "decision": "rejected",
+  "production_changed": false,
+  "base_commit": "11e26cc2e5f66af1e645257280f0d4c43508966b",
+  "production_source": "b58ddc20ac481b2aafc0629cab54afa0f58ae9c0b5e29e9d815738ab71f2961c",
+  "candidate_source": "77b7fd79b687219ad29fa8a4941fd9e6407fc0aac59419fcf7e79402aea9772f",
+  "hypothesis": "Independent wandering longitudinal color and fine relief/roughness, no rings or pith. Mapped wood uses exact old field. No assets/passes/samplers/dependencies added. Four noise calls instead of two requires measured cost.",
+  "parameters": {
+    "transverse_second_weight": 0.37,
+    "wander_along": 0.018,
+    "wander_across": 0.12,
+    "wander_offset": [
+      7.1,
+      13.7,
+      3.9
+    ],
+    "warp_gain": 1.25,
+    "broad_along": 0.025,
+    "broad_across": 0.75,
+    "fine_along": 0.1,
+    "fine_across": 2.8,
+    "fine_warp_gain": 2,
+    "micro_along": 0.12,
+    "micro_across": 8,
+    "micro_offset": [
+      19.3,
+      5.7,
+      11.1
+    ],
+    "micro_slope_gain": 0.04,
+    "roughness_mean": 0.575,
+    "roughness_micro_gain": 0.12
+  },
+  "visual_gate": "Table AND bench improve at ordinary distance; no flatter/noisier/regular stripes or loss of fibre continuity, no darkening-only benefit. One frozen formulation, no post-view retuning. Only after appearance pass: GPU channel/compatibility/motion tests and original performance budgets.",
+  "review": {
+    "source_static_review": "approved, derivative/map/cache logic; no runtime quality inference",
+    "helper_static_review": "approved capture nested finally and unchanged corrected recording helper",
+    "appearance_decision": "rejected",
+    "independent_originals_inspected": 8,
+    "root_decoded_samples_inspected": 24,
+    "root_observation": "Smoother broad stripes do not produce clear natural-wood figure; table loses definition and bench gain insufficient.",
+    "next_direction": "Stop procedural wood signal tuning. Implement user-facing existing-prop surface appearance editing separately from physical material, persistence/Undo and explicit rebuild/reset semantics, followed by native validation and original budgets."
+  },
+  "capture": {
+    "worlds": 5,
+    "views_per_cohort": 12,
+    "original_pngs": 24,
+    "css_viewport": [
+      1280,
+      800
+    ],
+    "dpr": 2,
+    "pixel_size": [
+      2560,
+      1600
+    ]
+  },
+  "comparison": {
+    "baseline_source": "b58ddc20ac481b2aafc0629cab54afa0f58ae9c0b5e29e9d815738ab71f2961c",
+    "candidate_source": "77b7fd79b687219ad29fa8a4941fd9e6407fc0aac59419fcf7e79402aea9772f",
+    "checks": 2542,
+    "failures": 0,
+    "cases": {
+      "wood_props": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.035583577473958336,
+            "changed_pixel_fraction": 0.033566162109375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 2436,
+            "programs": 5
+          },
+          "top": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.6816312662760416,
+            "changed_pixel_fraction": 0.514164306640625,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 2436,
+            "programs": 5
+          },
+          "detail": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.9668926595052083,
+            "changed_pixel_fraction": 0.713515625,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 2436,
+            "programs": 5
+          },
+          "grazing": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.19584000651041666,
+            "changed_pixel_fraction": 0.163960693359375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 2436,
+            "programs": 5
+          }
+        }
+      },
+      "park": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.022419921875,
+            "changed_pixel_fraction": 0.019635009765625,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.2999999523162842,
+              0.4000000089406967
+            ],
+            "after_draw_p50_p95_ms": [
+              0.30000001192092896,
+              0.30000001192092896
+            ],
+            "resources": {
+              "geometries": 113,
+              "textures": 7
+            },
+            "draw_calls": 77,
+            "triangles": 430238,
+            "programs": 15
+          },
+          "detail": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.7000076497395833,
+            "changed_pixel_fraction": 0.55895166015625,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.09999996423721313,
+              0.15500000417232485
+            ],
+            "after_draw_p50_p95_ms": [
+              0.09999996423721313,
+              0.20000002086162566
+            ],
+            "resources": {
+              "geometries": 113,
+              "textures": 7
+            },
+            "draw_calls": 16,
+            "triangles": 19740,
+            "programs": 15
+          },
+          "grazing": {
+            "camera_max_abs_error": 8.881784197001252e-16,
+            "mean_rgb_abs_delta_8bit": 0.15766935221354167,
+            "changed_pixel_fraction": 0.14227392578125,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.20000004768371582
+            ],
+            "after_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.20000004768371582
+            ],
+            "resources": {
+              "geometries": 113,
+              "textures": 7
+            },
+            "draw_calls": 31,
+            "triangles": 28132,
+            "programs": 15
+          }
+        }
+      },
+      "kitchen": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.026280110677083333,
+            "changed_pixel_fraction": 0.024117919921875,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.5,
+              0.5999999970197678
+            ],
+            "after_draw_p50_p95_ms": [
+              0.5,
+              0.8550000250339506
+            ],
+            "resources": {
+              "geometries": 122,
+              "textures": 5
+            },
+            "draw_calls": 123,
+            "triangles": 39752,
+            "programs": 14
+          },
+          "detail": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.026519205729166665,
+            "changed_pixel_fraction": 0.01992041015625,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.20000004768371582
+            ],
+            "after_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.20000004768371582
+            ],
+            "resources": {
+              "geometries": 122,
+              "textures": 5
+            },
+            "draw_calls": 34,
+            "triangles": 13804,
+            "programs": 14
+          }
+        }
+      },
+      "solids": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.015457682291666667,
+            "changed_pixel_fraction": 0.0176923828125,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.04999998211860657,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 772,
+            "programs": 4
+          },
+          "end": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.06457657877604167,
+            "changed_pixel_fraction": 0.084827880859375,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "after_draw_p50_p95_ms": [
+              0.0,
+              0.10000002384185791
+            ],
+            "resources": {
+              "geometries": 5,
+              "textures": 5
+            },
+            "draw_calls": 5,
+            "triangles": 772,
+            "programs": 4
+          }
+        }
+      },
+      "control": {
+        "arrays": 485,
+        "all_arrays_exact": true,
+        "full_scene_exact": true,
+        "views": {
+          "normal": {
+            "camera_max_abs_error": 0.0,
+            "mean_rgb_abs_delta_8bit": 0.0,
+            "changed_pixel_fraction": 0.0,
+            "image_dimensions": [
+              2560,
+              1600
+            ],
+            "before_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.20000004768371582
+            ],
+            "after_draw_p50_p95_ms": [
+              0.10000002384185791,
+              0.25499999523162814
+            ],
+            "resources": {
+              "geometries": 24,
+              "textures": 5
+            },
+            "draw_calls": 26,
+            "triangles": 8998,
+            "programs": 10
+          }
+        }
+      }
+    },
+    "appearance_acceptance": false,
+    "reason": "Root and independent original-image review reject: table smoother but flatter/less distinct; bench subtle smoothing does not clearly improve wood recognition. Detail remains blurred soft bands. Joint ordinary-distance gate failed.",
+    "scope": "Source/state/control/GL equality does not certify appearance or temporal stability; sequential draw samples are not formal budgets."
+  },
+  "movies": {
+    "baseline-wood_props": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-wood-color-relief/video-baseline-wood_props/workflow.mp4",
+      "video_sha256": "4980a8befa4c014a7d0793c970af57b08d508cc226a34db050ede574fa0f2552",
+      "video_bytes": 1441076,
+      "raw_frame_count": 387,
+      "duration_seconds": 6.566667,
+      "decoded_frame_count": 197,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-wood-color-relief/video-baseline-wood_props/decoded-contact.jpg"
+    },
+    "baseline-park": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-wood-color-relief/video-baseline-park/workflow.mp4",
+      "video_sha256": "6fa9bb62048cb498c704a69fb07ae8639198bcce134a41f05a94f6ca9b3709d2",
+      "video_bytes": 2179603,
+      "raw_frame_count": 385,
+      "duration_seconds": 6.566667,
+      "decoded_frame_count": 197,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-wood-color-relief/video-baseline-park/decoded-contact.jpg"
+    },
+    "candidate-wood_props": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-wood-color-relief/video-candidate-wood_props/workflow.mp4",
+      "video_sha256": "8e4999d69b7e799fd128859e22a54cbac32f8cea3ea5047a7bc9a8c43b3f5669",
+      "video_bytes": 1445705,
+      "raw_frame_count": 386,
+      "duration_seconds": 6.566667,
+      "decoded_frame_count": 197,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-wood-color-relief/video-candidate-wood_props/decoded-contact.jpg"
+    },
+    "candidate-park": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-wood-color-relief/video-candidate-park/workflow.mp4",
+      "video_sha256": "dba98a3f2beaad2ec8c764cde0637be0509094881054329c5a6941ad5a09d45f",
+      "video_bytes": 2181999,
+      "raw_frame_count": 385,
+      "duration_seconds": 6.566667,
+      "decoded_frame_count": 197,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-wood-color-relief/video-candidate-park/decoded-contact.jpg"
+    }
+  },
+  "integrity": {
+    "indexed_files": 1635,
+    "indexed_bytes": 321626040,
+    "index_sha256": "d37b7a3e167810d5f8431f24de48842bfa077377de247287502c2b96b38d2a3f",
+    "raw_frames_verified": 1543,
+    "decoded_samples_inspected": 24
+  },
+  "verification": {
+    "record_tests_passed": 41,
+    "wheel_bytes": 3925041,
+    "wheel_sha256": "2e294c7ca95389c763a04e8b79a61dd41100758299098403345262f0bb8b2ca9",
+    "product_files_byte_identical": 408,
+    "ruff_and_format": true,
+    "original_wip_preserved": 13,
+    "type_security_tools": "mypy/pyright/bandit/pip-audit absent from project Python3.12.16; not installed or claimed passed"
+  },
+  "limits": [
+    "No candidate full suite, GPU channel test suite, installed smoke, lifecycle, ABBA or original budget run after visual rejection.",
+    "Four actual paused scripted-camera movies are not native gameplay; strict decode and six sampled stills each do not prove temporal stability.",
+    "Sequential draw samples include below-clock-precision readings and are descriptive, not performance certification.",
+    "Filtered analytic means do not guarantee equal finite-image mean brightness.",
+    "Analyzer completed successfully but its tail overlapped the start of movie acquisition; timing samples are not isolated ABBA measurements."
+  ],
+  "next": "Stop procedural wood tuning. Implement existing primitive-prop surface appearance editing separately from density/magnetic material, reuse documented creative-edit rebuild/pause/reset semantics, persistence and one-use Undo, then native browser and original-budget validation.",
+  "goal_status": "active"
+}
