@@ -353,6 +353,47 @@ def test_sweep_summary_counts_passes_per_scenario(tmp_path):
     assert "0 always pass, 0 never pass, 1 sometimes" in text
 
 
+def test_bench_compare_matches_episodes_with_isaac_and_lets_a_retest_win(tmp_path):
+    from robotforge.zenobench import bench
+
+    results = tmp_path / bench.RESULTS
+    results.parent.mkdir(parents=True)
+    results.write_text(
+        "| Task | Seed | Variant | Planner | Route | Outcome | Real failure | Calls | Dropped | Dir |\n"
+        "|---|---|---|---|---|---|---|---|---|---|\n"
+        "| T01_book | 0 | no_overhang | scripted | fallback_expose | pass |  |  |  | `x` |\n"
+        "| T01_book | 2 | no_overhang | retry | nominal | fail |  |  |  | `x` |\n"
+        "| P03_pin | 0 | default | scripted | nominal | pass |  |  |  | `x` |\n"
+    )
+
+    def episode(d, task, seed, planner, route, ok, calls=()):
+        where = tmp_path / d / task / f"s{seed}_{route}"
+        where.mkdir(parents=True)
+        r = {
+            "task_id": task,
+            "seed": seed,
+            "variant": "default" if task[0] == "P" else "no_overhang",
+            "planner": planner,
+            "route": route,
+            "success": ok,
+            "calls": list(calls),
+        }
+        (where / "result.json").write_text(json.dumps(r))
+
+    missed = {"skill": "center", "expect": "ok", "feedback": {"success": False, "error": "edge margin 0.047 m"}}
+    episode("a", "T01_book", 0, "scripted", "fallback_expose", False)
+    episode("retest", "T01_book", 0, "scripted", "fallback_expose", True)  # a later directory replaces it
+    episode("a", "T01_book", 2, "retry", "nominal", True)
+    episode("a", "P03_pin", 0, "scripted", "nominal", False, [missed])
+    groups = bench.compare(tmp_path, [tmp_path / "a", tmp_path / "retest"])
+    assert (groups["routes"].passed, groups["routes"].isaac_passed, groups["routes"].differences) == (1, 1, [])
+    assert groups["retry"].differences == ["T01_book s2 no_overhang nominal: Isaac fail, MuJoCo pass"]
+    assert groups["probes"].differences == [
+        "P03_pin s0 default nominal: Isaac pass, MuJoCo fail - center (expected ok): edge margin 0.047 m"
+    ]
+    assert "| probes | 0/1 | 1/1 |" in bench.report(groups)
+
+
 def test_sleeping_world_wakes_for_new_targets():
     stage = _scene()
     w = World(stage, options=OPTIONS)

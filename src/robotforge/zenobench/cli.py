@@ -30,6 +30,12 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         description="Example: robotforge zenobench sweep -- --seeds 5 --jobs 6 (arguments after --)",
     )
     w.add_argument("args", nargs=argparse.REMAINDER)
+    c = zsub.add_parser(
+        "compare",
+        help="compare benchmark episodes run here with Isaac Sim's benchmark/RESULTS.md",
+        description="Example: robotforge zenobench compare -- runs/bench/accept runs/bench/probes (arguments after --)",
+    )
+    c.add_argument("args", nargs=argparse.REMAINDER)
 
 
 def _rest(args: list[str]) -> list[str]:
@@ -65,6 +71,10 @@ def run(args: argparse.Namespace) -> int:
             from robotforge.zenobench import sweep
 
             return sweep.main(_rest(args.args))
+        if command == "compare":
+            from robotforge.zenobench import bench
+
+            return bench.main(_rest(args.args))
         if command == "serve":
             rest = _rest(args.args)
             if "--worker-python" not in rest:

@@ -68,6 +68,7 @@ uv run robotforge zenobench serve -- --port 8800
 - 时间步长：PhysX 每步 1/120 秒，这里每步拆成 8 个 MuJoCo 子步（1/960 秒）。
   只拆 4 步时，手指捏住的易拉罐会在手臂上抬转腕时从指垫间慢慢滑出去（实测每秒约 3 厘米），8 步时不会。
 - 关节限速（physxJoint:maxJointVelocity）：每个 MuJoCo 子步之后把关节速度截在限值内，和 PhysX 求解器的做法一致；手指是 0.1 米每秒。
+- 刚体阻尼：PhysX 按速率（每秒）衰减每个刚体的速度，角速度默认 0.05，ZenoBench 给樱桃番茄和木块写了 3；这里给每个自由物体的关节加上"速率乘以质量或转动惯量"的阻尼，效果相同。
 - 捏住的物体：PhysX 的摩擦是静摩擦，MuJoCo 的是软约束，所以这里加了"夹持静摩擦锁"，见后文。
 
 ## 物理设置和调节项
@@ -84,6 +85,9 @@ uv run robotforge zenobench serve -- --port 8800
 | `ZENOBENCH_SLEEP` | 1 | 静止物体休眠到被碰为止；厨房场景每步从 2.2 毫秒降到 0.5 毫秒 |
 | `ZENOBENCH_GRASP_LOCK` | 1 | 夹持静摩擦锁（见后文）；设为 0 关闭 |
 | `ZENOBENCH_VMAX` | 1 | 按 maxJointVelocity 截断关节速度；设为 0 关闭 |
+| `ZENOBENCH_DAMPING` | 1 | PhysX 的刚体阻尼（见上）；设为 0 关闭 |
+| `ZENOBENCH_SEED` | 0 | 大于 0 时，第一步之前把每个自由物体挪一点点（同一个种子挪法相同），见"重复测量" |
+| `ZENOBENCH_JITTER` | 1,0.5 | 上面那一挪的上限：水平毫米数、绕竖直轴的度数 |
 | `ZENOBENCH_HULL_LIMIT` | all | PhysX 凸包顶点上限用在哪些刚体上：`all`（物体和机器人）、`objects`（只有自由物体）、`off` |
 
 扭转摩擦按"滑动摩擦系数乘以 15 毫米接触半径"设置：PhysX 的平面接触是一块接触面，能抵抗扭转，MuJoCo 默认的 0.005 太小，捏住的物体会在指间打转。
@@ -135,6 +139,7 @@ uv run robotforge zenobench python -- tools/verify_skills.py --all --jobs 4 --ou
     瓶子的凸包按 PhysX 削到 64 个顶点后，推倒的瓶子朝向差了约 1 度，ZenoBench 换了一个抓取点、绕到另一侧，扶正以后找不到能把瓶子立回去的位置。
     设 `ZENOBENCH_HULL_LIMIT=off` 时它照样通过；这是规划对微小姿态的敏感，不是瓶子从手里滑掉。
 - 历次结果：第一版 18/35，差距主要是物体在搬运中从手里滑掉；加上夹持静摩擦锁后 24/35；这一轮修正推、拖、滚的物理后 23/35，丢的是上面的 k_bottle，换来的是推和滚的距离接近 Isaac（见下一节）。
+- 下表是单次运行；加上刚体阻尼以后每个场景跑 5 次的通过率见下一节。
 
 | Scenario | Isaac Sim | MuJoCo | MuJoCo failure |
 |---|---|---|---|
@@ -175,6 +180,120 @@ uv run robotforge zenobench python -- tools/verify_skills.py --all --jobs 4 --ou
 | t_floor_moving | pass 5/5 | pass 5/5 |  |
 
 Isaac 29/35 pass, MuJoCo 23/35 pass, both 22
+
+## 重复测量：每个场景跑 5 次
+
+MuJoCo 是确定性的，同一个场景跑一次只能看到一种结果，而有些结果取决于很小的差别（推倒的瓶子朝向差一度、擀面杖滚多远）。
+`sweep` 每个种子跑一遍 `tools/verify_skills.py`。
+种子 0 是原样的场景；种子大于 0 时，第一步之前把每个自由物体水平挪最多 1 毫米、绕竖直轴转最多 0.5 度（`ZENOBENCH_SEED`、`ZENOBENCH_JITTER`），同一个种子挪法相同。
+已经跑完的种子会跳过，中断以后重跑同一条命令就接着跑。
+结果和 Isaac 的单次记录并排写进 `<out>/summary.md`：
+
+```bash
+uv run robotforge zenobench sweep -- --seeds 5 --jobs 4 --out runs/sweep5
+uv run robotforge zenobench sweep -- --summary --out runs/sweep5   # 只汇总已有结果
+```
+
+2026-10-28 的结果（robotforge `c1b5466`，默认设置，已加上 PhysX 刚体阻尼；175 次运行约 2.5 小时，同时还在跑下一节的基准）：
+
+- 按通过率算，MuJoCo 期望通过 22.4 个场景，Isaac 单次是 29/35。
+- 21 个场景 5 次都通过，11 个 5 次都失败，只有 3 个时过时不过。
+  1 毫米的扰动改变不了其余 32 个场景的结果，所以和 Isaac 差的那几个场景不是运气，每次都会复现。
+- 5 个种子各自的通过数是 23、21、22、23、23。
+- 5 次都失败的 11 个，正是上一节表里失败的 12 个去掉 b_books。
+- 时过时不过的 3 个：
+  - b_books 2/5：失败的 3 次都停在最后一步，ZenoBench 找不到两只手共用的无碰撞底座位姿，和上一节单次运行的失败相同；两次推书各推多远，决定了书最后停在哪。
+  - k_hands 4/5：有一次左手拿着东西去开门时，东西从左手滑了出去。
+  - k_brace 1/5：加上刚体阻尼以后才这样。
+    ZenoBench 给樱桃番茄写了 3 的角阻尼，番茄落定时只滚 5 毫米（不加阻尼时 13 毫米），ZenoBench 据此选了另一个停放手臂的位置，收左臂时关节误差 0.41 弧度。
+    设 `ZENOBENCH_DAMPING=0` 重跑时它通过。
+- 种子 0 上 b_books 现在通过、k_brace 失败，所以和上一节相比总数还是 23/35，换了一个场景。
+
+| Scenario | Isaac Sim | MuJoCo passes | Steps passed | Most common failure |
+|---|---|---|---|---|
+| b_books | pass 7/7 | 2/5 | 5/6, 7/7 | bimanual_flat_pick: no collision-free shared base pose |
+| c_approach_moving | pass 2/2 | 5/5 | 2/2 |  |
+| c_tray_moving | pass 5/5 | 5/5 | 5/5 |  |
+| g_expose_then_pick_book | pass 5/5 | 0/5 | 1/2 | slide to edge: no graspable free edge of kitchen_island/top |
+| g_heat_on_stove_instead_of_microwave | pass 5/5 | 5/5 | 5/5 |  |
+| g_search_then_fetch | pass 5/5 | 5/5 | 5/5 |  |
+| k_arrange_sort | fail 1/2 | 5/5 | 2/2 |  |
+| k_blocks | pass 6/6 | 5/5 | 6/6 |  |
+| k_body | pass 5/5 | 5/5 | 5/5 |  |
+| k_book | pass 5/5 | 0/5 | 1/2 | slide to edge: no graspable free edge of kitchen_island/top |
+| k_bottle | pass 3/3 | 0/5 | 2/3 | upright juice_bottle: no base pose reaches the top end |
+| k_brace | pass 4/4 | 1/5 | 3/4, 4/4 | fold left arm: joint error 0.412 rad |
+| k_cabinet | pass 8/8 | 5/5 | 8/8 |  |
+| k_empty_hide | fail 2/3 | 0/5 | 2/3 | pick cherry_tomato_1: not held (lift 0.000 m) |
+| k_fetch_collect | pass 2/2 | 5/5 | 2/2 |  |
+| k_floor | pass 4/4 | 5/5 | 4/4 |  |
+| k_fridge_chill | fail 5/6 | 0/5 | 6/7 | tuck arm: posture did not settle |
+| k_handle_mug | pass 2/2 | 5/5 | 2/2 |  |
+| k_hands | pass 8/8 | 4/5 | 6/7, 8/8 | open door while left holds: left grasp slipped |
+| k_microwave | fail 12/13 | 0/5 | 10/11, 5/6 | joint move to microwave_front: every joint-space path collides |
+| k_mug_on_burner | pass 8/8 | 5/5 | 8/8 |  |
+| k_perceive | pass 12/12 | 5/5 | 14/14 |  |
+| k_pin | pass 4/4 | 0/5 | 3/4 | push rolling_pin: object did not move |
+| k_posture | pass 9/9 | 5/5 | 9/9 |  |
+| k_present | pass 6/6 | 5/5 | 6/6 |  |
+| k_restore_swap | pass 3/3 | 0/5 | 2/3 | SUBSKILL_FAILED: place_object(object=soda_can, receptacle=kitchen_island/top) |
+| k_separate | pass 5/5 | 0/5 | 3/4 | PRECONDITION_FAILED: not grasp_clearance(object=wooden_block_a) is false |
+| k_soup_stove | fail 6/7 | 0/5 | 6/7 | pour: 0/3 items reached handled_cooking_pot |
+| k_stir_cover | pass 13/13 | 5/5 | 13/13 |  |
+| k_sweep | pass 3/3 | 5/5 | 3/3 |  |
+| k_trash | pass 10/10 | 5/5 | 10/10 |  |
+| k_wipe | pass 5/5 | 5/5 | 5/5 |  |
+| o_clear | pass 1/1 | 5/5 | 1/1 |  |
+| r_bimanual_box | fail 1/2 | 0/5 | 1/2 | bimanual_box_lift: two-hand lift/contact check failed |
+| t_floor_moving | pass 5/5 | 5/5 | 5/5 |  |
+
+## 整任务基准：和 Isaac 的 benchmark/RESULTS.md 对比
+
+上面的验证逐个检查技能；ZenoBench 的基准跑的是整个任务：机器人从回合起点出发，规划器一个接一个调用技能，最后按任务目标判成败。
+Isaac 上的结果记录在 `benchmark/RESULTS.md`，分三批：
+
+- accept：10 个任务的 60 条脚本路线，包括"先失败一次再换办法"的路线，失败的那一步也要按预期失败才算通过。
+- probes：21 个单项探针，每个只测一类技能。
+- baselines：三种规划器各跑 10 个回合；fixed 按固定计划执行，retry 失败了就重试，oracle 知道真实世界的状态。
+
+`run_episode.py --batch` 最多同时开 2 个进程（Isaac 的限制），想跑得快就把批次拆成几份分别启动，输出写进同一个目录。
+`compare` 按"任务、种子、变体、规划器、路线"逐个回合对上 Isaac 的记录，后写的目录覆盖前面的同一回合，方便在整批结果上叠加重跑：
+
+```bash
+uv run robotforge zenobench episode -- --batch benchmark/batches/accept.json --jobs 2 --no-eval --out runs/bench/accept
+uv run robotforge zenobench episode -- --batch benchmark/batches/probes.json --jobs 2 --no-eval --out runs/bench/probes
+uv run robotforge zenobench episode -- --batch benchmark/batches/baselines.json --jobs 2 --no-eval --out runs/bench/baselines
+uv run robotforge zenobench compare -- runs/bench/accept runs/bench/probes runs/bench/baselines
+```
+
+2026-10-28 的结果（124 个回合，没有崩溃或超时，回合时间加起来 7.2 小时）：
+
+| 批次 | MuJoCo | Isaac Sim（同样的回合） |
+|---|---|---|
+| accept（路线） | 43/60 | 60/60 |
+| probes | 13/21 | 14/21 |
+| baselines：fixed | 2/10 | 2/10 |
+| baselines：retry | 2/10 | 3/10 |
+| baselines：oracle | 9/10 | 9/10 |
+
+基准的主要结论在 MuJoCo 上照样成立：世界和计划不符时，固定计划和简单重试大多失败，知道真实状态的 oracle 几乎都能完成。
+
+accept 里只在 MuJoCo 上失败的 17 条路线，按原因分：
+
+- T07 热燕麦（6 条）：放进微波炉时 ZenoBench 的规划器说"每条关节空间路径都会碰撞"；改用灶台的路线，按灶台电源键时差了 3.9 厘米。
+  这和验证场景 k_microwave 失败在同一处，probes 里的 P13 和 oracle 的 T07 也是。
+- T01 书（4 条）：边缘捏书失败后，改成推书露出书边，书一动不动；验证场景 k_book、g_expose_then_pick_book 和探针 P05 翻书，问题也都出在把书往桌边滑的这一步。
+- T02 叠木块（4 条）：路线预期"挤在一起的木块拿不起来"，再走先分开的办法；MuJoCo 里第一次就拿起来了，预期的失败没有发生。
+  oracle 的 T02 反而只在 MuJoCo 上通过，和这一条是同一回事；retry 的 T02 是搬运时木块从手里滑掉。
+- T09 番茄汤（2 条）：搅拌只转了 0.37 圈。
+- T05 铅笔（1 条）：要找的铅笔在搜索的几个位置上都没看见。
+
+另外 4 条起初也失败，已经修正：T08 和 T10 的 hard 路线从别的房间开始。
+ZenoBench 把机器人摆到回合起点时，以每秒 2.4 米拖着底座锚点直线走过去，中间穿墙；MuJoCo 里底座被墙挡住，回合从错的地方开始，路上还撞开过冰箱门。
+ZenoBench 自己导航最快每秒 0.35 米、0.8 弧度，所以现在锚点一步走得比每秒 1.5 米或 3 弧度还快时，直接把底座放到锚点上，并关掉机器人的碰撞，直到锚点慢下来；正常导航不受影响。
+修正后重跑了 13 个从别处开始的回合，这 4 条通过，原来通过的 5 条仍然通过（上表已经是修正后的结果）。
+
+probes 里 P03 擀面杖（推到台面中间时离边只有 4.7 厘米，要求 6 厘米）、P05、P13 只在 MuJoCo 上失败，P06 双手和 P09 扫木块只在 MuJoCo 上通过。
 
 ## 推、拖和滚：凸包顶点上限和锁的误判
 
