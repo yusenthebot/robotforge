@@ -27,6 +27,9 @@ It runs on macOS, Windows and Linux.
 Model availability and controller support are separate: the catalogue reports whether a model loads, stands and moves in its recorded checks.
 See its per-model results and the [legged](docs/LEGGED.md), [humanoid](docs/HUMANOID.md) and [mobile manipulation](docs/MOBILE.md) guides for current limits.
 
+For an existing Zeno Malo description package, the [local Malo workspace guide](docs/MALO.md) covers import, independent steering, joint controls and reusable saved designs.
+Malo meshes stay local; the guide records controller and sensor limits.
+
 ## In the viewer
 
 These are actual viewer captures of real robot models in simulation.

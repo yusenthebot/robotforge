@@ -988,3 +988,14 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
 - Five strict-decoded actual movies: baseline desktop2.7s/81frames,phone2.3s/69;final desktop26.666s/800,phone22.5s/675,arm7.9s/237.30decoded stills inspected. Native rover routes preserve lidar/config, rotate/start/Undo/drive twice with5distinct positive-force contacts each,save/map/restore/page-reload/reset;new interpreter opens actual saved-world copies with same home qpos. Arm onlytabletop/Undo/homeReset;phone emulated.
 - Retained development fixtures/drivers failed before correction. Nativecapturev1/v2/v3 failed on framing/insufficientwheel/literalsettle;v4 uses native Fit/boundedwheel and1e-9 adjacent stability. v1stdout was accidentally overwritten byv2, but full failuremanifest/traceback/raw remain. Reopen import/constructor helper failures retained;v6 uses existing requiredsession constructor. Final selected stages pass,notallattempts;no source edits afterfreeze or official budget repeats.
 - Report docs/bench/2026-10-24-robot-start.md/.json;raw/helpers/source/ExperimentStore under ../robotforge-evidence/2026-10-24-robot-start/. Runtimeab532d2ca6ef48cc589d511a7476089e787f6006e7bdf45d0650a8cd0752e3a7. Broad goal remains active; continue shared material quality and approachable creation/exploration,without individual action-success tuning/release/paidActions.
+
+
+## 2026-10-27: Malo workspaces and real-model creation (merge held)
+
+- Import a local Malo generated URDF with source effort limits; save its design and create Malo/Go2/Panda workspaces without bundling CAD or adding dependencies.
+- Place allowlisted library models and saved designs from the viewer using protected publication, bounded placement, real download progress and the existing Undo API.
+- Add generic independent steering; the first full run caught wheel-leg/suspension misclassification, repaired with axis-aware detection and legacy friction/balance regressions.
+- Add optional local daylight using the existing lights/environment/shadows; preserve Studio as default and isolate camera previews from view lighting.
+- Physical/native v3 workflow and decoded 20.833333-second video, stdio MCP/script/navigation/refusal recovery, seven framework cases, source/installed smoke and original 11/11 install/viewer budgets pass.
+- Full regular/browser:3951passed/127skipped/1failed; all207browser and separate5sensor tests pass. Exact main export reproduces the same seeing evening-mask9/10 failure, with test unchanged. acceptance=false/merge_hold=true; draft PR only. Original copy WIP and failed driver attempts are preserved; broad goal remains active and action-success tuning stays deferred.
+- Details: docs/MALO.md and docs/bench/2026-10-27-malo-workspaces.md.
