@@ -1,5 +1,12 @@
 # progress
 
+## Rejected daylight reflection screen (2026-10-27)
+
+One predeclared external sky-reflection candidate fails ordinary-distance quality across Malo, Go2 and Panda: mainly darker/cooler scenes, insufficient common detail gain. Local steel reflections improve but add one environment texture with6MiB nominal color pixels (not measured VRAM).
+No renderer changes shipped. Twelve original fixed stills and six actual paused scripted-camera videos retained; all movies fully decode and36decoded samples inspected. No native-gameplay or temporal-quality claim.
+Documentation verification: offline wheel407product files byte-identical,98experiment-record tests/Ruff and3484integrity checks pass; original13WIP files preserved. Optional type/security tools unavailable; no full candidate suite, installed smoke or original budget run after visual rejection.
+[Report](docs/bench/2026-10-27-daylight-screen.md). Next finite contact/depth screen must show ordinary-distance benefit within the existing performance budgets. Broad material/lightweight/creative-play goal active; action-success tuning deferred.
+
 ## Local terrain composition (2026-10-27)
 
 Native ramp/stair placement preserves prior terrain and props, shares actual compile geometry with preview, checks saved/live occupancy, and keeps reset/pause semantics explicit.
