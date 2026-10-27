@@ -2156,7 +2156,14 @@ function setPanelBusy(on) {
   renderLayouts();
   renderScreenDrive();
   renderRobotStart();
-  for (const id of ["object-focus", "object-move", "object-copy", "object-remove", "object-edit-done"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
+  for (const id of ["object-focus", "object-move", "object-copy", "object-remove", "object-edit-done", "object-surface", "object-surface-apply", "object-surface-material"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
+  const surface = surfaceReselect;
+  surfaceReselect = null;
+  if (!on && surface && surface.version === sceneDesc?.version && surface.version === stateVersion
+      && surface.generation === stateGeneration) {
+    const entry = editableObjects().find((o) => o.name === surface.name);
+    if (entry) { beginObjectSelection(entry); showObjectSurface(true); }
+  }
 }
 
 // ------------------------------------------------------------ pick a local robot, click to place
@@ -2164,6 +2171,7 @@ function setPanelBusy(on) {
 let placementVersion = 0, placementGeneration = null, placementWorldSha = null, creationClickUntil = 0, creationSelection = null;
 let lastAddition = null, creationSurface = null;
 let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null, lastRobotEdit = null, lastTerrainEdit = null;
+let surfaceReselect = null;
 let terrainHighlight = null, terrainListKey = null;
 const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
 const headingShape = new THREE.Shape();
@@ -2333,6 +2341,7 @@ function renderEditableObjects() {
 function clearObjectSelection() {
   selectingObjects = false; objectSelection = null;
   $("object-edit-bar").hidden = true;
+  showObjectSurface(false);
   creationGesture.invalidate();
   if (objectHighlight) {
     scene3.remove(objectHighlight); objectHighlight.geometry.dispose(); objectHighlight.material.dispose(); objectHighlight = null;
@@ -2349,6 +2358,10 @@ function beginObjectSelection(entry = null) {
   setWorldPanel(false); setDrawer(false); setHelp(false); canvas.focus();
   $("object-edit-title").textContent = entry?.name || t("select_prop");
   $("object-edit-bar").hidden = false;
+  $("object-surface").hidden = !entry || !Object.hasOwn(entry, "surface_material");
+  $("object-surface-material").value = entry?.surface_material || "";
+  showObjectSurface(false);
+  for (const id of ["object-surface", "object-surface-apply", "object-surface-material"]) $(id).disabled = !entry;
   $("object-focus").disabled = $("object-move").disabled = $("object-copy").disabled = $("object-remove").disabled = !entry;
   if (entry) {
     objectHighlight = new THREE.Box3Helper(new THREE.Box3(), theme.amber);
@@ -2400,6 +2413,43 @@ function finishObjectSelection() {
 }
 $("object-edit-done").addEventListener("click", finishObjectSelection);
 $("object-focus").addEventListener("click", focusObject);
+function showObjectSurface(open) {
+  $("object-surface-controls").hidden = !open;
+  $("object-surface").setAttribute("aria-expanded", String(open));
+}
+$("object-surface").addEventListener("click", () => {
+  if (!busy && objectSelection && Object.hasOwn(objectSelection, "surface_material")) {
+    showObjectSurface($("object-surface-controls").hidden);
+  }
+});
+$("object-surface-apply").addEventListener("click", async () => {
+  if (busy || !objectSelection || creationGesture.active() || !Object.hasOwn(objectSelection, "surface_material")) return;
+  const entry = objectSelection;
+  stopDriving(); endDrag();
+  await runChoice($("object-surface-apply"), { type: "world", action: "set_object_surface", name: entry.name,
+    surface_material: $("object-surface-material").value || null,
+    version: placementVersion, generation: placementGeneration, world_sha256: sceneDesc.object_edit.world_sha256 }, {
+    done: async (data) => {
+      if (data.unchanged) {
+        if (stateVersion !== data.version || stateGeneration !== data.generation) {
+          lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
+          clearObjectSelection(); throw new Error(t("create_scene_changed"));
+        }
+        toast(t("surface_unchanged")); return;
+      }
+      lastObjectEdit = data.undo_edit || null;
+      lastAddition = lastRobotEdit = lastTerrainEdit = null;
+      try { await waitForCreation(data, true); }
+      catch (error) {
+        lastObjectEdit = stateVersion === data.version && stateGeneration === data.generation ? data.undo_edit || null : null;
+        clearObjectSelection(); updateUndo(); throw error;
+      }
+      clearObjectSelection();
+      surfaceReselect = { name: entry.name, version: data.version, generation: data.generation };
+      updateUndo(); toast(t("surface_saved", { name: entry.name }));
+    },
+  });
+});
 $("object-move").addEventListener("click", () => { if (!busy && objectSelection) creator.edit(objectSelection); });
 $("object-copy").addEventListener("click", () => {
   if (!busy && objectSelection) creator.duplicate({ ...objectSelection, world_sha256: sceneDesc.object_edit.world_sha256 });

@@ -257,9 +257,16 @@ def test_undo_refuses_invalidated_receipts_without_discarding_other_edits(pg, ch
     else:
         store.file.write_text(store.file.read_text(encoding="utf-8") + "\n# external change\n", encoding="utf-8")
     before, model = store.file.read_bytes(), pg.session.model
-    with pytest.raises(PlaygroundError, match="simulation changed"):
+    expected = "simulation changed"
+    if change == "edit":
+        # Reloading after another edit has already cleared the old one-use receipt.
+        assert pg._play_addition is None
+        assert [obj.name for obj in store.load().objects] == ["ball", "other"]
+        expected = "that addition is no longer available to undo"
+    with pytest.raises(PlaygroundError, match=expected):
         undo(pg, reply)
     assert store.file.read_bytes() == before and pg.session.model is model
+    assert pg._play_addition is None
 
 
 def test_wrong_receipt_cannot_consume_valid_receipt_and_compile_failure_is_retryable(pg, monkeypatch):  # noqa: F811

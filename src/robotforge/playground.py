@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from robotforge.design import generator
     from robotforge.viewer.creation import Addition
     from robotforge.viewer.object_edit import Edit
+    from robotforge.viewer.object_surface import SurfaceEdit
     from robotforge.viewer.robot_edit import RobotEdit
     from robotforge.viewer.terrain_create import TerrainAddition
     from robotforge.viewer.terrain_edit import TerrainEdit
@@ -127,7 +128,7 @@ class Playground:
     _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
     _play_addition: Addition | TerrainAddition | None = field(default=None, init=False, repr=False)
-    _play_edit: Edit | None = field(default=None, init=False, repr=False)
+    _play_edit: Edit | SurfaceEdit | None = field(default=None, init=False, repr=False)
     _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
     _play_terrain_edit: TerrainEdit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
@@ -299,7 +300,7 @@ class Playground:
                 return self.edit_terrain_for_play(msg)
             if action in {"edit_robot_start", "undo_robot_start"}:
                 return self.edit_robot_start_for_play(msg)
-            if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object"}:
+            if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object", "set_object_surface"}:
                 return self.edit_object_for_play(msg)
             if action in {"add_object", "undo_add"}:
                 return self.object_for_play(msg)
@@ -534,8 +535,14 @@ class Playground:
     def edit_object_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
         """Reposition/copy/remove an exact existing rigid prop, or undo that one edit."""
         from robotforge.viewer.object_edit import duplicate, edit, undo
+        from robotforge.viewer.object_surface import SurfaceEdit
+        from robotforge.viewer.object_surface import handle as surface
 
         action = message.get("action")
+        if action == "set_object_surface" or (
+            action == "undo_object_edit" and isinstance(self._play_edit, SurfaceEdit)
+        ):
+            return surface(self, message)
         if action == "duplicate_object":
             return duplicate(self, message)
         return undo(self, message) if action == "undo_object_edit" else edit(self, message)
@@ -1059,10 +1066,10 @@ class Playground:
 
         def change(w: World) -> None:
             obj = _find(w.objects, name, "object")
-            if all(value is None for value in fields.values()):
+            if all(value is None for value in fields.values()) and "surface_material" not in fields:
                 raise PlaygroundError(f"nothing to change: give {', '.join(fields)}")
             for key, value in fields.items():
-                if value is not None:
+                if value is not None or key == "surface_material":
                     setattr(obj, key, value)
 
         return _noted(self._edit(change), _yaw_note(fields.get("yaw")))
