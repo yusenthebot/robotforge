@@ -50,7 +50,7 @@ export function createPlacementGesture() {
 
 export function initCreation({ start, submit, cancel, change }) {
   const $ = (id) => document.getElementById(id);
-  let item = null, point = null, sending = false, size = "normal", yaw = 0, session = 0;
+  let item = null, point = null, sending = false, size = "normal", yaw = 0, turns = 0, session = 0;
   const repeat = $("place-repeat");
   const material = $("place-material");
   const syncRepeat = () => { $("place-cancel").textContent = t(repeat.checked ? "done_placing" : "cancel_place"); };
@@ -58,6 +58,7 @@ export function initCreation({ start, submit, cancel, change }) {
   const scales = { small: 0.75, normal: 1, large: 1.5 };
   const send = () => {
     if (point && !sending && item) submit({ ...item, scale: size, yaw,
+      ...(item.kind === "terrain-edit" ? { turns } : {}),
       ...(item.kind === "object" && item.name !== "table" && material.value ? { material: material.value } : {}) }, point);
   };
   const setOpen = (open) => {
@@ -74,23 +75,25 @@ export function initCreation({ start, submit, cancel, change }) {
   }
   for (const b of sizeButtons) b.addEventListener("click", () => { setSize(b.dataset.size); change(); });
   $("place-rotate").addEventListener("click", () => {
-    yaw = (yaw + 90) % 360;
+    if (item?.kind === "terrain-edit") { turns = (turns + 1) % 4; yaw = item.yaw + 90 * turns; }
+    else yaw = (yaw + 90) % 360;
     $("place-rotate").textContent = t("rotate_place", { angle: yaw }); change();
   });
   function begin(entry, kind, title) {
     item = { ...entry, kind }; point = null; sending = false; size = "normal";
     // Authored worlds may contain many full turns; copy the same heading within the request's angle bounds.
-    yaw = kind === "edit" ? entry.yaw : kind === "copy" || kind === "start" ? entry.yaw % 360 : 0; session++;
+    turns = 0;
+    yaw = kind === "edit" || kind === "terrain-edit" ? entry.yaw : kind === "copy" || kind === "start" ? entry.yaw % 360 : 0; session++;
     repeat.checked = false; syncRepeat();
     material.value = "";
     $("prop-material-control").hidden = kind !== "object" || entry.name === "table";
-    $("placement-hint").textContent = t(kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
+    $("placement-hint").textContent = t(kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     $("place-rotate").textContent = t("rotate_place", { angle: yaw });
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
-    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain";
-    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain";
-    $("placement-title").textContent = t(kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
+    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
+    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain" || kind === "terrain-edit";
+    $("placement-title").textContent = t(kind === "terrain-edit" ? "move_named_terrain" : kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
     start();
@@ -116,11 +119,12 @@ export function initCreation({ start, submit, cancel, change }) {
   }
   return {
     active: () => item !== null,
-    editing: () => item?.kind === "edit" || item?.kind === "start" ? item : null,
+    editing: () => item?.kind === "edit" || item?.kind === "start" || item?.kind === "terrain-edit" ? item : null,
     edit: (entry) => begin(entry, "edit", entry.name),
+    editTerrain: (entry) => begin(entry, "terrain-edit", entry.name),
     repositionRobot: (entry) => begin(entry, "start", entry.name),
-    heading: () => item?.kind === "start" || item?.kind === "terrain" ? yaw : null,
-    placingTerrain: () => item?.kind === "terrain",
+    heading: () => item?.kind === "start" || item?.kind === "terrain" || item?.kind === "terrain-edit" ? yaw : null,
+    placingTerrain: () => item?.kind === "terrain" || item?.kind === "terrain-edit",
     duplicate: (entry) => begin(entry, "copy", entry.name),
     session: () => session,
     repeating: () => (item?.kind === "object" || item?.kind === "copy") && repeat.checked,
@@ -129,7 +133,7 @@ export function initCreation({ start, submit, cancel, change }) {
       point = null; $("place-here").disabled = true;
       $("placement-hint").textContent = t("place_next_hint");
     },
-    preview: () => item?.kind === "terrain" ? { boxes: item.boxes, yaw }
+    preview: () => item?.kind === "terrain" || item?.kind === "terrain-edit" ? { boxes: item.boxes, yaw }
       : item && item.kind !== "robot" && item.kind !== "start" && item.kind !== "model" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
     open() { setOpen(true); $("model-list").querySelector("button")?.focus(); },
     render(entries, editable, busy, objects = [], models = [], terrains = []) {
