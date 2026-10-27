@@ -183,6 +183,51 @@ def test_split_parts_and_convexity():
     assert len(hulls.split_parts(box, faces)) == 2
 
 
+@pytest.fixture
+def isolated_shim(monkeypatch):
+    """Install the stand-ins for one test, then put back every module and patch they replaced, so tests
+    that run later in the same process see the real torch (or none) and unpatched pxr and NumPy."""
+    import sys
+
+    import pxr
+
+    from robotforge.zenobench import shim
+
+    modules = dict(sys.modules)
+    monkeypatch.setattr(np, "cross", np.cross)
+    monkeypatch.setattr(Usd.Prim, "RemoveAPI", Usd.Prim.RemoveAPI)
+    monkeypatch.setattr(Usd.Prim, "HasAPI", Usd.Prim.HasAPI)
+    had_physx = hasattr(pxr, "PhysxSchema")
+    old_physx = getattr(pxr, "PhysxSchema", None)
+    for field in ("stage", "world", "options", "substeps"):
+        monkeypatch.setattr(shim.STATE, field, getattr(shim.STATE, field))
+    yield shim
+    for name in [n for n in sys.modules if n not in modules]:
+        del sys.modules[name]
+    sys.modules.update({n: m for n, m in modules.items() if sys.modules.get(n) is not m})
+    if had_physx:
+        pxr.PhysxSchema = old_physx
+    elif hasattr(pxr, "PhysxSchema"):
+        del pxr.PhysxSchema
+
+
+def test_shim_leaves_no_trace_after_its_test(isolated_shim):
+    import sys
+
+    isolated_shim.install(OPTIONS)
+    assert "isaacsim.core.prims" in sys.modules
+
+
+def test_stand_ins_are_gone_after_an_isolated_test():
+    import sys
+
+    assert "isaacsim.core.prims" not in sys.modules
+    assert not getattr(np.cross, "__robotforge_compat__", False)
+    from robotforge.zenobench import shim
+
+    assert getattr(sys.modules.get("torch"), "Tensor", None) is not shim.Tensor
+
+
 def test_numpy_cross_accepts_2d_vectors_like_numpy_1(monkeypatch):
     from robotforge.zenobench import shim
 
@@ -195,13 +240,11 @@ def test_numpy_cross_accepts_2d_vectors_like_numpy_1(monkeypatch):
     assert np.allclose(np.cross([1.0, 0, 0], [0, 1.0, 0]), [0, 0, 1.0])
 
 
-def test_shim_runs_isaac_style_calls(monkeypatch):
-    from robotforge.zenobench import shim
-
+def test_shim_runs_isaac_style_calls(isolated_shim):
+    shim = isolated_shim
     stage = _scene()
-    monkeypatch.setattr(shim.STATE, "stage", stage)
-    monkeypatch.setattr(shim.STATE, "options", OPTIONS)
     shim.install(OPTIONS)
+    shim.STATE.stage = stage
     import isaaclab.sim as sim_utils
     from isaaclab.sensors import Camera, CameraCfg
     from isaacsim.core.prims import SingleArticulation, SingleRigidPrim
