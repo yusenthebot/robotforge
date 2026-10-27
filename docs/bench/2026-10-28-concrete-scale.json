@@ -1,0 +1,1553 @@
+{
+  "date": "2026-10-28",
+  "feature": "shared concrete colour scale",
+  "base": "12233ea02b71f80cabf1a640da708210b210aaa1",
+  "production_source_sha256": "d2b2b40c7c4b1388deec48bef713ad85a95bdb1c462a5a0d3838f3ca52819303",
+  "external_screen_server_source_sha256": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+  "candidate_ground_module_sha256": "ab04ccf2aa920d9b63f14b61095155b31cf5ab83e1c751af04f3611e5bbfc16b",
+  "frozen_inputs": 755,
+  "source_bridge": "External screen/movie use historical server source and frozen static tree. Promoted product differs from that source only by this exact ground module. Movie/loading additionally verify served SHA; stills bind static source/size and tile pixel fingerprints. Not relabeled as post-promotion captures.",
+  "tests": {
+    "concrete-tests": {
+      "passed": 2,
+      "skipped": 0,
+      "xml_sha256": "f71f47f9339d0f8dc4b8183eadefe7cc843659aaab41430b48bc9ac61f51cae5"
+    },
+    "browser-related": {
+      "passed": 50,
+      "skipped": 0,
+      "xml_sha256": "54574b1a97dceb70b6d8ec62d1f9d31b272053cabb5f1065ea0d403c26bb1efe"
+    },
+    "gpu-assets": {
+      "passed": 4,
+      "skipped": 0,
+      "xml_sha256": "e8039e5d64adb2e3f87ae9ab0e2fba7a17d5fba412f111f4492fc54db919fa6f"
+    },
+    "gpu-sensors": {
+      "passed": 5,
+      "skipped": 0,
+      "xml_sha256": "120f170db83f61e4f1a5418b8da527ebc4e6f26f58288db85d885659192578eb"
+    },
+    "backend-related": {
+      "passed": 283,
+      "skipped": 0,
+      "xml_sha256": "bcc2925025e0ffac12062e0f4f125469d668bf6d276280467ac60c95cd7094bd"
+    }
+  },
+  "targeted_passes": 344,
+  "framework": {
+    "cases": 7,
+    "python": "3.12.13",
+    "status": "pass"
+  },
+  "package": {
+    "wheel_bytes": 3937886,
+    "wheel_sha256": "36f01ea7400b8caf4b3a808c29a6af973422ee25f258f22cf86507ca8c93c97a",
+    "production_files": 412,
+    "source_wheel_installed_exact": true,
+    "preserved_original_files": 13,
+    "original_hashes_exact": true,
+    "added_and_new_lines_scanned": 184,
+    "new_files_included": [
+      "tests/fixtures/ground-tile-pixels-v1.json",
+      "tests/test_viewer_concrete_browser.py"
+    ],
+    "secret_pattern_hits": {
+      "private_key": 0,
+      "known_token": 0,
+      "literal_secret_assignment": 0
+    },
+    "added_product_debug_statements": 0,
+    "scope": "Lightweight added-line review, not a bandit or pip-audit substitute.",
+    "upstream_wheel_bytes": 3937532,
+    "own_wheel_delta_bytes": 354,
+    "changed_product_files": [
+      "robotforge/viewer/static/ground-look.js"
+    ]
+  },
+  "budget": {
+    "statuses": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "metrics": {
+      "install": {
+        "wheel_kb": {
+          "value": 3845.5918,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.626,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.5
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.525,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.317
+        },
+        "fps": {
+          "value": 60.1189,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 1.7,
+          "unit": "ms",
+          "better": "lower",
+          "median": 1.7000000476837158,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1569,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 4.8,
+          "unit": "ms",
+          "better": "lower",
+          "median": 4.799999952316284,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.1,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 559.9
+        },
+        "idle_cpu_pct": {
+          "value": 4.8,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "machine": {
+      "system": "Darwin",
+      "release": "26.3.2",
+      "machine": "arm64",
+      "cpus": 18,
+      "python": "3.12.16",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "load": [
+        6.5,
+        5.2,
+        4.8
+      ]
+    },
+    "scope": "One unchanged original install/viewer budget run; other categories not run. Standard first-frame is pre-opened Chrome/warm local disk method, not a fresh remote Malo download."
+  },
+  "screen": {
+    "baseline_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.16",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "12233ea02b71f80cabf1a640da708210b210aaa1",
+      "git_dirty": false,
+      "active_source_sha256": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "candidate_source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.16",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "12233ea02b71f80cabf1a640da708210b210aaa1",
+      "git_dirty": false,
+      "active_source_sha256": "ba1d13cace9a929ca7ee627145a363a154cea3eb45f82f3243bf9afb33f43319",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "cases": {
+      "malo": {
+        "scene_payload_exact": true,
+        "mesh_input_files": 32,
+        "model_input_files": 1,
+        "captured_arrays": 486,
+        "different_arrays": [
+          "mesh_pathadr",
+          "paths"
+        ],
+        "world_equal": true,
+        "mesh_files": [
+          {
+            "before": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/screen-before/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+            "after": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/screen-candidate/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+            "sha256": "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+          }
+        ],
+        "views": {
+          "dpr1-studio-normal": {
+            "camera_errors": {
+              "eye": 1.7763568394002505e-15,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 1.7763568394002505e-15,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.8782864583333333,
+            "fraction_pixels_any_channel_changed": 0.6634775390625,
+            "max_channel_delta": 7.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000004768371582,
+              "raf_fps": 60.00300015000751
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.25499999523162814,
+              "raf_fps": 59.99999999999999
+            }
+          },
+          "dpr1-studio-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.9357639973958334,
+            "fraction_pixels_any_channel_changed": 0.682796875,
+            "max_channel_delta": 8.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.15500000417232485,
+              "raf_fps": 60.00600060006
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.09999999403953552,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00300015000748
+            }
+          },
+          "dpr1-daylight-normal": {
+            "camera_errors": {
+              "eye": 3.552713678800501e-15,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 3.552713678800501e-15,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.8107356770833334,
+            "fraction_pixels_any_channel_changed": 0.6662421875,
+            "max_channel_delta": 7.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000004768371582,
+              "raf_fps": 60.00300015000748
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 59.99999999999999
+            }
+          },
+          "dpr1-daylight-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 1.1102230246251565e-16,
+              "projection": 0.0,
+              "world": 3.3306690738754696e-16,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.8638059895833333,
+            "fraction_pixels_any_channel_changed": 0.688310546875,
+            "max_channel_delta": 7.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.09999996423721313,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 59.99999999999999
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.09999999403953552,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00600060006002
+            }
+          },
+          "dpr2-studio-normal": {
+            "camera_errors": {
+              "eye": 1.7763568394002505e-15,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 1.7763568394002505e-15,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.8951673177083334,
+            "fraction_pixels_any_channel_changed": 0.663630859375,
+            "max_channel_delta": 31.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00300015000751
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr2-studio-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.9410638834635416,
+            "fraction_pixels_any_channel_changed": 0.681451416015625,
+            "max_channel_delta": 32.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00600060005997
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.09999996423721313,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 59.99999999999994
+            }
+          },
+          "dpr2-daylight-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.8269423828125,
+            "fraction_pixels_any_channel_changed": 0.666292236328125,
+            "max_channel_delta": 27.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00300015000757
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000004768371582,
+              "raf_fps": 60.00300015000745
+            }
+          },
+          "dpr2-daylight-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.8691131998697916,
+            "fraction_pixels_any_channel_changed": 0.68704541015625,
+            "max_channel_delta": 27.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 59.99999999999999
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.09999999403953552,
+              "draw_p95_ms": 0.15500000417232485,
+              "raf_fps": 60.00300015000745
+            }
+          }
+        },
+        "before_interactive_seconds": 3.4100965420366265,
+        "after_interactive_seconds": 3.1396011670003645
+      },
+      "go2": {
+        "scene_payload_exact": true,
+        "mesh_input_files": 16,
+        "model_input_files": 4,
+        "captured_arrays": 486,
+        "different_arrays": [],
+        "world_equal": true,
+        "mesh_files": [],
+        "views": {
+          "dpr1-studio-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.7093974609375,
+            "fraction_pixels_any_channel_changed": 0.4992060546875,
+            "max_channel_delta": 10.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.40000003576278687,
+              "raf_fps": 60.00600060006001
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.4550000160932538,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr1-studio-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.927638671875,
+            "fraction_pixels_any_channel_changed": 0.64873046875,
+            "max_channel_delta": 17.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.00300015000751
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr1-daylight-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.6540764973958333,
+            "fraction_pixels_any_channel_changed": 0.5034248046875,
+            "max_channel_delta": 9.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.3549999922513959,
+              "raf_fps": 59.99999999999997
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.4000000089406967,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr1-daylight-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.8553372395833333,
+            "fraction_pixels_any_channel_changed": 0.655107421875,
+            "max_channel_delta": 16.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 59.99999999999999
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.00600060006002
+            }
+          },
+          "dpr2-studio-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.7146572265625,
+            "fraction_pixels_any_channel_changed": 0.497369140625,
+            "max_channel_delta": 33.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.3999999761581421,
+              "raf_fps": 60.00300015000751
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.29999998211860657,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr2-studio-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.9306577962239583,
+            "fraction_pixels_any_channel_changed": 0.6467666015625,
+            "max_channel_delta": 35.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.00300015000745
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.3549999922513959,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr2-daylight-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.6590263671875,
+            "fraction_pixels_any_channel_changed": 0.501862548828125,
+            "max_channel_delta": 35.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.3549999922513959,
+              "raf_fps": 60.00300015000757
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.30000001192092896,
+              "draw_p95_ms": 0.3549999922513959,
+              "raf_fps": 60.00300015000745
+            }
+          },
+          "dpr2-daylight-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 0.8586726888020834,
+            "fraction_pixels_any_channel_changed": 0.65357421875,
+            "max_channel_delta": 37.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.00600060006002
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.19999998807907104,
+              "draw_p95_ms": 0.30000001192092896,
+              "raf_fps": 60.00600060006002
+            }
+          }
+        },
+        "before_interactive_seconds": 1.97206262499094,
+        "after_interactive_seconds": 2.238962499948684
+      },
+      "panda": {
+        "scene_payload_exact": true,
+        "mesh_input_files": 67,
+        "model_input_files": 9,
+        "captured_arrays": 486,
+        "different_arrays": [],
+        "world_equal": true,
+        "mesh_files": [],
+        "views": {
+          "dpr1-studio-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 7.2265625e-05,
+            "fraction_pixels_any_channel_changed": 0.000216796875,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.15000000596046448,
+              "draw_p95_ms": 0.20000004768371582,
+              "raf_fps": 59.99999999999999
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.15000000596046448,
+              "draw_p95_ms": 0.25500002801418276,
+              "raf_fps": 60.00600060006001
+            }
+          },
+          "dpr1-studio-detail": {
+            "camera_errors": {
+              "eye": 4.440892098500626e-16,
+              "target": 1.1102230246251565e-16,
+              "projection": 0.0,
+              "world": 4.440892098500626e-16,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 4.296875e-05,
+            "fraction_pixels_any_channel_changed": 0.00012890625,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 59.99999999999999
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr1-daylight-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 6.673177083333333e-05,
+            "fraction_pixels_any_channel_changed": 0.0002001953125,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.00000000000002
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.00300015000748
+            }
+          },
+          "dpr1-daylight-detail": {
+            "camera_errors": {
+              "eye": 4.440892098500626e-16,
+              "target": 1.1102230246251565e-16,
+              "projection": 0.0,
+              "world": 4.440892098500626e-16,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 4.00390625e-05,
+            "fraction_pixels_any_channel_changed": 0.0001201171875,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.00600060006002
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00600060005997
+            }
+          },
+          "dpr2-studio-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 7.535807291666666e-05,
+            "fraction_pixels_any_channel_changed": 0.000225830078125,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.00300015000745
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr2-studio-detail": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 5.0374348958333335e-05,
+            "fraction_pixels_any_channel_changed": 0.000151123046875,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 60.00300015000745
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.00300015000751
+            }
+          },
+          "dpr2-daylight-normal": {
+            "camera_errors": {
+              "eye": 0.0,
+              "target": 0.0,
+              "projection": 0.0,
+              "world": 0.0,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 6.0791015625e-05,
+            "fraction_pixels_any_channel_changed": 0.000182373046875,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.20000002086162566,
+              "raf_fps": 60.00300015000757
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 59.99999999999999
+            }
+          },
+          "dpr2-daylight-detail": {
+            "camera_errors": {
+              "eye": 2.220446049250313e-16,
+              "target": 1.1102230246251565e-16,
+              "projection": 0.0,
+              "world": 2.220446049250313e-16,
+              "near": 0.0,
+              "far": 0.0
+            },
+            "mean_rgb_abs_delta_8bit": 4.060872395833333e-05,
+            "fraction_pixels_any_channel_changed": 0.000121826171875,
+            "max_channel_delta": 1.0,
+            "render_equal": true,
+            "memory_counts_equal": true,
+            "program_counts_equal": true,
+            "before_cost": {
+              "draw_p50_ms": 0.09999999403953552,
+              "draw_p95_ms": 0.20000004768371582,
+              "raf_fps": 60.00300015000745
+            },
+            "after_cost": {
+              "draw_p50_ms": 0.10000002384185791,
+              "draw_p95_ms": 0.19999998807907104,
+              "raf_fps": 59.99999999999999
+            }
+          }
+        },
+        "before_interactive_seconds": 1.8358099169563502,
+        "after_interactive_seconds": 2.01180087501416
+      }
+    },
+    "scope": "Frozen concrete-colour candidate on original actual worlds, same physical world/state/camera/viewport. Only target colour may change. Single sequential warm samples do not prove loading/render speedup."
+  },
+  "pixels": {
+    "checks": {
+      "malo": {
+        "tiles": {
+          "concrete": {
+            "detail_exact": true,
+            "color_exact": false
+          },
+          "grass": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "wood": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "dirt": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "sand": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "rock": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "snow": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "tile": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "checker": {
+            "detail_exact": true,
+            "color_exact": true
+          }
+        },
+        "old_linear_mean": 0.9134924089364156,
+        "candidate_linear_mean": 0.9136439440479863,
+        "relative_mean_change": 0.00016588546340211657
+      },
+      "go2": {
+        "tiles": {
+          "concrete": {
+            "detail_exact": true,
+            "color_exact": false
+          },
+          "grass": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "wood": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "dirt": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "sand": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "rock": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "snow": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "tile": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "checker": {
+            "detail_exact": true,
+            "color_exact": true
+          }
+        },
+        "old_linear_mean": 0.9134924089364156,
+        "candidate_linear_mean": 0.9136439440479863,
+        "relative_mean_change": 0.00016588546340211657
+      },
+      "panda": {
+        "tiles": {
+          "concrete": {
+            "detail_exact": true,
+            "color_exact": false
+          },
+          "grass": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "wood": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "dirt": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "sand": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "rock": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "snow": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "tile": {
+            "detail_exact": true,
+            "color_exact": true
+          },
+          "checker": {
+            "detail_exact": true,
+            "color_exact": true
+          }
+        },
+        "old_linear_mean": 0.9134924089364156,
+        "candidate_linear_mean": 0.9136439440479863,
+        "relative_mean_change": 0.00016588546340211657
+      }
+    },
+    "served_ground_module_sizes_match_frozen_static": true,
+    "limitations": [
+      "Exported wood is legacy procedural wood, actual Panda natural-oak is checked through unchanged scene/module/resources and before/after imagery.",
+      "Mean bound only prevents a broad brightness shift, not an aesthetic quality score."
+    ]
+  },
+  "loading": {
+    "summary": {
+      "malo": {
+        "before": {
+          "browser_cold": {
+            "ready_gpu_finished_ms": [
+              300.30000001192093,
+              318.5
+            ],
+            "mean_ready_ms": 309.40000000596046,
+            "resource_entries": [
+              29,
+              29
+            ],
+            "resource_timing_encoded_bytes": [
+              48385443,
+              48385443
+            ],
+            "resource_timing_transfer_bytes": [
+              48394143,
+              48394143
+            ],
+            "chrome_tree_rss_kib": [
+              1818944,
+              1835456
+            ]
+          },
+          "reload": {
+            "ready_gpu_finished_ms": [
+              157.69999998807907,
+              156.20000004768372
+            ],
+            "mean_ready_ms": 156.9500000178814,
+            "resource_entries": [
+              29,
+              29
+            ],
+            "resource_timing_encoded_bytes": [
+              48175688,
+              48175688
+            ],
+            "resource_timing_transfer_bytes": [
+              47073372,
+              47073372
+            ],
+            "chrome_tree_rss_kib": [
+              1841888,
+              1851952
+            ]
+          }
+        },
+        "candidate": {
+          "browser_cold": {
+            "ready_gpu_finished_ms": [
+              341.7000000476837,
+              343.10000002384186
+            ],
+            "mean_ready_ms": 342.4000000357628,
+            "resource_entries": [
+              29,
+              29
+            ],
+            "resource_timing_encoded_bytes": [
+              48386532,
+              48386532
+            ],
+            "resource_timing_transfer_bytes": [
+              48395232,
+              48395232
+            ],
+            "chrome_tree_rss_kib": [
+              1820736,
+              1816480
+            ]
+          },
+          "reload": {
+            "ready_gpu_finished_ms": [
+              165.10000002384186,
+              154.30000001192093
+            ],
+            "mean_ready_ms": 159.7000000178814,
+            "resource_entries": [
+              29,
+              29
+            ],
+            "resource_timing_encoded_bytes": [
+              48176777,
+              48176777
+            ],
+            "resource_timing_transfer_bytes": [
+              47073372,
+              47073372
+            ],
+            "chrome_tree_rss_kib": [
+              1843792,
+              1834992
+            ]
+          }
+        }
+      },
+      "go2": {
+        "before": {
+          "browser_cold": {
+            "ready_gpu_finished_ms": [
+              366.9000000357628,
+              383.19999998807907
+            ],
+            "mean_ready_ms": 375.05000001192093,
+            "resource_entries": [
+              29,
+              29
+            ],
+            "resource_timing_encoded_bytes": [
+              21653283,
+              21653283
+            ],
+            "resource_timing_transfer_bytes": [
+              21661983,
+              21661983
+            ],
+            "chrome_tree_rss_kib": [
+              1730160,
+              1734704
+            ]
+          },
+          "reload": {
+            "ready_gpu_finished_ms": [
+              232,
+              231.10000002384186
+            ],
+            "mean_ready_ms": 231.55000001192093,
+            "resource_entries": [
+              29,
+              29
+            ],
+            "resource_timing_encoded_bytes": [
+              21443528,
+              21443528
+            ],
+            "resource_timing_transfer_bytes": [
+              20341212,
+              20341212
+            ],
+            "chrome_tree_rss_kib": [
+              1811136,
+              1754816
+            ]
+          }
+        },
+        "candidate": {
+          "browser_cold": {
+            "ready_gpu_finished_ms": [
+              383.39999997615814,
+              377.60000002384186
+            ],
+            "mean_ready_ms": 380.5,
+            "resource_entries": [
+              29,
+              29
+            ],
+            "resource_timing_encoded_bytes": [
+              21654372,
+              21654372
+            ],
+            "resource_timing_transfer_bytes": [
+              21663072,
+              21663072
+            ],
+            "chrome_tree_rss_kib": [
+              1734160,
+              1737440
+            ]
+          },
+          "reload": {
+            "ready_gpu_finished_ms": [
+              235.10000002384186,
+              242.60000002384186
+            ],
+            "mean_ready_ms": 238.85000002384186,
+            "resource_entries": [
+              29,
+              29
+            ],
+            "resource_timing_encoded_bytes": [
+              21444617,
+              21444617
+            ],
+            "resource_timing_transfer_bytes": [
+              20341212,
+              20341212
+            ],
+            "chrome_tree_rss_kib": [
+              1770128,
+              1759008
+            ]
+          }
+        }
+      }
+    },
+    "scope": "ABBA with fresh Chrome profile per arm, first browser-cache-cold navigation then actual reload. Local model/OS disk caches warm; server already compiled and physics paused. Ready means scene rendered, no busy/loading plus2RAF and gl.finish, not human input latency or fresh remote model download. RSS is one Chrome process-tree snapshot, not VRAM or peak."
+  },
+  "movies": {
+    "movie-before-malo-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-before-malo-dpr2/studio/workflow.mp4",
+      "video_sha256": "a7eac7838c58c4dfafa7addf76aa85547ef6015f5691b2a3486e270f89cdfdee",
+      "video_bytes": 1391322,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199742126464844,
+      "duplicates_within_segments": 0
+    },
+    "movie-before-malo-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-before-malo-dpr2/daylight/workflow.mp4",
+      "video_sha256": "3b3207568b3af69b3acd9be0ba61cb30aa79f1fdcc1daa18b58b20071e3fcf9d",
+      "video_bytes": 1342938,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199739742279053,
+      "duplicates_within_segments": 0
+    },
+    "movie-before-go2-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-before-go2-dpr2/studio/workflow.mp4",
+      "video_sha256": "e505a3d1a42694db32762e23fd47e8dc42f4c5ac2581072da0e219adb966eea7",
+      "video_bytes": 2236220,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199740934371948,
+      "duplicates_within_segments": 0
+    },
+    "movie-before-go2-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-before-go2-dpr2/daylight/workflow.mp4",
+      "video_sha256": "006aef03222aeb88000059bace63120ef05b377931caf234d26f578b8126acd7",
+      "video_bytes": 2153056,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199739980697632,
+      "duplicates_within_segments": 0
+    },
+    "movie-before-terrain-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-before-terrain-dpr2/studio/workflow.mp4",
+      "video_sha256": "1ce77a0e0fbea057e67ee904f2929c4ee758ebc761695d2b7df21e0e726f2918",
+      "video_bytes": 2380387,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199744033813476,
+      "duplicates_within_segments": 0
+    },
+    "movie-before-terrain-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-before-terrain-dpr2/daylight/workflow.mp4",
+      "video_sha256": "b06db009219e623f77b4267193d7281ab7b0b11e07e371d6c35ef8277d8c845e",
+      "video_bytes": 2282674,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199740695953369,
+      "duplicates_within_segments": 0
+    },
+    "movie-candidate-malo-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-candidate-malo-dpr2/studio/workflow.mp4",
+      "video_sha256": "45d7c7849950a5ab5c9a41cbed61cd22cfce11079ca52c89cdc2350908697b02",
+      "video_bytes": 1727499,
+      "raw_frames": 433,
+      "decoded_frames": 220,
+      "encoded_duration": 7.333333,
+      "expected_duration": 7.233073043823242,
+      "duplicates_within_segments": 0
+    },
+    "movie-candidate-malo-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-candidate-malo-dpr2/daylight/workflow.mp4",
+      "video_sha256": "177eea4ae6d2761cbbeb1f23b4d62a60e913b64520c746e5d3408f1ae6d86e75",
+      "video_bytes": 1632205,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.1997418880462645,
+      "duplicates_within_segments": 0
+    },
+    "movie-candidate-go2-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-candidate-go2-dpr2/studio/workflow.mp4",
+      "video_sha256": "c841c33d8abd03d770bebd7ca30504dc3d643a369bf0a57b648583d86cb65be9",
+      "video_bytes": 2450117,
+      "raw_frames": 433,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.216408061981201,
+      "duplicates_within_segments": 0
+    },
+    "movie-candidate-go2-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-candidate-go2-dpr2/daylight/workflow.mp4",
+      "video_sha256": "432b4dc90c6f238783dce16ca721777b8b143a61e14225c77d339fd0b2f2abfa",
+      "video_bytes": 2333337,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199741172790527,
+      "duplicates_within_segments": 0
+    },
+    "movie-candidate-terrain-dpr2-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-candidate-terrain-dpr2/studio/workflow.mp4",
+      "video_sha256": "c4da015e4f17616750eec619a123e3514f875ba71e6f65c198473b41e90f451a",
+      "video_bytes": 2759157,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199740219116211,
+      "duplicates_within_segments": 0
+    },
+    "movie-candidate-terrain-dpr2-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-concrete-scale/movie-candidate-terrain-dpr2/daylight/workflow.mp4",
+      "video_sha256": "7a19ff2347d6853712d10861c0fb76ff4f5fb5ce7578052ed0cbee28b28e9166",
+      "video_bytes": 2647816,
+      "raw_frames": 432,
+      "decoded_frames": 219,
+      "encoded_duration": 7.3,
+      "expected_duration": 7.199741649627685,
+      "duplicates_within_segments": 0
+    }
+  },
+  "receipts": {
+    "screen-before": {
+      "sha256": "c6149518158aeea28477c05393aab22e3cfddde91f7951e666f9b9837c06d866",
+      "seconds": 74.44450562499696
+    },
+    "screen-candidate": {
+      "sha256": "7720ad40b1171ab0cfe9934c908aac025c8183e5107994e1acce4f20a6b0ad97",
+      "seconds": 75.25778870901559
+    },
+    "movie-before-malo": {
+      "sha256": "14517949685863294a0899463aee1b3575a987cc0a99034de6eb84dd8e5755a7",
+      "seconds": 24.681928666017484
+    },
+    "movie-before-go2": {
+      "sha256": "f2e1d5e2127d04c756eb2ce4d43402d5576a80141f3ac0ddeed18f6f04ddcec7",
+      "seconds": 22.370778125012293
+    },
+    "movie-before-terrain": {
+      "sha256": "0a77ec94775cb0df443a3f034c4132d94a59706e187e2103c99c4127a8da982c",
+      "seconds": 22.922538625018205
+    },
+    "movie-candidate-malo": {
+      "sha256": "4fa894a81372897c859f5632f0503872563b7843edfe4f849dfa43668bbe1672",
+      "seconds": 25.069306208984926
+    },
+    "movie-candidate-go2": {
+      "sha256": "c3812a2c3a7bf56772a6bb117fbdd10b6aacd88ead62d7618e1529dad1355b61",
+      "seconds": 22.35168804199202
+    },
+    "movie-candidate-terrain": {
+      "sha256": "4bfcc7364dd52a1bc9ef1f88d114fb02f93432e59ca4f73e3da56ee142fb976d",
+      "seconds": 23.061227250029333
+    },
+    "media": {
+      "sha256": "0736cb8730e9cdc129e76e507843a6363fe1cdca0b14e1883c7c4e9449b89cf7",
+      "seconds": 51.565124374988955
+    },
+    "concrete-tests": {
+      "sha256": "bf8d73608b5f25cac412018cca576f3db4ac7a569dcf5d1967cb3b6c70fa01fb",
+      "seconds": 5.072349958005361
+    },
+    "loading": {
+      "sha256": "e3ea17c424dbb6140ab385bada0500e51cef2392b2ceb891db469bc329917f7b",
+      "seconds": 21.61563150002621
+    },
+    "build-upstream": {
+      "sha256": "c8af71a56d8f657eb92ae30399fde63b931d0517fc3c64300ea360a73249b520",
+      "seconds": 0.13915308396099135
+    },
+    "build-final": {
+      "sha256": "ebefd0b0d5f9a8825c54c18d3fefdb60ddbb8008654c1943686f9d5d2b5c3e72",
+      "seconds": 0.14220545900752768
+    },
+    "lint": {
+      "sha256": "5b5612c347335ca711161865721686011f2d96d03c41dfeb7b99e3fec0184a02",
+      "seconds": 0.062129875004757196
+    },
+    "format": {
+      "sha256": "8f746f5ef9987b25c41129e566e024344a82d72156b6debe5daecf596c37cb5a",
+      "seconds": 0.07445174996973947
+    },
+    "browser-related": {
+      "sha256": "e1233517cc81f37faa13d8ef430f9ab7a28ed1fee7e40c38df465468c1ea0569",
+      "seconds": 155.6587603329681
+    },
+    "gpu-assets": {
+      "sha256": "706bfa7aed1de8ac35f1d8e2782c2ab551d54a5152cfe9e873972d2b52b791bc",
+      "seconds": 16.65254633402219
+    },
+    "gpu-sensors": {
+      "sha256": "98aa2147b3ac630e945862d833e8b082606e42100d77031062cd2690ae1405de",
+      "seconds": 22.38893558300333
+    },
+    "backend-related": {
+      "sha256": "87379b528492583c8fd55fa60d687c1a8159d0c8efa3973679c98d04b89c2788",
+      "seconds": 12.726781250035856
+    },
+    "smoke-source": {
+      "sha256": "7a07147e98408a96e8157acd340a9da2ce7d97d7cec36bc9061d0728c45c6b71",
+      "seconds": 3.7893364999908954
+    },
+    "wheel-install": {
+      "sha256": "4c404dacc70f87fa0cd9509e974da17317b16b70d1387f335c2d58475de187f5",
+      "seconds": 0.39448620803887025
+    },
+    "smoke-installed": {
+      "sha256": "3afee26ce6b2b85d07061ef437be72d71b0bbff65065bf6ed5abd33319299034",
+      "seconds": 21.437855874944944
+    },
+    "framework": {
+      "sha256": "ca09bb6e06ef66908878e59f577ba2b1aabf61517419cff8e434284f0c0f0916",
+      "seconds": 1.9310310420114547
+    },
+    "budget": {
+      "sha256": "202d8670f14d4f348d194be2c3eb6f7917487e97e428d1f81803513a302a647e",
+      "seconds": 25.890863457985688
+    },
+    "audit": {
+      "sha256": "93005e9a249bc972eca14e15d4c0bb7e5e423683b40932c722c3aaaabd478534",
+      "seconds": 0.2994788340292871
+    }
+  },
+  "evidence": {
+    "directory": "../robotforge-evidence/2026-10-28-concrete-scale",
+    "index_sha256": "b24131ac71ccbdde40e4999ee1bc514079f3a53dd99fe32817af8cfafb08010e",
+    "indexed_files": 5840,
+    "asset_files": 133
+  },
+  "limits": [
+    "Colour attribution only for four intervention views; flat colour preserves rounded encoded mean, not linear mean. Roughness/shadow interactions not separately isolated.",
+    "Brightness constraint is not an aesthetic score or physical scanned-concrete calibration.",
+    "Only concrete including legacy unknown-style fallback changes; robot materials, terrain geometry, physical friction/MuJoCo offscreen floor texture unchanged. Browser RGB sees intended colour change; depth/segmentation contracts tested.",
+    "Panda has static controls only. Movies are paused scripted-camera three-distance segments with intentional cuts; setup gaps omitted. Last source frame adds1/60s, then30fps quantization. Not native gameplay or frame-aligned temporal comparison.",
+    "All12videos fully decode and72sample frames inspected; not every-frame visual/alias-free certification. DPR1 only static comparisons.",
+    "Malo browser-cold samples slower; no universal speedup, first remote-download or measured VRAM claim. Resource timing excludes document/WebSocket traffic.",
+    "Full regular suite and full browser suite not rerun; targeted suites and complete asset/sensor GPU files only. Physical phones, Windows and other GPU drivers unverified.",
+    "Optional mypy/pyright/bandit/pip-audit unavailable, not passed. Setup system-Python Pillow import mistake corrected using locked project uv environment before product copy."
+  ],
+  "goal": "Broad shared visual quality/lightweight/creative-play goal remains active; no individual action-success tuning."
+}

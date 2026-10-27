@@ -1,0 +1,42 @@
+{
+  "scope": "Original12233ea deterministic procedural256x256 RGBA canvas pixels; actual natural-oak is covered separately.",
+  "styles": {
+    "concrete": {
+      "color_rgba_sha256": "2c46eff32d383ee8f7d7a760e0afc17647b0dd36478db6e3816106a812940a45",
+      "detail_rgba_sha256": "520848c35020064f7e6ec809d03bdf1bde1302b2757eea3c146d6087303113cd"
+    },
+    "grass": {
+      "color_rgba_sha256": "ac36f4c0ef66e3f1030c9d7755cceb49783d780d1c3265899dca3882db12aa3d",
+      "detail_rgba_sha256": "6cf04ba447ebf06e318760eea92bb7438062f3ac120350af8be959bf252ed913"
+    },
+    "wood": {
+      "color_rgba_sha256": "b3e2ef61d6a765a5ebc81952c80397d28cf6795c78757a8cd04b6f7706ca3190",
+      "detail_rgba_sha256": "8099d0081210ccf43d56037b6b32df048314405f5006edb6ac89ceed6d13ab7e"
+    },
+    "dirt": {
+      "color_rgba_sha256": "2c5082bb4c17c22250678283ce12ec9c1844a19de5d8abd0f3b0d87e211a5114",
+      "detail_rgba_sha256": "adfa9ff724dd2a693bbb6055356154aeb1643f348800b41bebcb0d227ae4c41c"
+    },
+    "sand": {
+      "color_rgba_sha256": "9be5c44eddc20ee0c672127ddfbf1e9e6a534746adf807ebb411f6b3b3fab481",
+      "detail_rgba_sha256": "dada9d139f3b17eacec25e4c3c8731a1454b215b99985a58a1375bba226bea00"
+    },
+    "rock": {
+      "color_rgba_sha256": "1c9b1ae39dd58489a1372a034d54769ae1e9abe1fd2a63c92c7303268e7d14e4",
+      "detail_rgba_sha256": "6cbe56b9147df4274489f4eef05491e7fd4151c143560e241cf2f5c87e7f54d7"
+    },
+    "snow": {
+      "color_rgba_sha256": "5311b0c92b782940c2530f8b8923889c98d93785b092aa6279a278368922cdb7",
+      "detail_rgba_sha256": "26aa972d19a568f7f1b7ef677b5cb4466c53238eb18ef93ba997d1000d1c52dc"
+    },
+    "tile": {
+      "color_rgba_sha256": "2079a9380fa7d447701183422d9247c7fa0a700d7c46fe6898e788a2ca7a8d42",
+      "detail_rgba_sha256": "398dc2eb5183f5bd0c65be0fac36cdf3e379c65008206517a5dbc7d4c2166f8c"
+    },
+    "checker": {
+      "color_rgba_sha256": "b82f53b2074d528ec335dfc1be602315ca7673835bdac8b539e9508b2814f07e",
+      "detail_rgba_sha256": "47b4e07361f0251cac6adab1cbd68353332068792fcc80eea9e66d90462fb191"
+    }
+  },
+  "concrete_linear_mean": 0.9134924089364156
+}

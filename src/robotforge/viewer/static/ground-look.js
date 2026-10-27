@@ -60,6 +60,25 @@ function surfaceTile(style) {
   const boards = Array.from({ length: 8 }, rand);
   const figure = style === "wood" ? noise(3, rand, 24) : null;
   const fibres = style === "wood" ? noise(6, rand, 96) : null;
+  // Centre only concrete's colour fields on their actual samples. Preserve the old
+  // decoded-linear average as the new neutral base; relief and roughness stay separate.
+  let concreteColor = null;
+  if (style === "concrete") {
+    const histogram = new Uint32Array(256);
+    let broadMean = 0, fineMean = 0;
+    for (let i = 0; i < broad.length; i++) {
+      broadMean += broad[i]; fineMean += fine[i];
+      histogram[byte(0.92 + 0.06 * broad[i] + 0.02 * fine[i])]++;
+    }
+    let linearMean = 0;
+    for (let value = 0; value < histogram.length; value++) {
+      const c = new THREE.Color(value / 255, value / 255, value / 255).convertSRGBToLinear();
+      linearMean += c.r * histogram[value];
+    }
+    linearMean /= broad.length;
+    const base = new THREE.Color(linearMean, linearMean, linearMean).convertLinearToSRGB().r;
+    concreteColor = { base, broadMean: broadMean / broad.length, fineMean: fineMean / fine.length };
+  }
   const make = () => {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = SIZE;
@@ -87,6 +106,8 @@ function surfaceTile(style) {
       height += (0.18 - height) * joint;
       shade += (0.68 - shade) * joint;
       roughness += (0.8 - roughness) * joint;
+    } else if (style === "concrete") {
+      shade = concreteColor.base + 0.02 * (b - concreteColor.broadMean) + 0.04 * (f - concreteColor.fineMean);
     } else if (style === "tile") {
       const grout = Math.min(edge(u * 2), edge(v * 2)) < 0.018;
       shade = grout ? 0.72 : 0.97 + b * 0.025;
