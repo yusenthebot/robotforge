@@ -50,6 +50,17 @@
     </div>
   </header>
 
+  <section class="view-panel" id="view-panel" aria-labelledby="view-heading" hidden>
+    <h2 class="section-title" id="view-heading" data-i18n="view_direction">View direction</h2>
+    <p class="note" data-i18n="view_direction_note">World axes, around your current aim. Perspective stays on.</p>
+    <div class="view-choices" role="group" aria-labelledby="view-heading">
+      <button class="pill" type="button" data-camera-view="top" aria-pressed="false" data-i18n="view_top">Top</button>
+      <button class="pill" type="button" data-camera-view="front" aria-pressed="false" data-i18n="view_front">Front · −Y</button>
+      <button class="pill" type="button" data-camera-view="side" aria-pressed="false" data-i18n="view_side">Side · +X</button>
+    </div>
+    <button class="pill" id="view-back" type="button" disabled data-i18n="view_back">Return to original view</button>
+  </section>
+
   <div class="learn-panel" id="learn-panel" hidden>
     <h2 class="learn-heading" data-i18n="learn_title">Learn robotics by doing</h2>
     <p class="note" data-i18n="learn_lead">Each lesson sets up a small experiment. You change something, watch what the robot does, and the lesson explains why.</p>
@@ -352,6 +363,10 @@
     <button class="tool" id="btn-frame" type="button" data-i18n-label="fit_tip">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
       <span data-i18n="fit">Fit view</span>
+    </button>
+    <button class="tool" id="view-toggle" type="button" aria-expanded="false" aria-controls="view-panel" data-i18n-label="view_direction">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/></svg>
+      <span data-i18n="views">Views</span>
     </button>
     <button class="tool rec" id="btn-record" type="button" data-i18n-label="record_tip" aria-pressed="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="rec-dot" cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="9"/></svg>
