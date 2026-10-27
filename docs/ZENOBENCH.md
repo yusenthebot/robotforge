@@ -15,7 +15,8 @@ ZenoBench 和 Isaac 打交道的地方很少，只有三个文件：`zeno_skills
   网格先拆成连通部件，近似凸的部件保留凸包，凹的小部件用 CoACD 分解，大的凹部件（房间的地板和墙）用精确的薄棱柱。
   判断凸不凸时除了看顶点是否都在凸包上，还要看网格表面是否盖满了凸包表面：没有屋顶的房间所有顶点都在凸包上，凸包却会把整个房间填实。
   结果按网格内容缓存在磁盘上。
-- `world` 按 PhysX 的方式推进仿真：一步 1/120 秒拆成 4 个 MuJoCo 子步，关节驱动用 PhysX 的隐式公式，底座跟随场景里那个被 ZenoBench 改写的固定关节锚点。
+  会动的刚体（物体和机器人）的凸包再按 PhysX 的顶点上限处理：PhysX 烹制凸包时最多保留 64 个顶点（场景里写了 `hullVertexLimit` 就用写的值），超出时把包围盒按凸包的面一刀刀切下去，见后文。
+- `world` 按 PhysX 的方式推进仿真：一步 1/120 秒拆成 8 个 MuJoCo 子步，关节驱动用 PhysX 的隐式公式，底座跟随场景里那个被 ZenoBench 改写的固定关节锚点。
 - `shim` 把 `isaacsim.core.prims`、`isaaclab.sim`、`isaaclab.sensors`、`isaaclab.app`、`omni.usd` 和 `pxr.PhysxSchema` 注册成真实的模块名，接口只做 ZenoBench 用到的部分。
   没装 PyTorch 时，一个很小的 NumPy 替身负责 ZenoBench 用到的几个 torch 调用。
   ZenoBench 是对着 Isaac Sim 自带的 NumPy 1.26 写的，有几处用二维向量做 `np.cross`，NumPy 2 已经不支持，shim 在 ZenoBench 进程里恢复了旧行为。
@@ -59,7 +60,8 @@ uv run robotforge zenobench serve -- --port 8800
 已知的差别：
 
 - 驱动：PhysX 的 acceleration 型驱动按关节的有效惯量缩放，这里用 MuJoCo 质量矩阵对角线上的值近似。
-- 摩擦：MuJoCo 只有一个摩擦系数，这里用 USD 材质的静摩擦系数；两个物体取较大的值，PhysX 多数材质取平均。
+- 摩擦：MuJoCo 只有一个摩擦系数，这里用 USD 材质的静摩擦系数；两个物体取较大的值。
+  指垫材质在 USD 里写的就是取较大值（PhysX 里 max 的优先级最高），所以夹持和 PhysX 一致；物体之间、物体和台面之间 PhysX 取平均，这里大约高 15%。
 - 底座轮子和转向连杆不参与碰撞：底座本来就由锚点拖动，轮子只是被拖着走。
 - 接触偏移（contactOffset、restOffset）和 CCD 没有对应。
 - 时间步长：PhysX 每步 1/120 秒，这里每步拆成 8 个 MuJoCo 子步（1/960 秒）。
@@ -81,6 +83,7 @@ uv run robotforge zenobench serve -- --port 8800
 | `ZENOBENCH_SLEEP` | 1 | 静止物体休眠到被碰为止；厨房场景每步从 2.2 毫秒降到 0.5 毫秒 |
 | `ZENOBENCH_GRASP_LOCK` | 1 | 夹持静摩擦锁（见后文）；设为 0 关闭 |
 | `ZENOBENCH_VMAX` | 1 | 按 maxJointVelocity 截断关节速度；设为 0 关闭 |
+| `ZENOBENCH_HULL_LIMIT` | all | PhysX 凸包顶点上限用在哪些刚体上：`all`（物体和机器人）、`objects`（只有自由物体）、`off` |
 
 扭转摩擦按"滑动摩擦系数乘以 15 毫米接触半径"设置：PhysX 的平面接触是一块接触面，能抵抗扭转，MuJoCo 默认的 0.005 太小，捏住的物体会在指间打转。
 
@@ -102,21 +105,28 @@ ZenoBench 自带物理验证工具 `tools/verify_skills.py`，35 个场景逐步
 uv run robotforge zenobench python -- tools/verify_skills.py --all --jobs 4 --out runs/mj_all
 ```
 
-2026-10-27 在 M5 Max 上的结果（ZenoBench `d573467`，默认设置，6 个并行任务，35 个场景共 31 分钟）：
+2026-10-27 在 M5 Max 上的结果（ZenoBench `d573467`，默认设置，6 个并行任务，35 个场景共 49 分钟，期间测试套件也在跑）：
 
-- MuJoCo 通过 24/35，Isaac Sim 通过 29/35，两边都通过的 23 个。
+- MuJoCo 通过 23/35，Isaac Sim 通过 29/35，两边都通过的 22 个。
 - k_arrange_sort 只在 MuJoCo 上通过；Isaac 上它在第 1 步取物时失败。
-- Isaac 也失败的另外 5 个，MuJoCo 同样失败；其中 k_fridge_chill 和 k_soup_stove 停在和 Isaac 相同的那一步，k_soup_stove 的失败原因也相同（倒汤时 0/3 落进锅里）。
-- 只在 MuJoCo 上失败的 6 个：
+- Isaac 也失败的另外 5 个，MuJoCo 同样失败；k_soup_stove 停在和 Isaac 相同的那一步，原因也相同（倒汤时 0/3 落进锅里），k_fridge_chill 比 Isaac 多走了一步。
+- 只在 MuJoCo 上失败的 7 个：
   - 找不到能把书滑过去的桌边（k_book、g_expose_then_pick_book）。
     这一步只用标注和物体位姿做几何判断，不经过物理引擎；书在 MuJoCo 里一动没动，每条边被排除的理由都能复现（路径上压着马克杯和番茄）。
     所以更可能是 Isaac 的验证记录早于当前布局，需要在 Isaac 上重跑才能确认。
-  - 推、拖之后的位置和 Isaac 不同（k_pin、k_restore_swap、k_separate），以及 b_books 最后一步双手推书时书没有动。
-- 第一版（还没有夹持静摩擦锁）是 18/35，差距主要是 6 个场景里物体在搬运中从手里滑掉，下一节讲原因和办法。
+  - k_separate 和 k_restore_swap：下一节，没找到移植上的问题。
+  - k_pin：滚和拉两步现在都通过，第 4 步把擀面杖往里推时手从它旁边擦过去。
+    ZenoBench 估计物体底部时把"原点到底面中心"的偏移跟着物体一起转；擀面杖滚到 -84 度时，这个估计横向偏了 2.8 厘米（半径乘以滚动角的正弦），手正好对着偏掉的位置。
+    Isaac 记录里它滚到 174.5 度，偏差只有 3 毫米；滚多少度两边都会有随机性，MuJoCo 这几轮在 54 到 179 度之间。
+  - b_books：两次推书都推到了位，最后一步双手拿书时 ZenoBench 的规划器找不到两只手共用的无碰撞底座位姿。
+  - k_bottle：上一轮通过。
+    瓶子的凸包按 PhysX 削到 64 个顶点后，推倒的瓶子朝向差了约 1 度，ZenoBench 换了一个抓取点、绕到另一侧，扶正以后找不到能把瓶子立回去的位置。
+    设 `ZENOBENCH_HULL_LIMIT=off` 时它照样通过；这是规划对微小姿态的敏感，不是瓶子从手里滑掉。
+- 历次结果：第一版 18/35，差距主要是物体在搬运中从手里滑掉；加上夹持静摩擦锁后 24/35；这一轮修正推、拖、滚的物理后 23/35，丢的是上面的 k_bottle，换来的是推和滚的距离接近 Isaac（见下一节）。
 
 | Scenario | Isaac Sim | MuJoCo | MuJoCo failure |
 |---|---|---|---|
-| b_books | pass 7/7 | fail 5/6 | POLICY_FAILED: push book_green: object did not move path two_hand_flat |
+| b_books | pass 7/7 | fail 5/6 | POLICY_FAILED: bimanual_flat_pick: no collision-free shared base pose path two_hand_flat |
 | c_approach_moving | pass 2/2 | pass 2/2 |  |
 | c_tray_moving | pass 5/5 | pass 5/5 |  |
 | g_expose_then_pick_book | pass 5/5 | fail 1/2 | slide to edge: no graspable free edge of kitchen_island/top |
@@ -126,23 +136,23 @@ uv run robotforge zenobench python -- tools/verify_skills.py --all --jobs 4 --ou
 | k_blocks | pass 6/6 | pass 6/6 |  |
 | k_body | pass 5/5 | pass 5/5 |  |
 | k_book | pass 5/5 | fail 1/2 | POLICY_FAILED: slide to edge: no graspable free edge of kitchen_island/top path slide_to_edge |
-| k_bottle | pass 3/3 | pass 3/3 |  |
+| k_bottle | pass 3/3 | fail 2/3 | POLICY_FAILED: upright juice_bottle: no base pose reaches the top end path pick_orient_place |
 | k_brace | pass 4/4 | pass 4/4 |  |
 | k_cabinet | pass 8/8 | pass 8/8 |  |
-| k_empty_hide | fail 2/3 | fail 2/3 | POLICY_FAILED: pick cherry_tomato_1: not held (lift 0.006 m) path pick_each_inside |
+| k_empty_hide | fail 2/3 | fail 2/3 | POLICY_FAILED: pick cherry_tomato_2: not held (lift -0.000 m) path pick_each_inside |
 | k_fetch_collect | pass 2/2 | pass 2/2 |  |
 | k_floor | pass 4/4 | pass 4/4 |  |
-| k_fridge_chill | fail 5/6 | fail 5/6 | POLICY_FAILED: carry_in_via: soda_can slipped out of the hand while carrying it path cabinet_or_fridge_shelf |
+| k_fridge_chill | fail 5/6 | fail 6/7 | POLICY_FAILED: tuck arm: posture did not settle path handle_push |
 | k_handle_mug | pass 2/2 | pass 2/2 |  |
 | k_hands | pass 8/8 | pass 8/8 |  |
 | k_microwave | fail 12/13 | fail 5/6 | POLICY_FAILED: joint move to microwave_front: every joint-space path collides path microwave_staged |
 | k_mug_on_burner | pass 8/8 | pass 8/8 |  |
 | k_perceive | pass 12/12 | pass 14/14 |  |
-| k_pin | pass 4/4 | fail 3/4 | POLICY_FAILED: rolling_pin: not resting on an annotated support path push_inward |
+| k_pin | pass 4/4 | fail 3/4 | POLICY_FAILED: push rolling_pin: object did not move path push_inward |
 | k_posture | pass 9/9 | pass 9/9 |  |
 | k_present | pass 6/6 | pass 6/6 |  |
-| k_restore_swap | pass 3/3 | fail 2/3 | POSTCONDITION_FAILED: POSTCONDITION_FAILED: positions_swapped(a=wooden_block_a, b=soda_can) is false (errors 0 |
-| k_separate | pass 5/5 | fail 3/4 | PRECONDITION_FAILED: PRECONDITION_FAILED: not grasp_clearance(object=wooden_block_a) is false (pinch at [7.22, |
+| k_restore_swap | pass 3/3 | fail 2/3 | SUBSKILL_FAILED: SUBSKILL_FAILED: place_object(object=soda_can, receptacle=kitchen_island/top, hint_xy=[7.6787 |
+| k_separate | pass 5/5 | fail 3/4 | PRECONDITION_FAILED: PRECONDITION_FAILED: not grasp_clearance(object=wooden_block_a) is false (pinch at [7.219 |
 | k_soup_stove | fail 6/7 | fail 6/7 | POLICY_FAILED: pour: 0/3 items reached handled_cooking_pot path tilt_over_rim |
 | k_stir_cover | pass 13/13 | pass 13/13 |  |
 | k_sweep | pass 3/3 | pass 3/3 |  |
@@ -151,6 +161,36 @@ uv run robotforge zenobench python -- tools/verify_skills.py --all --jobs 4 --ou
 | o_clear | pass 1/1 | pass 1/1 |  |
 | r_bimanual_box | fail 1/2 | fail 1/2 | POLICY_FAILED: bimanual_box_lift: two-hand lift/contact check failed path two_hand_box |
 | t_floor_moving | pass 5/5 | pass 5/5 |  |
+
+Isaac 29/35 pass, MuJoCo 23/35 pass, both 22
+
+## 推、拖和滚：凸包顶点上限和锁的误判
+
+k_pin、k_restore_swap、k_separate 和 b_books 最后一步的差距都出在推、拖、滚上。
+逐个用快照回放查下来，有两处是移植和 PhysX 不一致，已经修正：
+
+1. 夹持锁的误判。
+   推、拖、滚的时候夹爪是合拢的，两根指尖一起从上面压在物体上，每根都超过 2 N，旧规则把这当成捏住，物体被焊在手上跟着走。
+   b_books 里绿书因此被拖出 13.2 厘米（要求 11.5），第二次推的时候手就没碰到书；k_pin 滚擀面杖时也锁住过。
+   现在要求两根手指的推力方向相反。
+2. 凸包太细。
+   PhysX 烹制凸包时最多保留 64 个顶点（Isaac 里 `hullVertexLimit` 的取值范围是 8 到 64），这里原来直接用网格的完整凸包。
+   擀面杖的凸包有 995 个顶点，中段截面是 149 边形，几乎是光滑的圆柱，回退的推一下就滚出 31 厘米、掉下台面（要求 8 厘米）；PhysX 里它只有 64 个顶点，滚起来有颠簸和损耗。
+   现在会动的刚体按 PhysX 的默认做法处理：凸包不超过上限就原样保留，超过时从点集的定向包围盒开始，每次用当前形状超出最多的那个凸包面切一刀，直到再切就超过上限。
+   结果仍然包住所有原始点；厨房、水果两个场景和机器人上被截的 115 个凸包，体积最多是原来的 1.11 倍，中位数 1.04 倍。
+   擀面杖中段截面变成 24 边形，改完后同一下推让它走了 12.9 厘米（要求 8），没有再掉下台面。
+   起初按面积从大到小选面来切，机器人躯干的凸包大了 25%，b_books 里的书被推着撞上机器人自己的躯干，被挤得飞出去 35 厘米；改成先切超出最多的面后躯干只大 9%，两次推书都推到了位（12 厘米推了 11.4，11.5 厘米推了 12.6）。
+
+另外两个场景没找到移植上的问题：
+
+- k_separate：放 wooden_block_b 时要求的位置 (7.22, 1.69) 被 wooden_block_a 占着，ZenoBench 在 3 厘米网格上找最近的空位，得到 (7.230, 1.725)，这只取决于标注和物体位姿，和物理引擎无关。
+  MuJoCo 把木块放在了离这个点 4 毫米的地方，此时 wooden_block_a 两侧的手指槽都是空的，"先分开"这一步的前置条件不成立。
+  Isaac 记录里它通过了，说明那次 wooden_block_a 离得更近；和 k_book 一样需要在 Isaac 上重跑确认。
+- k_restore_swap：去抓易拉罐时，手掌的碰撞凸包（底面在 TCP 上方 3.6 厘米）以 68 N 压在罐顶，手停在抓取点上方 2.4 厘米。
+  PhysX 用的是同一个网格的凸包，这一步应该和 Isaac 一样。
+  之后手臂转向放置点，罐子撞上机器人自己的头（最大 258 N），超过摩擦能提供的力，夹持锁松开，罐子在手里移位，放下时偏了 7.4 厘米；头的凸包按 PhysX 削顶点后大了 9%，这一轮罐子干脆从手里滑了出去。
+  回放里如果锁一直不松，罐子会落在目标 5 毫米以内；撞头的接触点离头部真实碰撞网格不到 1 毫米，头的姿态也和目标一致。
+  Isaac 记录里这个罐子的误差是 1.8 厘米，是这组里最大的，那边可能也碰到了头，只是偏得没这么多。
 
 ## 捏住的物体：夹持静摩擦锁
 
@@ -167,10 +207,11 @@ MuJoCo 的接触是软约束，持续的受力会让物体以很小的速度蠕�
 
 所以这里给捏持单独加了静摩擦：
 
-- 同一只手的两根手指都以至少 2 N 压在同一个物体上、物体相对手掌基本静止时，激活一个建模时就声明好（默认不激活）的焊接约束，把物体锁在手掌上当前的位置。
+- 同一只手的两根手指都以至少 2 N 从相对的两侧压在同一个物体上（两侧推力的方向至少差 120 度）、物体相对手掌基本静止时，激活一个建模时就声明好（默认不激活）的焊接约束，把物体锁在手掌上当前的位置。
+  "相对的两侧"这条是后来加的：推、拖、滚的时候两根并拢的指尖从上面压住物体，两侧推力同向，不是捏，之前也被锁住，物体就被手带着走。
 - 每个 tick 计算夹持必须对外提供的力：物体受到的全部约束力（焊接和指垫加在一起，彼此的内力抵消）减去它和其他东西的接触（比如它压着的桌面），按 0.1 秒做平滑。
   这个力超过"摩擦系数乘以两侧夹紧力"，或力矩超过它再乘以 2 厘米接触半径时，锁就松开，物体照常滑动，静止后可以再锁上。
 - 任一根手指连续 50 毫秒不再压着物体（张开手、放下物体）时松开。
 - 关闭焊接约束不会唤醒正在休眠的物体，所以松开时给物体一个 tick 的极小推力，免得它悬在手离开的位置。
 
-单元测试覆盖了上锁、抬起时零漂移、张手后掉落，以及摩擦拿不住的重物会滑脱而不是被焊住提起来。
+单元测试覆盖了上锁、抬起时零漂移、张手后掉落、摩擦拿不住的重物会滑脱而不是被焊住提起来，以及指尖从上面压住物体时不会上锁。
