@@ -121,7 +121,8 @@ class World:
         if self._sun_tracks:  # the shadow map spans SUN_REACH around the robot instead of the whole model
             m.vis.map.shadowclip = min(1.0, SUN_REACH / max(float(m.stat.extent), 1e-6))
         m.opt.timestep = self.dt / self.substeps
-        self._damp(m, conv)
+        if _knob("ZENOBENCH_DAMPING", 1):
+            self._damp(m, conv)
         m.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
         m.opt.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
         m.opt.impratio = _knob("ZENOBENCH_IMPRATIO", IMPRATIO)
