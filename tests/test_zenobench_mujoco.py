@@ -292,6 +292,42 @@ def test_free_bodies_lose_spin_at_physx_damping_rates():
     assert d.qvel[spin["default"]] / 10.0 == pytest.approx(math.exp(-0.05), rel=0.01)
 
 
+def _start_pose(monkeypatch, seed):
+    monkeypatch.setenv("ZENOBENCH_SEED", str(seed))
+    w = World(_scene(), options=OPTIONS)
+    w.build()
+    before = w.body_pose("/World/box")
+    w.step(1)
+    return before, w.body_pose("/World/box")
+
+
+def test_start_jitter_is_small_and_the_same_for_a_seed(monkeypatch):
+    (p0, q0), (p1, q1) = _start_pose(monkeypatch, 3)
+    shift = p1 - p0
+    assert 0 < np.linalg.norm(shift[:2]) <= math.sqrt(2) * 1e-3 + 1e-6
+    turn = math.degrees(2 * math.acos(min(1.0, abs(float(np.dot(q0, q1))))))
+    assert 0 < turn <= 0.5 + 1e-6
+    assert _start_pose(monkeypatch, 3)[1][0] == pytest.approx(p1)  # the same seed, the same start
+    (p0, _), (p1, _) = _start_pose(monkeypatch, 0)
+    assert np.allclose(p1[:2], p0[:2], atol=1e-6)  # seed 0: the scene as authored
+
+
+def test_sweep_summary_counts_passes_per_scenario(tmp_path):
+    from robotforge.zenobench import sweep
+
+    status = tmp_path / sweep.STATUS
+    status.parent.mkdir(parents=True)
+    status.write_text("## Scenarios\n| Scenario | Result | Steps | Note |\n|---|---|---|---|\n| a | pass | 2/2 |  |\n")
+    out = tmp_path / "runs"
+    for seed, ok in enumerate((True, False, True)):
+        (out / f"seed{seed}" / "a").mkdir(parents=True)
+        steps = [{"success": True}, {"success": ok, "error": None if ok else "slipped"}]
+        (out / f"seed{seed}" / "a" / "result.json").write_text(json.dumps({"id": "a", "success": ok, "steps": steps}))
+    text = sweep.summary(tmp_path, out)
+    assert "| a | pass 2/2 | 2/3 | 1/2, 2/2 | slipped |" in text
+    assert "0 always pass, 0 never pass, 1 sometimes" in text
+
+
 def test_sleeping_world_wakes_for_new_targets():
     stage = _scene()
     w = World(stage, options=OPTIONS)

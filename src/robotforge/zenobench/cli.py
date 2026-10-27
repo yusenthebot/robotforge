@@ -24,6 +24,12 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     r.add_argument("args", nargs=argparse.REMAINDER)
     s = zsub.add_parser("serve", help="ZenoBench's env_service HTTP server for an external planner")
     s.add_argument("args", nargs=argparse.REMAINDER, help="env_service.server arguments, e.g. --port 8800")
+    w = zsub.add_parser(
+        "sweep",
+        help="run the skill scenarios over several seeds and compare pass rates with Isaac Sim's",
+        description="Example: robotforge zenobench sweep -- --seeds 5 --jobs 6 (arguments after --)",
+    )
+    w.add_argument("args", nargs=argparse.REMAINDER)
 
 
 def _rest(args: list[str]) -> list[str]:
@@ -55,6 +61,10 @@ def run(args: argparse.Namespace) -> int:
             return python.main([str(root / "benchmark" / "run_episode.py"), *_rest(args.args)])
         if command == "python":
             return python.main(_rest(args.args))
+        if command == "sweep":
+            from robotforge.zenobench import sweep
+
+            return sweep.main(_rest(args.args))
         if command == "serve":
             rest = _rest(args.args)
             if "--worker-python" not in rest:

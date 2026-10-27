@@ -72,6 +72,7 @@ class World:
         self._recorder: _Recorder | None = None
         self._film: _Film | None = None
         self._sun_tracks = False
+        self._started = False
         self._locks: _GraspLocks | None = None
         self._lock_pairs: list = []
 
@@ -272,6 +273,9 @@ class World:
 
     def step(self, n: int = 1) -> None:
         m, d = self.model, self.data
+        if not self._started:
+            self._started = True
+            self._jitter_start()
         for _ in range(n):
             if self._trace is not None:
                 self._trace.record()
@@ -293,6 +297,34 @@ class World:
                     d.qvel[self._vdof] = np.clip(v, -self._vmax, self._vmax)
             if self._film is not None:
                 self._film.record()
+
+    def _jitter_start(self) -> None:
+        """`ZENOBENCH_SEED=<n>` (n > 0) nudges every free object before the first step: up to
+        `ZENOBENCH_JITTER` (default "1,0.5": mm along the floor, degrees about the vertical) from where the
+        scene puts it, the same for the same seed. One exact start shows one outcome of a task whose
+        outcome may hinge on a degree; a sweep over seeds shows how often it succeeds."""
+        import os
+
+        seed = int(os.environ.get("ZENOBENCH_SEED", "0") or 0)
+        if seed <= 0:
+            return
+        parts = [float(v) for v in os.environ.get("ZENOBENCH_JITTER", "1,0.5").split(",")]
+        if len(parts) != 2:
+            raise ValueError(f"ZENOBENCH_JITTER is 'mm,deg', not {os.environ['ZENOBENCH_JITTER']!r}")
+        mm, deg = parts
+        m, d = self.model, self.data
+        rng = np.random.default_rng(seed)
+        turned = np.zeros(4)
+        count = 0
+        for j in np.flatnonzero(m.jnt_type == mujoco.mjtJoint.mjJNT_FREE):
+            a = m.jnt_qposadr[j]
+            d.qpos[a : a + 2] += rng.uniform(-mm, mm, 2) / 1000.0
+            half = math.radians(rng.uniform(-deg, deg)) / 2
+            mujoco.mju_mulQuat(turned, np.array([math.cos(half), 0.0, 0.0, math.sin(half)]), d.qpos[a + 3 : a + 7])
+            d.qpos[a + 3 : a + 7] = turned
+            count += 1
+        mujoco.mj_forward(m, d)
+        log.info("start jitter: seed %d moved %d free objects (up to %g mm, %g deg)", seed, count, mm, deg)
 
     def contacts_of(self, body: str) -> list[tuple[str, float, float]]:
         """(other geom or body, distance, normal force) of every contact touching a body."""
