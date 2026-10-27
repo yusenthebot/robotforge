@@ -269,6 +269,15 @@
       </label>
       <label class="check repeat-placement"><input type="checkbox" id="place-repeat"><span data-i18n="keep_placing">Keep placing</span></label>
     </div>
+    <div class="placement-coordinates">
+      <label class="prop-material-control"><span data-i18n="placement_snap">Snap</span>
+        <select id="place-spacing"><option value="free" data-i18n="placement_free">Free placement</option><option value="0.1">0.10 m</option><option value="0.25">0.25 m</option></select>
+      </label>
+      <div class="placement-coordinate-readout">
+        <output id="placement-position" aria-live="off" data-i18n="placement_position_empty">Choose a surface to see its position.</output>
+        <p class="note" id="placement-coordinate-status" aria-live="polite" hidden></p>
+      </div>
+    </div>
     <button class="pill" id="place-here" type="button" data-i18n="place_here">Place here</button>
     <button class="pill" id="place-cancel" type="button" data-i18n="cancel_place">Cancel</button>
   </div>

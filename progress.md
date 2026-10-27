@@ -1,5 +1,17 @@
 # progress
 
+## Shared precise placement and native regressions (2026-10-28)
+
+Optional 0.10/0.25m world-origin XY spacing shares preview, readout and submitted positions across eight placement entries; free placement remains default.
+Same fixed horizontal support is checked again before submission; existing full-footprint, stale-request and Undo contracts remain.
+The placement bar participates in view avoidance, short screens scroll, feedback has stable height, and narrow editing panels clear held screen-driving inputs.
+Same-product-source split browser coverage258pass/1optional USD module skip,456targeted backend pass/1optional skip,7canonical,source/fresh offline60-tool smoke and original11/11budgets pass.
+The first full native-target failures and final partial resource-snapshot failure remain recorded; settled-view sampling retains the original exact resource equality.
+Four actual Malo/Go2/Panda desktop/touch-emulated workflow pairs fully decode,48decoded samples inspected;12snapped coordinates exact after native creation and reload.
+Wheel3937532B(+2386B over integrated upstream),412source/wheel/installed product files exact; original13WIP hashes retained.
+[Report](docs/bench/2026-10-28-precise-placement.md).
+No shader aesthetic gain, human timing or full regular/slow suite claim; broad material/lightweight/play goal continues, individual action-success tuning deferred.
+
 ## Actual-world specular baseline (2026-10-28)
 
 No two actual material paths establish an attributable ordinary-distance specular defect; no compensation candidate or shader change.

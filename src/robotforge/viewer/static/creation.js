@@ -48,11 +48,22 @@ export function createPlacementGesture() {
   };
 }
 
-export function initCreation({ start, submit, cancel, change }) {
+export function initCreation({ start, submit, cancel, change, coordinateChange = () => {} }) {
   const $ = (id) => document.getElementById(id);
   let item = null, point = null, sending = false, size = "normal", yaw = 0, turns = 0, session = 0;
   const repeat = $("place-repeat");
   const material = $("place-material");
+  const spacing = $("place-spacing");
+  spacing.addEventListener("change", coordinateChange);
+  function coordinates(value, status = null) {
+    const readout = $("placement-position"), note = $("placement-coordinate-status");
+    const text = value ? t("placement_position", { x: value[0].toFixed(4), y: value[1].toFixed(4), z: value[2].toFixed(4) })
+      : t("placement_position_empty");
+    if (readout.textContent !== text) readout.textContent = text;
+    const message = status ? t(status) : "";
+    if (note.textContent !== message) note.textContent = message;
+    note.hidden = !message;
+  }
   const syncRepeat = () => { $("place-cancel").textContent = t(repeat.checked ? "done_placing" : "cancel_place"); };
   repeat.addEventListener("change", syncRepeat);
   const scales = { small: 0.75, normal: 1, large: 1.5 };
@@ -81,6 +92,7 @@ export function initCreation({ start, submit, cancel, change }) {
   });
   function begin(entry, kind, title) {
     item = { ...entry, kind }; point = null; sending = false; size = "normal";
+    spacing.value = "free"; coordinates(null);
     // Authored worlds may contain many full turns; copy the same heading within the request's angle bounds.
     turns = 0;
     yaw = kind === "edit" || kind === "terrain-edit" ? entry.yaw : kind === "copy" || kind === "start" ? entry.yaw % 360 : 0; session++;
@@ -127,10 +139,11 @@ export function initCreation({ start, submit, cancel, change }) {
     placingTerrain: () => item?.kind === "terrain" || item?.kind === "terrain-edit",
     duplicate: (entry) => begin(entry, "copy", entry.name),
     session: () => session,
+    spacing: () => spacing.value,
     repeating: () => (item?.kind === "object" || item?.kind === "copy") && repeat.checked,
     next(guard = {}) {
       item = { ...item, ...guard };
-      point = null; $("place-here").disabled = true;
+      point = null; coordinates(null); $("place-here").disabled = true;
       $("placement-hint").textContent = t("place_next_hint");
     },
     preview: () => item?.kind === "terrain" || item?.kind === "terrain-edit" ? { boxes: item.boxes, yaw }
@@ -149,7 +162,7 @@ export function initCreation({ start, submit, cancel, change }) {
       $("build-add-robot").dataset.off = editable ? "0" : "1";
       $("build-add-robot").disabled = busy || !editable;
     },
-    point(value) { point = value; $("place-here").disabled = !value || sending; },
+    point(value, status = null) { point = value; coordinates(value, status); $("place-here").disabled = !value || sending; },
     busy(value) {
       sending = value;
       $("place-here").disabled = !point || value;
@@ -158,6 +171,7 @@ export function initCreation({ start, submit, cancel, change }) {
       $("place-rotate").disabled = value;
       repeat.disabled = value;
       material.disabled = value;
+      spacing.disabled = value;
       $("placement-bar").setAttribute("aria-busy", String(value));
     },
     progress(stage, fraction) {
@@ -168,6 +182,7 @@ export function initCreation({ start, submit, cancel, change }) {
     clear() {
       session++; item = point = null;
       sending = false;
+      coordinates(null);
       $("placement-bar").hidden = true;
       $("place-cancel").disabled = false;
     },
