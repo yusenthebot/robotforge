@@ -333,3 +333,35 @@ def test_the_map_the_viewer_draws_goes_when_the_map_is_cleared(playground, chrom
         thread.join(timeout=10)
     assert seen["drawn"] == "rover"
     assert seen["after"]["robots"] == [] and seen["hud_hidden"] is True
+
+
+def test_view_lighting_preserves_rgb_stereo_fisheye_and_event_previews(served, chrome):
+    pg, port = served
+    for kind, name in (("stereo", "pair"), ("fisheye", "wide"), ("event", "dvs")):
+        pg.add_sensor("post", {"type": kind, "name": name, "width": 80, "height": 60})
+
+    async def run():
+        async with _page(chrome, f"http://127.0.0.1:{port}/?lang=en") as tab:
+            pg.session.paused = True
+            return await tab.eval("""(async () => {
+              const rf=window.__robotforge,light=rf.three().lighting,results={};
+              for(const name of ["rgb","pair","wide","dvs"]){
+                light.select("studio");
+                [...document.querySelectorAll('.sensor-pip .seg button')].find(b=>b.textContent===name).click();
+                await new Promise(r=>setTimeout(r,800));
+                const canvas=()=>document.querySelector('.sensor-pip canvas');
+                const before=canvas().toDataURL(),renders=rf.sensors().pictures;
+                light.select("daylight");
+                await new Promise(r=>setTimeout(r,800));
+                results[name]={same:before===canvas().toDataURL(),renders:rf.sensors().pictures-renders,
+                  view:light.preset(),drawn:[...canvas().getContext('2d').getImageData(0,0,canvas().width,
+                    canvas().height).data].some((v,i)=>i%4!==3&&v>0)};
+              }
+              return results;
+            })()""")
+
+    for name, row in asyncio.run(run()).items():
+        assert row["same"], (name, row)
+        assert row["renders"] > 0 and row["view"] == "daylight", (name, row)
+        if name != "dvs":
+            assert row["drawn"], (name, row)

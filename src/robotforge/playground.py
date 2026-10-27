@@ -286,6 +286,8 @@ class Playground:
                 return self.layouts_for_play(msg)
             if action == "add_robot":
                 return self.add_robot_for_play(msg)
+            if action == "add_model":
+                return self.add_model_for_play(msg)
             if action in {"edit_robot_start", "undo_robot_start"}:
                 return self.edit_robot_start_for_play(msg)
             if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object"}:
@@ -514,6 +516,13 @@ class Playground:
         if action == "duplicate_object":
             return duplicate(self, message)
         return undo(self, message) if action == "undo_object_edit" else edit(self, message)
+
+    @_one_edit_at_a_time
+    def add_model_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Place a curated model or saved design selected by its server-owned ID."""
+        from robotforge.viewer.model_create import place
+
+        return place(self, message)
 
     @_one_edit_at_a_time
     def edit_robot_start_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
@@ -1982,9 +1991,11 @@ def _limit_dict(d: dict) -> dict:
 def viewer_catalog() -> dict[str, Any]:
     """What the viewer's World panel offers: scene presets, ground styles with their colors, terrain types."""
     from robotforge.viewer.creation import catalog, object_catalog
+    from robotforge.viewer.model_create import catalog as model_catalog
 
     return {
         "robot_templates": catalog(),
+        "robot_models": model_catalog(),
         "object_presets": object_catalog(),
         "scenes": [{"name": s["name"], "title": s["title"], "summary": s["summary"]} for s in scenes.catalog()],
         "grounds": {name: [round(c, 3) for c in style.rgba[:3]] for name, style in terrain.STYLES.items()},

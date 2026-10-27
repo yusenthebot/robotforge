@@ -258,6 +258,11 @@ def _object_obstacles(model, data, name: str, owners: dict[int, str] | None = No
 
 def undo_addition(pg: Playground, message: dict) -> dict:
     from robotforge.playground import PlaygroundError
+    from robotforge.viewer.model_create import ModelAddition
+    from robotforge.viewer.model_create import undo as undo_model
+
+    if isinstance(pg._play_addition, ModelAddition):
+        return undo_model(pg, message)
 
     request = _parse(UndoAddition, message, "undo add")
     with pg.session.execution.command("viewer_undo_add"), pg.lessons._lock, pg.session.lock:

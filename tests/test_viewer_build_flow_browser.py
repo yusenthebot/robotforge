@@ -95,7 +95,7 @@ def test_scene_tabs_share_one_row_native_keyboard_does_not_drive_and_build_opens
         await click(tab, "#build-add-robot")
         assert await tab.eval("document.getElementById('world-panel').hidden")
         assert not await tab.eval("document.getElementById('create-options').hidden")
-        assert await tab.eval("document.querySelectorAll('.create-card').length") == 4
+        assert await tab.eval("document.querySelectorAll('#create-list .create-card').length") == 4
         await click(tab, '.create-card[data-template="rover"]')
         assert await tab.eval("document.getElementById('object-placement-controls').hidden")
         await key(tab, "Escape")

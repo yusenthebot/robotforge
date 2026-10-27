@@ -147,6 +147,10 @@ def test_held_touch_cannot_place_after_cancel_or_scene_change_and_fresh_tap_reco
                 server.pg.add_object("external", shape="sphere", size=[0.1], pos=[3, 0])
             await tab.until("document.getElementById('placement-bar').hidden")
             await touch(tab, "touchEnd")
+            version = server.pg.session.version
+            await tab.until(
+                f"window.__robotforge.scene.version === {version} && window.__robotforge.renderedVersion === {version}"
+            )
             await choose_object(tab, "ball")
         expected = 1 if boundary == "edit" else 0
         assert len(server.pg.store.load().objects) == expected

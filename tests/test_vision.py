@@ -60,6 +60,34 @@ def test_blur_shrinks_noise_and_white_balance_takes_out_a_tint():
     assert np.ptp(balanced) < 2  # the average is grey again
 
 
+@pytest.mark.parametrize("gap", [1, 2, 3])
+def test_gap_filling_rejoins_small_breaks_but_keeps_distinct_blobs_separate(gap):
+    mask = np.zeros((35, 50), bool)
+    mask[8:26, 5:20] = True
+    mask[16 : 16 + gap, 5:20] = False
+    mask[8:26, 30:45] = True  # a separate object must stay separate
+    mask[2, 2] = mask[31, 48] = True
+    original = mask.copy()
+    opened = vision.clean(mask)
+    joined = vision.clean(mask, fill_gaps=True)
+    assert len(vision.blobs(opened)) == 3
+    assert len(vision.blobs(joined)) == (2 if gap <= 2 else 3)
+    assert not joined[2, 2] and not joined[31, 48]
+    if gap <= 2:
+        assert joined[8:26, 5:20].all()
+    np.testing.assert_array_equal(mask, original)
+
+
+@pytest.mark.parametrize("fill", [False, True])
+def test_gap_filling_preserves_empty_full_and_image_edge_masks(fill):
+    for value in (False, True):
+        mask = np.full((10, 12), value, bool)
+        np.testing.assert_array_equal(vision.clean(mask, fill_gaps=fill), mask)
+    mask = np.zeros((20, 20), bool)
+    mask[:8, :8] = True
+    np.testing.assert_array_equal(vision.clean(mask, fill_gaps=fill), mask)
+
+
 # ---- blobs and centroids ------------------------------------------------------------------------------------
 
 

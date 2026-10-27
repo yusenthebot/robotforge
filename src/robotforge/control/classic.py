@@ -15,7 +15,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from robotforge.behaviors.drive import DiffDrive
+from robotforge.behaviors.drive import rover_drive
 from robotforge.behaviors.ik import Chain, IKSolver
 from robotforge.control.actuation import ActionScale, TorqueMap
 from robotforge.control.tasks import Task, TaskError
@@ -334,7 +334,7 @@ class GoToGoal:
             raise TaskError("go-to-goal driving works with the drive_to task")
         self.task = task
         try:
-            self.drive = DiffDrive(model, task.robot.name)
+            self.drive = rover_drive(model, task.robot.name, home_qpos(model))
         except (ValueError, KeyError, StopIteration) as exc:
             raise TaskError(str(exc)) from exc
         self.k_turn, self.k_speed = positive("k_turn", k_turn, 100.0), positive("k_speed", k_speed, 100.0)
