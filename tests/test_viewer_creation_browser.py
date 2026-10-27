@@ -54,7 +54,7 @@ def test_empty_world_to_local_robot_placement_cancel_and_map_loop(viewer, size, 
         assert await tab.eval("document.getElementById('empty').hidden")
         await click(tab, "#world-toggle")
         await click(tab, "#empty-add")
-        assert await tab.eval("document.querySelectorAll('.create-card').length") == 4
+        assert await tab.eval("document.querySelectorAll('#create-list .create-card').length") == 4
         await click(tab, '.create-card[data-template="rover"]')
         assert await tab.eval("""(()=>{const r=document.getElementById('placement-bar').getBoundingClientRect(),
           d=document.querySelector('.dock').getBoundingClientRect();

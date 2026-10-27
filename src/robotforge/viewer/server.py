@@ -288,13 +288,26 @@ class ViewerHub:
 
     async def _run_slow(self, ws: WebSocket, msg: dict[str, Any], handler: Callable[[dict[str, Any]], Any]) -> None:
         reply: dict[str, Any] = {"type": "reply", "id": msg.get("id")}
+        from robotforge.viewer.progress import reporting
+
+        loop = asyncio.get_running_loop()
+
+        async def send_progress(event: dict) -> None:
+            with contextlib.suppress(WebSocketDisconnect, RuntimeError, OSError):
+                await ws.send_text(json.dumps({"type": "progress", "id": msg.get("id"), **event}))
+
+        def progress(event: dict) -> None:
+            # Best-effort feedback is sent on the event loop, scoped to this request ID.
+            asyncio.run_coroutine_threadsafe(send_progress(event), loop)
+
         try:
 
             def admitted() -> Any:
                 if msg.get("type") in {"go_to", "mode", "pick_and_place"}:
                     with self.session.execution.command(str(msg["type"])):
                         return handler(msg)
-                return handler(msg)
+                with reporting(progress):
+                    return handler(msg)
 
             reply.update(ok=True, data=await asyncio.to_thread(admitted))
         except (ValueError, KeyError, IndexError, TypeError) as exc:

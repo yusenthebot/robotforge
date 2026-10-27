@@ -173,6 +173,10 @@
       <button class="create-toggle" id="create-toggle" type="button" aria-expanded="false" aria-controls="create-options"><span aria-hidden="true">+</span><span data-i18n="add_robot">Add robot</span></button>
       <div id="create-options" hidden>
         <p class="note" data-i18n="create_lead">Pick a robot, then click an open spot on the ground or a tabletop.</p>
+        <h3 class="section-title" data-i18n="real_models">Robot models</h3>
+        <div class="create-list" id="model-list"></div>
+        <p class="note" data-i18n="model_sources">Library models download on first use. Saved designs reuse your local files.</p>
+        <h3 class="section-title" data-i18n="experiment_templates">Experiment templates</h3>
         <div class="create-list" id="create-list"></div>
       </div>
     </section>
@@ -196,6 +200,11 @@
     <section>
       <h2 class="section-title"><span data-i18n="display">Display</span></h2>
       <label class="check"><input type="checkbox" id="show-collision"><span data-i18n="collision">Show collision shapes</span></label>
+      <div class="size-choices" role="group" aria-label="Lighting" data-i18n-label="lighting">
+        <button class="pill" id="lighting-studio" type="button" aria-pressed="true" data-i18n="lighting_studio">Studio</button>
+        <button class="pill" id="lighting-daylight" type="button" aria-pressed="false" data-i18n="lighting_daylight">Daylight</button>
+      </div>
+      <p class="note" data-i18n="lighting_note">View lighting only; simulated sensors keep their own lighting.</p>
       <label class="check"><input type="checkbox" id="show-shadows" checked><span data-i18n="shadows">Shadows</span></label>
       <label class="check"><input type="checkbox" id="show-screen-drive"><span data-i18n="screen_drive">On-screen driving</span></label>
     </section>

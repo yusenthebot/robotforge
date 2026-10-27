@@ -201,6 +201,7 @@ export const picture = {
     const shadows = renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate = false; // the sun's shadows are the view's, drawn already this frame
     const swapped = [];
+    const restoreLighting = this.api.sensorLighting?.();
     try {
       if (kind === "fisheye") {
         scene.fog = null;
@@ -234,6 +235,7 @@ export const picture = {
         renderer.render(scene, cam);
       }
     } finally {
+      restoreLighting?.();
       for (const [m, material] of swapped) m.material = material;
       for (const o of hidden) o.visible = true;
       scene.background = before.background;

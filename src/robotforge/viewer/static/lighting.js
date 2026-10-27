@@ -137,5 +137,25 @@ export function createLighting(scene, renderer) {
     sun.shadow.needsUpdate = true;
   }
 
-  return { sun, bind, update, restore, state: () => fitted };
+  let preset = "studio";
+  function select(name) {
+    if (name !== "studio" && name !== "daylight") return false;
+    preset = name;
+    const daylight = name === "daylight";
+    scene.environmentIntensity = daylight ? 0.6 : 0.85;
+    hemi.color.setHex(daylight ? 0xe4edff : 0xdfe8ff);
+    hemi.groundColor.setHex(daylight ? 0x6b655e : 0x3a3328);
+    hemi.intensity = daylight ? 0.55 : 0.35;
+    sun.color.setHex(daylight ? 0xffffff : 0xfff6ec);
+    sun.intensity = daylight ? 1.35 : 1.9;
+    return true;
+  }
+
+  function sensorLighting() {
+    const view = preset;
+    select("studio");
+    return () => select(view);
+  }
+
+  return { sun, bind, update, restore, select, sensorLighting, preset: () => preset, state: () => fitted };
 }

@@ -78,12 +78,12 @@ export function initCreation({ start, submit, cancel, change }) {
     // Authored worlds may contain many full turns; copy the same heading within the request's angle bounds.
     yaw = kind === "edit" ? entry.yaw : kind === "copy" || kind === "start" ? entry.yaw % 360 : 0; session++;
     repeat.checked = false; syncRepeat();
-    $("placement-hint").textContent = t(kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
+    $("placement-hint").textContent = t(kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     $("place-rotate").textContent = t("rotate_place", { angle: yaw });
-    $("object-placement-controls").hidden = kind === "robot";
+    $("object-placement-controls").hidden = kind === "robot" || kind === "model";
     for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start";
-    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start";
+    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model";
     $("placement-title").textContent = t(kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
@@ -92,17 +92,18 @@ export function initCreation({ start, submit, cancel, change }) {
   function card(entry, kind, busy) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = kind === "robot" ? "create-card" : "object-card";
-    button.dataset[kind === "robot" ? "template" : "object"] = entry.name;
+    button.className = kind === "robot" || kind === "model" ? "create-card" : "object-card";
+    button.dataset[kind === "model" ? "model" : kind === "robot" ? "template" : "object"] = entry.name;
+    if (kind === "model") button.dataset.source = entry.source;
     button.disabled = busy;
     const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     icon.setAttribute("viewBox", "0 0 50 46"); icon.setAttribute("aria-hidden", "true");
     const path = document.createElementNS(icon.namespaceURI, "path");
-    path.setAttribute("d", paths[entry.name] || paths.block); icon.append(path);
+    path.setAttribute("d", paths[entry.name] || paths[entry.kind === "quadruped" ? "quadruped" : "arm"] || paths.block); icon.append(path);
     const copy = document.createElement("span"), title = document.createElement("strong"), desc = document.createElement("span");
     const key = kind === "robot" ? "starter" : "prop";
-    title.textContent = tOr(`${key}_${entry.name}`, entry.name);
-    desc.textContent = tOr(`${key}_${entry.name}_desc`, entry.summary || "");
+    title.textContent = kind === "model" ? entry.title : tOr(`${key}_${entry.name}`, entry.name);
+    desc.textContent = kind === "model" ? t(entry.local ? "model_local" : entry.downloaded ? "model_cached" : "model_download", { size: entry.download_mb }) : tOr(`${key}_${entry.name}_desc`, entry.summary || "");
     copy.append(title, desc); button.append(icon, copy);
     button.addEventListener("click", () => begin(entry, kind, title.textContent));
     return button;
@@ -121,11 +122,12 @@ export function initCreation({ start, submit, cancel, change }) {
       point = null; $("place-here").disabled = true;
       $("placement-hint").textContent = t("place_next_hint");
     },
-    preview: () => item && item.kind !== "robot" && item.kind !== "start" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
-    open() { setOpen(true); $("create-list").querySelector("button")?.focus(); },
-    render(entries, editable, busy, objects = []) {
+    preview: () => item && item.kind !== "robot" && item.kind !== "start" && item.kind !== "model" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
+    open() { setOpen(true); $("model-list").querySelector("button")?.focus(); },
+    render(entries, editable, busy, objects = [], models = []) {
       $("create-section").hidden = !editable || !entries.length;
       $("create-list").replaceChildren(...entries.map((entry) => card(entry, "robot", busy)));
+      $("model-list").replaceChildren(...models.map((entry) => card(entry, "model", busy)));
       $("object-list").replaceChildren(...(editable ? objects : []).map((entry) => card(entry, "object", busy)));
       $("objects-note").hidden = editable;
       $("build-pick-map").hidden = editable;
@@ -142,6 +144,11 @@ export function initCreation({ start, submit, cancel, change }) {
       $("place-rotate").disabled = value;
       repeat.disabled = value;
       $("placement-bar").setAttribute("aria-busy", String(value));
+    },
+    progress(stage, fraction) {
+      if (!sending || item?.kind !== "model") return;
+      const percent = Number.isFinite(fraction) ? ` ${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}%` : "";
+      $("placement-hint").textContent = tOr(`model_stage_${stage}`, t("model_stage_prepare")) + percent;
     },
     clear() {
       session++; item = point = null;
