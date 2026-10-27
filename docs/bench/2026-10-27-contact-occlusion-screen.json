@@ -1,0 +1,1055 @@
+{
+  "schema": "robotforge.local_benchmark_report.v1",
+  "experiment_date": "2026-10-27",
+  "decision": "REJECT_FROZEN_VISUAL_CANDIDATE",
+  "production_runtime_changed": false,
+  "base_commit": "a8b7fe9451ca3ec3715c9cfe4ecc847575cfe3e1",
+  "baseline_source_sha256": "154677d641d7627062d44c0ed35ca49ccb816f4278ba3926bc45e4725deb43d7",
+  "candidate_source_sha256": "cd53e2c2b29dde34028d3450945353ec9ddb863ed28f0e66b79c3e98fad08399",
+  "candidate_files": {
+    "src/robotforge/viewer/static/app.js": "2476cd355852efbfb6f43a6af6329e5bbee3e1acaeb19d568feaf86cf6791e27",
+    "src/robotforge/viewer/static/contact-occlusion.js": "7077eed96ae76d146e20186a01618625c353eb2eeb654afe04df09b7cf11f93a"
+  },
+  "plan_sha256": "6e947f2c819bf0a63cd9ee667dcb25adcfb10860170007ae67eb8d402420136e",
+  "parameters": {
+    "radius_m": 0.06,
+    "max_indirect_attenuation": 0.25,
+    "samples": 12,
+    "resolution_scale": 0.5,
+    "long_edge_cap": 1024,
+    "bilateral_depth_tolerance_m": 0.01,
+    "temporal_accumulation": false,
+    "blur_pass": false
+  },
+  "visual_review": "Root and independent reviewer reject: insufficient shared ordinary-distance readability gain. Raised/environment static frames show no obvious false patch/broad darkening/halo; not a temporal certificate.",
+  "model_controls": {
+    "malo-contact": {
+      "arrays": 485,
+      "different_arrays": [
+        "mesh_pathadr",
+        "paths"
+      ],
+      "mesh_path_pairs": [
+        {
+          "before": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-contact-occlusion/before/malo-contact/home/cache/import/meshes/base_link-df294dff02.stl",
+          "after": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-contact-occlusion/after-corrected/malo-contact/home/cache/import/meshes/base_link-df294dff02.stl",
+          "sha256": "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+        }
+      ],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        4.393549542000983,
+        5.909812541969586
+      ]
+    },
+    "malo-raised": {
+      "arrays": 485,
+      "different_arrays": [
+        "mesh_pathadr",
+        "paths"
+      ],
+      "mesh_path_pairs": [
+        {
+          "before": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-contact-occlusion/before/malo-raised/home/cache/import/meshes/base_link-df294dff02.stl",
+          "after": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-contact-occlusion/after-corrected/malo-raised/home/cache/import/meshes/base_link-df294dff02.stl",
+          "sha256": "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+        }
+      ],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        3.562846124987118,
+        3.3189834160148166
+      ]
+    },
+    "malo-environment": {
+      "arrays": 485,
+      "different_arrays": [
+        "mesh_pathadr",
+        "paths"
+      ],
+      "mesh_path_pairs": [
+        {
+          "before": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-contact-occlusion/before/malo-environment/home/cache/import/meshes/base_link-df294dff02.stl",
+          "after": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-27-contact-occlusion/after-corrected/malo-environment/home/cache/import/meshes/base_link-df294dff02.stl",
+          "sha256": "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+        }
+      ],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        3.8507314999587834,
+        4.093041834014002
+      ]
+    },
+    "go2-contact": {
+      "arrays": 485,
+      "different_arrays": [],
+      "mesh_path_pairs": [],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        2.522217916965019,
+        3.04941224999493
+      ]
+    },
+    "go2-raised": {
+      "arrays": 485,
+      "different_arrays": [],
+      "mesh_path_pairs": [],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        2.3568120839772746,
+        1.8003032089909539
+      ]
+    },
+    "go2-environment": {
+      "arrays": 485,
+      "different_arrays": [],
+      "mesh_path_pairs": [],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        2.274412917031441,
+        1.755139250017237
+      ]
+    },
+    "panda-contact": {
+      "arrays": 485,
+      "different_arrays": [],
+      "mesh_path_pairs": [],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        1.9352319579920731,
+        1.7222885419614613
+      ]
+    },
+    "panda-raised": {
+      "arrays": 485,
+      "different_arrays": [],
+      "mesh_path_pairs": [],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        1.671777417010162,
+        1.5046685420093127
+      ]
+    },
+    "panda-environment": {
+      "arrays": 485,
+      "different_arrays": [],
+      "mesh_path_pairs": [],
+      "world_equal": true,
+      "warm_interactive_seconds": [
+        1.7114443749887869,
+        1.3957154169911519
+      ]
+    }
+  },
+  "views": [
+    {
+      "case": "malo-contact",
+      "view": "normal",
+      "camera_max_error": 2.220446049250313e-15,
+      "before_cost": {
+        "draw_p50_ms": 0.10000002384185791,
+        "draw_p95_ms": 0.25500002801418276,
+        "raf_fps": 60.00300015000751
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.20000004768371582,
+        "raf_fps": 60.00300015000751
+      },
+      "increment_ms": {
+        "p50": 0.09999996423721313,
+        "p95": -0.054999980330466935
+      },
+      "extra_depth_draws": 48,
+      "extra_AO_draws": 1,
+      "textures": [
+        8,
+        11
+      ],
+      "programs": [
+        19,
+        23
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.0019020182291666667,
+        "max_absolute_delta_8bit": 29.0,
+        "fraction_pixels_any_channel_changed": 0.003685302734375,
+        "disabled_mean_absolute_delta_8bit": 4.9397786458333334e-05,
+        "disabled_max_absolute_delta_8bit": 29.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "malo-contact",
+      "view": "detail",
+      "camera_max_error": 3.3306690738754696e-16,
+      "before_cost": {
+        "draw_p50_ms": 0.10000002384185791,
+        "draw_p95_ms": 0.20000004768371582,
+        "raf_fps": 60.00300015000751
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.10000002384185791,
+        "draw_p95_ms": 0.20000004768371582,
+        "raf_fps": 60.00600060006002
+      },
+      "increment_ms": {
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "extra_depth_draws": 40,
+      "extra_AO_draws": 1,
+      "textures": [
+        8,
+        11
+      ],
+      "programs": [
+        19,
+        23
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.008730794270833333,
+        "max_absolute_delta_8bit": 24.0,
+        "fraction_pixels_any_channel_changed": 0.01602197265625,
+        "disabled_mean_absolute_delta_8bit": 1.2858072916666667e-05,
+        "disabled_max_absolute_delta_8bit": 24.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "malo-raised",
+      "view": "normal",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.15000000596046448,
+        "draw_p95_ms": 0.30000001192092896,
+        "raf_fps": 60.00300015000748
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.30000001192092896,
+        "raf_fps": 60.00300015000748
+      },
+      "increment_ms": {
+        "p50": 0.04999998211860657,
+        "p95": 0.0
+      },
+      "extra_depth_draws": 48,
+      "extra_AO_draws": 1,
+      "textures": [
+        8,
+        11
+      ],
+      "programs": [
+        20,
+        24
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.00105419921875,
+        "max_absolute_delta_8bit": 29.0,
+        "fraction_pixels_any_channel_changed": 0.00197119140625,
+        "disabled_mean_absolute_delta_8bit": 9.847005208333333e-06,
+        "disabled_max_absolute_delta_8bit": 29.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "malo-raised",
+      "view": "detail",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.10000002384185791,
+        "draw_p95_ms": 0.20000002086162566,
+        "raf_fps": 60.00300015000751
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.29999998211860657,
+        "draw_p95_ms": 0.40000003576278687,
+        "raf_fps": 58.06638923836251
+      },
+      "increment_ms": {
+        "p50": 0.19999995827674866,
+        "p95": 0.2000000149011612
+      },
+      "extra_depth_draws": 40,
+      "extra_AO_draws": 1,
+      "textures": [
+        8,
+        11
+      ],
+      "programs": [
+        20,
+        24
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.003888753255208333,
+        "max_absolute_delta_8bit": 27.0,
+        "fraction_pixels_any_channel_changed": 0.007197265625,
+        "disabled_mean_absolute_delta_8bit": 1.2613932291666667e-05,
+        "disabled_max_absolute_delta_8bit": 27.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "malo-environment",
+      "view": "normal",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.25500002801418276,
+        "raf_fps": 60.00300015000751
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.20000004768371582,
+        "draw_p95_ms": 0.30000001192092896,
+        "raf_fps": 57.60092161474583
+      },
+      "increment_ms": {
+        "p50": 5.960464477539063e-08,
+        "p95": 0.0449999839067462
+      },
+      "extra_depth_draws": 56,
+      "extra_AO_draws": 1,
+      "textures": [
+        8,
+        11
+      ],
+      "programs": [
+        19,
+        23
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.005149739583333333,
+        "max_absolute_delta_8bit": 29.0,
+        "fraction_pixels_any_channel_changed": 0.0095087890625,
+        "disabled_mean_absolute_delta_8bit": 2.1484375e-05,
+        "disabled_max_absolute_delta_8bit": 29.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "malo-environment",
+      "view": "detail",
+      "camera_max_error": 3.3306690738754696e-16,
+      "before_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.20000004768371582,
+        "raf_fps": 60.00300015000745
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.30000001192092896,
+        "raf_fps": 58.53944094833896
+      },
+      "increment_ms": {
+        "p50": 0.0,
+        "p95": 0.09999996423721313
+      },
+      "extra_depth_draws": 48,
+      "extra_AO_draws": 1,
+      "textures": [
+        8,
+        11
+      ],
+      "programs": [
+        19,
+        23
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.013344889322916666,
+        "max_absolute_delta_8bit": 28.0,
+        "fraction_pixels_any_channel_changed": 0.02285595703125,
+        "disabled_mean_absolute_delta_8bit": 1.3997395833333333e-05,
+        "disabled_max_absolute_delta_8bit": 28.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "go2-contact",
+      "view": "normal",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.40000003576278687,
+        "draw_p95_ms": 0.5549999803304669,
+        "raf_fps": 59.99999999999999
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.5,
+        "draw_p95_ms": 0.5549999803304669,
+        "raf_fps": 59.99999999999999
+      },
+      "increment_ms": {
+        "p50": 0.09999996423721313,
+        "p95": 0.0
+      },
+      "extra_depth_draws": 149,
+      "extra_AO_draws": 1,
+      "textures": [
+        6,
+        9
+      ],
+      "programs": [
+        11,
+        16
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.029819173177083335,
+        "max_absolute_delta_8bit": 90.0,
+        "fraction_pixels_any_channel_changed": 0.01752734375,
+        "disabled_mean_absolute_delta_8bit": 0.022876790364583333,
+        "disabled_max_absolute_delta_8bit": 90.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "go2-contact",
+      "view": "detail",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.30000001192092896,
+        "draw_p95_ms": 0.5100000292062754,
+        "raf_fps": 60.00300015000748
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.3999999761581421,
+        "draw_p95_ms": 0.5,
+        "raf_fps": 60.00000000000002
+      },
+      "increment_ms": {
+        "p50": 0.09999996423721313,
+        "p95": -0.010000029206275407
+      },
+      "extra_depth_draws": 117,
+      "extra_AO_draws": 1,
+      "textures": [
+        6,
+        9
+      ],
+      "programs": [
+        11,
+        16
+      ],
+      "AO_min_8bit": 247,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.013510009765625,
+        "max_absolute_delta_8bit": 38.0,
+        "fraction_pixels_any_channel_changed": 0.0238701171875,
+        "disabled_mean_absolute_delta_8bit": 0.002456461588541667,
+        "disabled_max_absolute_delta_8bit": 38.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "go2-raised",
+      "view": "normal",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.4000000059604645,
+        "draw_p95_ms": 0.5,
+        "raf_fps": 60.003000150007495
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.5,
+        "draw_p95_ms": 0.6550000369548795,
+        "raf_fps": 60.00300015000751
+      },
+      "increment_ms": {
+        "p50": 0.09999999403953552,
+        "p95": 0.15500003695487952
+      },
+      "extra_depth_draws": 149,
+      "extra_AO_draws": 1,
+      "textures": [
+        6,
+        9
+      ],
+      "programs": [
+        11,
+        16
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.016695068359375,
+        "max_absolute_delta_8bit": 42.0,
+        "fraction_pixels_any_channel_changed": 0.015991455078125,
+        "disabled_mean_absolute_delta_8bit": 0.010711181640625,
+        "disabled_max_absolute_delta_8bit": 42.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "go2-raised",
+      "view": "detail",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.3499999940395355,
+        "draw_p95_ms": 0.5,
+        "raf_fps": 59.99999999999999
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.5,
+        "draw_p95_ms": 0.6000000238418579,
+        "raf_fps": 60.00300015000748
+      },
+      "increment_ms": {
+        "p50": 0.15000000596046448,
+        "p95": 0.10000002384185791
+      },
+      "extra_depth_draws": 117,
+      "extra_AO_draws": 1,
+      "textures": [
+        6,
+        9
+      ],
+      "programs": [
+        11,
+        16
+      ],
+      "AO_min_8bit": 247,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.0067239583333333335,
+        "max_absolute_delta_8bit": 31.0,
+        "fraction_pixels_any_channel_changed": 0.012779541015625,
+        "disabled_mean_absolute_delta_8bit": 0.001277099609375,
+        "disabled_max_absolute_delta_8bit": 31.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "go2-environment",
+      "view": "normal",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.40000003576278687,
+        "draw_p95_ms": 0.5550000131130216,
+        "raf_fps": 60.00300015000751
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.5,
+        "draw_p95_ms": 0.6550000041723248,
+        "raf_fps": 60.003000150007495
+      },
+      "increment_ms": {
+        "p50": 0.09999996423721313,
+        "p95": 0.09999999105930324
+      },
+      "extra_depth_draws": 157,
+      "extra_AO_draws": 1,
+      "textures": [
+        6,
+        9
+      ],
+      "programs": [
+        11,
+        16
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.011244303385416666,
+        "max_absolute_delta_8bit": 36.0,
+        "fraction_pixels_any_channel_changed": 0.022637451171875,
+        "disabled_mean_absolute_delta_8bit": 0.021271484375,
+        "disabled_max_absolute_delta_8bit": 80.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "go2-environment",
+      "view": "detail",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.30000001192092896,
+        "draw_p95_ms": 0.40000003576278687,
+        "raf_fps": 59.99999999999999
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.5,
+        "draw_p95_ms": 0.5549999803304669,
+        "raf_fps": 60.00300015000751
+      },
+      "increment_ms": {
+        "p50": 0.19999998807907104,
+        "p95": 0.15499994456768007
+      },
+      "extra_depth_draws": 125,
+      "extra_AO_draws": 1,
+      "textures": [
+        6,
+        9
+      ],
+      "programs": [
+        11,
+        16
+      ],
+      "AO_min_8bit": 247,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.024560628255208335,
+        "max_absolute_delta_8bit": 55.0,
+        "fraction_pixels_any_channel_changed": 0.04091748046875,
+        "disabled_mean_absolute_delta_8bit": 0.0025738118489583334,
+        "disabled_max_absolute_delta_8bit": 55.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "panda-contact",
+      "view": "normal",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.4000000089406967,
+        "raf_fps": 60.00300015000751
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.30000001192092896,
+        "raf_fps": 60.00300015000751
+      },
+      "increment_ms": {
+        "p50": 0.0,
+        "p95": -0.09999999701976775
+      },
+      "extra_depth_draws": 66,
+      "extra_AO_draws": 1,
+      "textures": [
+        5,
+        8
+      ],
+      "programs": [
+        8,
+        12
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.002182373046875,
+        "max_absolute_delta_8bit": 3.0,
+        "fraction_pixels_any_channel_changed": 0.004898681640625,
+        "disabled_mean_absolute_delta_8bit": 0.00044694010416666667,
+        "disabled_max_absolute_delta_8bit": 1.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "panda-contact",
+      "view": "detail",
+      "camera_max_error": 4.440892098500626e-16,
+      "before_cost": {
+        "draw_p50_ms": 0.10000002384185791,
+        "draw_p95_ms": 0.19999998807907104,
+        "raf_fps": 59.99999999999999
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.2999999850988388,
+        "raf_fps": 60.00000000000002
+      },
+      "increment_ms": {
+        "p50": 0.09999996423721313,
+        "p95": 0.09999999701976775
+      },
+      "extra_depth_draws": 49,
+      "extra_AO_draws": 1,
+      "textures": [
+        5,
+        8
+      ],
+      "programs": [
+        8,
+        12
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.005864583333333334,
+        "max_absolute_delta_8bit": 3.0,
+        "fraction_pixels_any_channel_changed": 0.011565185546875,
+        "disabled_mean_absolute_delta_8bit": 0.00030631510416666665,
+        "disabled_max_absolute_delta_8bit": 1.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "panda-raised",
+      "view": "normal",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.30000001192092896,
+        "raf_fps": 60.00300015000751
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.30000001192092896,
+        "raf_fps": 59.99999999999999
+      },
+      "increment_ms": {
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "extra_depth_draws": 66,
+      "extra_AO_draws": 1,
+      "textures": [
+        5,
+        8
+      ],
+      "programs": [
+        8,
+        12
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.0012484537760416668,
+        "max_absolute_delta_8bit": 3.0,
+        "fraction_pixels_any_channel_changed": 0.002513671875,
+        "disabled_mean_absolute_delta_8bit": 2.4495442708333333e-05,
+        "disabled_max_absolute_delta_8bit": 1.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "panda-raised",
+      "view": "detail",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.10000002384185791,
+        "draw_p95_ms": 0.19999998807907104,
+        "raf_fps": 59.99999999999999
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.2999999850988388,
+        "raf_fps": 60.00300015000751
+      },
+      "increment_ms": {
+        "p50": 0.09999996423721313,
+        "p95": 0.09999999701976775
+      },
+      "extra_depth_draws": 49,
+      "extra_AO_draws": 1,
+      "textures": [
+        5,
+        8
+      ],
+      "programs": [
+        8,
+        12
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.003439208984375,
+        "max_absolute_delta_8bit": 3.0,
+        "fraction_pixels_any_channel_changed": 0.006343505859375,
+        "disabled_mean_absolute_delta_8bit": 1.6194661458333332e-05,
+        "disabled_max_absolute_delta_8bit": 1.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "panda-environment",
+      "view": "normal",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.3549999922513959,
+        "raf_fps": 60.00300015000751
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.20000001788139343,
+        "draw_p95_ms": 0.3549999922513959,
+        "raf_fps": 60.00000000000001
+      },
+      "increment_ms": {
+        "p50": 2.9802322387695312e-08,
+        "p95": 0.0
+      },
+      "extra_depth_draws": 66,
+      "extra_AO_draws": 1,
+      "textures": [
+        5,
+        8
+      ],
+      "programs": [
+        8,
+        12
+      ],
+      "AO_min_8bit": 249,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.002505126953125,
+        "max_absolute_delta_8bit": 3.0,
+        "fraction_pixels_any_channel_changed": 0.005739013671875,
+        "disabled_mean_absolute_delta_8bit": 0.0004510091145833333,
+        "disabled_max_absolute_delta_8bit": 1.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    },
+    {
+      "case": "panda-environment",
+      "view": "detail",
+      "camera_max_error": 0.0,
+      "before_cost": {
+        "draw_p50_ms": 0.10000002384185791,
+        "draw_p95_ms": 0.20000002086162566,
+        "raf_fps": 60.00600060006
+      },
+      "candidate_cost": {
+        "draw_p50_ms": 0.19999998807907104,
+        "draw_p95_ms": 0.30000001192092896,
+        "raf_fps": 59.99999999999999
+      },
+      "increment_ms": {
+        "p50": 0.09999996423721313,
+        "p95": 0.0999999910593033
+      },
+      "extra_depth_draws": 49,
+      "extra_AO_draws": 1,
+      "textures": [
+        5,
+        8
+      ],
+      "programs": [
+        8,
+        12
+      ],
+      "AO_min_8bit": 248,
+      "disabled_screenshot_diagnostic": {
+        "mean_absolute_delta_8bit": 0.005998453776041667,
+        "max_absolute_delta_8bit": 3.0,
+        "fraction_pixels_any_channel_changed": 0.01196240234375,
+        "disabled_mean_absolute_delta_8bit": 0.000440185546875,
+        "disabled_max_absolute_delta_8bit": 1.0,
+        "scope": "Includes HUD/browser-render timing; not a quality score or acceptance gate."
+      }
+    }
+  ],
+  "additional_targets": [
+    {
+      "width": 1024,
+      "height": 640,
+      "type": 1009,
+      "format": 1023,
+      "depthBuffer": true,
+      "depthTextureType": 1014
+    },
+    {
+      "width": 1024,
+      "height": 640,
+      "type": 1009,
+      "format": 1023,
+      "depthBuffer": false,
+      "depthTextureType": null
+    }
+  ],
+  "nominal_color_pixel_bytes": 5242880,
+  "measured_vram": false,
+  "storage_exclusions": "Depth, driver and transient storage unmeasured.",
+  "videos": {
+    "movie-after-go2-contact": {
+      "video_sha256": "c5c9c7f115995308d5fcb68c1b6638b030d0a3a0ca7d324c0f65ae66f3d1a2ef",
+      "video_bytes": 865786,
+      "raw_frame_count": 359,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-go2-contact/workflow.mp4"
+    },
+    "movie-after-go2-environment": {
+      "video_sha256": "883268a2a24e1100680ebe029fd6afdc3669c512b2e1d7762a4a488d2b177f8e",
+      "video_bytes": 910854,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-go2-environment/workflow.mp4"
+    },
+    "movie-after-go2-raised": {
+      "video_sha256": "590d18a2deb0e521604ffda20f1e9f30e541357a10348646019863ccfa4e6b8a",
+      "video_bytes": 864096,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-go2-raised/workflow.mp4"
+    },
+    "movie-after-malo-contact": {
+      "video_sha256": "2b2fb50e87eb418a98778717574728a007b2f07e3495cea4a9461b265c2f345e",
+      "video_bytes": 610273,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-malo-contact/workflow.mp4"
+    },
+    "movie-after-malo-environment": {
+      "video_sha256": "8d996ff367a90613caf9fc9608da4979bb6f62a79ea18e7bc279a5b8c313d2b0",
+      "video_bytes": 657681,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-malo-environment/workflow.mp4"
+    },
+    "movie-after-malo-raised": {
+      "video_sha256": "48d6a915bf6e7b32b94cafff913c6e1a3274aefc95ff456d9354f8d581b4faed",
+      "video_bytes": 585014,
+      "raw_frame_count": 304,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-malo-raised/workflow.mp4"
+    },
+    "movie-after-panda-contact": {
+      "video_sha256": "5b50f83f3047beaa42cee6851b80c815ba171e3aa41a007bd3b7da5c1b14f448",
+      "video_bytes": 943373,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-panda-contact/workflow.mp4"
+    },
+    "movie-after-panda-environment": {
+      "video_sha256": "4f694559c1430cfd52a40b2c237eee929704ecf4928bfd2065ce9ed12c1970d8",
+      "video_bytes": 840060,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-panda-environment/workflow.mp4"
+    },
+    "movie-after-panda-raised": {
+      "video_sha256": "6d0828eae0152e5c711b81f2799e9f7224036fd9ef619a054efc6ddc679fc191",
+      "video_bytes": 934378,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-after-panda-raised/workflow.mp4"
+    },
+    "movie-before-go2-contact": {
+      "video_sha256": "a2df331376c01492a06bdcdd57ea38fe2386d687ad65641e179fc7a3b00705df",
+      "video_bytes": 863380,
+      "raw_frame_count": 353,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-go2-contact/workflow.mp4"
+    },
+    "movie-before-go2-environment": {
+      "video_sha256": "f4e3b36ed71c214b8d72b5d64a10c19c0fa4ae2d1e6a348889691355c3d75e98",
+      "video_bytes": 915553,
+      "raw_frame_count": 352,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-go2-environment/workflow.mp4"
+    },
+    "movie-before-go2-raised": {
+      "video_sha256": "8cd5f2a931733430210e3efd86f68f18b37930de41f8b48ae4fac5555d96098d",
+      "video_bytes": 860378,
+      "raw_frame_count": 359,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-go2-raised/workflow.mp4"
+    },
+    "movie-before-malo-contact": {
+      "video_sha256": "c5d416fe2e69d034de56187192901d0a9e290ad99028aa9d6cf90d85bf1fb3da",
+      "video_bytes": 611673,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-malo-contact/workflow.mp4"
+    },
+    "movie-before-malo-environment": {
+      "video_sha256": "079021b9a31c66eb019293299e68802c4924950d15e86908794193aa01661901",
+      "video_bytes": 655620,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-malo-environment/workflow.mp4"
+    },
+    "movie-before-malo-raised": {
+      "video_sha256": "52c4f8fdb6420c2b36fd3db9f87e98b8355a3aa08b916978a9bab44f8ea09704",
+      "video_bytes": 605598,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-malo-raised/workflow.mp4"
+    },
+    "movie-before-panda-contact": {
+      "video_sha256": "a1790f3dbf9bf7c08c130b7fcc66a494b7b894448d8c2c56b62d7f34ab4a92dc",
+      "video_bytes": 943177,
+      "raw_frame_count": 355,
+      "duration_seconds": 6.133333,
+      "decoded_frame_count": 184,
+      "decode_exit_code": 0,
+      "path": "movie-before-panda-contact/workflow.mp4"
+    },
+    "movie-before-panda-environment": {
+      "video_sha256": "f6799cd4ee875a66a2720e1edfdf13a138e566267e97bc4c848a786690fcefbe",
+      "video_bytes": 841165,
+      "raw_frame_count": 357,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-panda-environment/workflow.mp4"
+    },
+    "movie-before-panda-raised": {
+      "video_sha256": "d547bb181ca5463413a2f73499133686198bb637be03873c39097b6e7b9a8ccd",
+      "video_bytes": 931166,
+      "raw_frame_count": 360,
+      "duration_seconds": 6.1,
+      "decoded_frame_count": 183,
+      "decode_exit_code": 0,
+      "path": "movie-before-panda-raised/workflow.mp4"
+    }
+  },
+  "root_decoded_samples_inspected": 108,
+  "verification": {
+    "offline_wheel": "passed",
+    "product_files_byte_identical": 407,
+    "wheel_bytes": 3919038,
+    "ruff_check": "passed",
+    "ruff_format": "699 files formatted",
+    "integrity_checks": 7989,
+    "integrity_failures": [],
+    "original_WIP_preserved": 13,
+    "optional_tools": {
+      "mypy": null,
+      "pyright": null,
+      "bandit": null,
+      "pip-audit": null
+    },
+    "pytest": "Not rerun for documentation-only change. PR35 experiment-record tests and PR34 production checks remain scoped to identical production source; no candidate suite/smoke/budget certification."
+  },
+  "retained_failures": [
+    "First candidate partial cohort aborts at nonzero GL check.",
+    "Diagnostic GL1282/all-zero AO readback without shader diagnostic errors.",
+    "First diagnostic HTTP proxy failure; localhost exclusions restored for following command."
+  ],
+  "measurement_repair": {
+    "candidate_source_or_parameters_changed": false,
+    "helper_change": "Synchronous AO read unbinds/restores PIXEL_PACK_BUFFER with no await; disabled screenshot renders without unnecessary raw pixel read.",
+    "original_GL_trigger_proven": false,
+    "corrected_bound_PBO_observations": 0
+  },
+  "limitations": [
+    "Disabled images near-identical, not strict pixel equality; localized HUD/sensor/lidar differences have no established cause.",
+    "Single sequential warm GPU-finished samples and paused RAF, not cold/active simulation or product budgets.",
+    "Movies use scripted ordinary-distance cameras, paused physics; no native gameplay inputs, joint motion or every-frame temporal certification.",
+    "Candidate lifecycle/context/sensor/multi-renderer behavior not certified; rejected before full suite/smoke/original budgets.",
+    "Companion JSON is a local benchmark report, not a registered experiment run."
+  ],
+  "evidence_relative_to_checkout": "../robotforge-evidence/2026-10-27-contact-occlusion",
+  "goal_remains_active": true,
+  "next_playability_increment": "Move/rotate existing ramp/stairs with source-preserving fields and guarded Undo.",
+  "single_action_success_tuning": "deferred"
+}
