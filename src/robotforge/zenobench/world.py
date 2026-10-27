@@ -31,6 +31,10 @@ CONTACT_TIMECONST = 0.003  # s
 SUBSTEPS = 8  # per 1/120 s PhysX step: at 4, a pinched can slid out while the arm swung it up
 BASE_KP = 1.0e5  # 1/s^2: the base follows its anchor like a stiff joint
 BASE_KD = 1.0e3
+# An anchor moving faster than this is a placement, not a drive: ZenoBench drives at most 0.35 m/s and
+# 0.8 rad/s, and puts the robot at an episode's start by dragging the anchor at 2.4 m/s straight through walls.
+PLACE_SPEED = 1.5  # m/s
+PLACE_TURN = 3.0  # rad/s
 ISAAC_APERTURE_MM = 20.955  # Isaac Lab's default horizontal aperture
 SUN_HEIGHT = 2.5  # m above the robot's base: the shadowed sun's position, which centres its shadow map
 SUN_REACH = 5.0  # m around it that the shadow map covers (4096 texels: about 2.4 mm each)
@@ -222,6 +226,13 @@ class World:
             q = self._anchor_q(i)
             self.data.qpos[item[1]] = q
             self._planar_prev.append(q)
+        # the robot's geoms, by base: switched off while the base is being placed
+        self._robot_geoms = []
+        for p, *_ in self._planar:
+            root = m.body_rootid[m.body(p.body).id]
+            g = np.flatnonzero(m.body_rootid[m.geom_bodyid] == root)
+            self._robot_geoms.append((g, m.geom_contype[g].copy(), m.geom_conaffinity[g].copy()))
+        self._placing = [False] * len(self._planar)
 
     def _set_gains(self, name: str, stiffness: float, damping: float, max_force: float, acceleration: bool) -> None:
         m = self.model
@@ -261,6 +272,33 @@ class World:
         return mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name) >= 0
 
     # ---------------------------------------------------------- stepping
+    def _place(self, i: int, q: np.ndarray) -> None:
+        """Put the base where its anchor is, passing through whatever is in between.
+
+        In PhysX the anchor is a rigid joint that wins over contacts, so a placement drag ends with the robot
+        at the start even through a wall; here the wall would win and stop the robot short of it (inside
+        it, every later motion refused). So the base follows the anchor exactly, and the robot collides with
+        nothing until the anchor slows to a drive again: no arm flung by a wall, nothing knocked over."""
+        m, d = self.model, self.data
+        planar, qadr, act, _ = self._planar[i]
+        if not self._placing[i]:
+            self._placing[i] = True
+            g = self._robot_geoms[i][0]
+            m.geom_contype[g] = 0
+            m.geom_conaffinity[g] = 0
+            log.info("base placement: the robot passes through obstacles until it arrives")
+        d.qpos[qadr] = q
+        d.qvel[[m.jnt_dofadr[m.joint(n).id] for n in planar.joints]] = 0.0
+        d.ctrl[act] = q
+
+    def _end_place(self, i: int) -> None:
+        g, contype, conaffinity = self._robot_geoms[i]
+        self.model.geom_contype[g] = contype
+        self.model.geom_conaffinity[g] = conaffinity
+        self._placing[i] = False
+        x, y, yaw = self._planar_prev[i] + np.asarray(self._planar[i][0].origin)
+        log.info("base placement: arrived at (%.2f, %.2f, %.0f deg); contacts back on", x, y, math.degrees(yaw))
+
     def _anchor_q(self, i: int) -> np.ndarray:
         p, qadr, _, prim = self._planar[i]
         pos = prim.GetAttribute("physics:localPos0").Get()
@@ -287,9 +325,14 @@ class World:
                 d.ctrl[self._act] = self.targets
             for i, (_, _, act, _) in enumerate(self._planar):
                 q = self._anchor_q(i)
-                vel = (q - self._planar_prev[i]) / self.dt
+                jump = q - self._planar_prev[i]
                 self._planar_prev[i] = q
-                d.ctrl[act] = q + vel * (BASE_KD / BASE_KP)  # velocity feed-forward: no lag while driving
+                if math.hypot(jump[0], jump[1]) > PLACE_SPEED * self.dt or abs(jump[2]) > PLACE_TURN * self.dt:
+                    self._place(i, q)
+                    continue
+                if self._placing[i]:
+                    self._end_place(i)
+                d.ctrl[act] = q + jump / self.dt * (BASE_KD / BASE_KP)  # velocity feed-forward: no lag
             for _ in range(self.substeps):
                 mujoco.mj_step(m, d)
                 if len(self._vdof):

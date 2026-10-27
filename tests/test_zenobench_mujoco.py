@@ -211,6 +211,31 @@ def test_drive_tracks_target_and_anchor_drags_base():
     assert box[2] == pytest.approx(0.1, abs=5e-3)  # resting on the ground, not sinking
 
 
+def _walled_base(speed_m_per_tick: float):
+    """The base drags its anchor 1.2 m along -y through a 0.1 m wall at the given speed; final base y."""
+    stage = _scene()
+    _cube(stage, "/World/wall", (-1.0, -0.6, 0.5), (2.0, 0.1, 1.0))  # static, across the path
+    w = World(stage, options=OPTIONS)
+    w.build()
+    anchor = stage.GetPrimAtPath("/World/robot/base_anchor")
+    steps = int(round(1.2 / speed_m_per_tick))
+    for k in range(1, steps + 1):
+        anchor.GetAttribute("physics:localPos0").Set(Gf.Vec3f(-1.0, -1.2 * k / steps, 0.3))
+        w.step(1)
+    w.step(120)
+    contype = w.model.geom_contype[w._robot_geoms[0][0]].copy()
+    return float(w.body_pose("/World/robot/base")[0][1]), contype
+
+
+def test_a_placement_drag_puts_the_base_through_a_wall_and_a_drive_does_not():
+    # ZenoBench puts the robot at an episode's start by dragging its anchor 2 cm per tick, through walls
+    y, contype = _walled_base(0.02)
+    assert y == pytest.approx(-1.2, abs=0.01)
+    assert contype.all()  # the robot collides again once it is there
+    y, _ = _walled_base(0.0025)  # 0.3 m/s, a drive: the wall stops the base
+    assert y > -0.5
+
+
 def test_shadowed_sun_rides_with_the_robot_base():
     w = World(_scene(), options=OPTIONS)
     w.build()
