@@ -75,6 +75,72 @@ def _scene():
 OPTIONS = usd_mjcf.Options(planar_anchors=("/World/robot/base_anchor",), visuals=False)
 
 
+def _gripper_scene(box_mass: float):
+    """A palm on a vertical slide with two sliding fingers around a box on the ground."""
+    stage = Usd.Stage.CreateInMemory()
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    UsdPhysics.Scene.Define(stage, "/World/PhysicsScene")
+    _cube(stage, "/World/ground", (0, 0, -0.05), (2, 2, 0.1))
+    _cube(stage, "/World/box", (0, 0, 0.05), (0.06, 0.06, 0.1), body=True, mass=box_mass)
+    palm = _cube(stage, "/World/hand/palm", (0, 0, 0.2), (0.04, 0.2, 0.04), body=True, mass=1.0)
+    lift = UsdPhysics.PrismaticJoint.Define(stage, "/World/hand/lift")
+    lift.CreateBody1Rel().SetTargets([palm.GetPath()])
+    lift.CreateLocalPos0Attr(Gf.Vec3f(0, 0, 0.2))
+    lift.CreateAxisAttr("Z")
+    drive = UsdPhysics.DriveAPI.Apply(lift.GetPrim(), "linear")
+    drive.CreateTypeAttr("acceleration")
+    drive.CreateStiffnessAttr(2.0e4)
+    drive.CreateDampingAttr(300.0)
+    for side, y in (("left", 0.07), ("right", -0.07)):
+        finger = _cube(stage, f"/World/hand/{side}_finger", (0, y, 0.09), (0.03, 0.01, 0.18), body=True, mass=0.05)
+        j = UsdPhysics.PrismaticJoint.Define(stage, f"/World/hand/{side}_finger_axis")
+        j.CreateBody0Rel().SetTargets([palm.GetPath()])
+        j.CreateBody1Rel().SetTargets([finger.GetPath()])
+        j.CreateLocalPos0Attr(Gf.Vec3f(0, y / 0.2, -0.11 / 0.04))  # the palm frame is scaled
+        j.CreateLocalPos1Attr(Gf.Vec3f(0, 0, 0))
+        j.CreateAxisAttr("Y")
+        d = UsdPhysics.DriveAPI.Apply(j.GetPrim(), "linear")
+        d.CreateStiffnessAttr(700.0)  # force drive: about 20 N of squeeze on the box
+        d.CreateDampingAttr(20.0)
+        d.CreateTargetPositionAttr(0.0)
+    return stage
+
+
+def _grip(world, close: bool):
+    for side, sign in (("left", -1.0), ("right", 1.0)):
+        world.set_target(f"/World/hand/{side}_finger_axis", sign * 0.07 if close else 0.0)
+
+
+def test_pinched_box_locks_rides_up_without_creep_and_lets_go():
+    w = World(_gripper_scene(0.3), options=usd_mjcf.Options(visuals=False))
+    w.build()
+    _grip(w, close=True)
+    w.step(120)
+    assert w._locks is not None and w._locks.locked, "the pinch should lock"
+    w.set_target("/World/hand/lift", 0.15)
+    w.step(120)
+    start = w.body_pose("/World/box")[0] - w.body_pose("/World/hand/palm")[0]
+    w.step(240)
+    held = w.body_pose("/World/box")[0] - w.body_pose("/World/hand/palm")[0]
+    assert w.body_pose("/World/box")[0][2] > 0.17  # lifted with the hand
+    assert np.linalg.norm(held - start) < 1e-3  # no creep in the fingers
+    _grip(w, close=False)
+    w.step(120)
+    assert not w._locks.locked
+    assert w.body_pose("/World/box")[0][2] < 0.06  # dropped back to the ground
+
+
+def test_a_box_too_heavy_for_friction_slips_out():
+    # about 40 N of squeeze at friction 0.5 holds 20 N; a 6 kg box weighs 59 N
+    w = World(_gripper_scene(6.0), options=usd_mjcf.Options(visuals=False))
+    w.build()
+    _grip(w, close=True)
+    w.step(120)
+    w.set_target("/World/hand/lift", 0.15)
+    w.step(360)
+    assert w.body_pose("/World/box")[0][2] < 0.1
+
+
 def test_conversion_keeps_joint_frames_limits_and_drive_units():
     conv = usd_mjcf.convert(_scene(), OPTIONS)
     m = conv.spec.compile()

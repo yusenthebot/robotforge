@@ -44,6 +44,8 @@ class Options:
     decompose: bool = True
     visuals: bool = True
     textures: bool = True
+    max_hull_vertices: int = 0  # cap for moving bodies' hulls (0: no cap)
+    capsule_pads: tuple[str, ...] = ()  # body name suffixes whose box colliders become capsule rows
 
 
 @dataclass
@@ -63,6 +65,7 @@ class JointInfo:
     child: str  # body name
     drive: Drive | None
     order: int  # creation order (breadth first), Isaac's DOF order inside one articulation
+    max_velocity: float = math.inf  # rad/s or m/s (physxJoint:maxJointVelocity)
 
 
 @dataclass
@@ -113,6 +116,15 @@ def _quat(r: np.ndarray) -> np.ndarray:
 def _gf_quat(q) -> np.ndarray:
     im = q.GetImaginary()
     return np.array([q.GetReal(), im[0], im[1], im[2]], dtype=np.float64)
+
+
+def _rotation_from_z(axis: np.ndarray) -> np.ndarray:
+    """A rotation (column vectors) whose z axis is `axis`."""
+    z = np.asarray(axis, float) / np.linalg.norm(axis)
+    helper = np.array([1.0, 0, 0]) if abs(z[0]) < 0.9 else np.array([0, 1.0, 0])
+    x = np.cross(helper, z)
+    x /= np.linalg.norm(x)
+    return np.stack([x, np.cross(z, x), z], axis=1)
 
 
 def _quat_mat(q: np.ndarray) -> np.ndarray:
@@ -382,7 +394,9 @@ class _Builder:
         # which scales with the joint inertia (PhysX acceleration drives)
         j.armature = 0.01 if kind == "hinge" else 0.005
         drive = self._drive(jprim, "angular" if kind == "hinge" else "linear", kind)
-        self.out.joints[jpath] = JointInfo(jpath, jpath, kind, child, drive, order)
+        vmax = float(_get(jprim, "physxJoint:maxJointVelocity", math.inf))  # deg/s for a hinge, m/s for a slide
+        vmax = vmax * math.pi / 180 if kind == "hinge" else vmax
+        self.out.joints[jpath] = JointInfo(jpath, jpath, kind, child, drive, order, vmax)
 
     def _joint_frame(self, body_prim, jprim, side: int):
         pos = np.asarray(_get(jprim, f"physics:localPos{side}", (0, 0, 0)), float)
@@ -502,6 +516,9 @@ class _Builder:
             log.debug("collider %s (%s) is not supported", prim.GetPath(), prim.GetTypeName())
             return 0
         r, t, s = _rigid(rel)
+        if prim.IsA(UsdGeom.Cube) and owner and owner.endswith(self.opt.capsule_pads):
+            half = np.maximum(float(_get(prim, "size", 2.0)) / 2 * np.abs(s), 1e-4)
+            return self._capsule_pad(parent, str(prim.GetPath()), r, t, half, material, dynamic)
         g = parent.add_geom()
         g.name = str(prim.GetPath())
         g.pos, g.quat = t, _quat(r)
@@ -528,11 +545,38 @@ class _Builder:
         self._collision_style(g, material, dynamic)
         return 1
 
+    def _capsule_pad(self, parent, name, r, t, half, material, dynamic) -> int:
+        """A finger pad box as parallel capsules along its long side, filling its width: the same contact
+        face, but smooth. A flat box face on a faceted hull switches its contact points abruptly as the
+        object turns, and the impulse flung a pinched bottle out of the fingers."""
+        order = np.argsort(half)  # thin, middle, long
+        thin, wide, long = order
+        radius = float(half[thin])
+        length = max(float(half[long]) - radius, 1e-4)
+        count = max(1, int(round(half[wide] / radius)))
+        offsets = np.linspace(-(half[wide] - radius), half[wide] - radius, count) if count > 1 else [0.0]
+        z = np.zeros(3)
+        z[long] = 1.0
+        axis_world = r @ z
+        rot = _rotation_from_z(axis_world)
+        for i, off in enumerate(offsets):
+            shift = np.zeros(3)
+            shift[wide] = off
+            g = parent.add_geom()
+            g.name = f"{name}#c{i}"
+            g.type = mujoco.mjtGeom.mjGEOM_CAPSULE
+            g.size = (radius, length, 0)
+            g.pos, g.quat = t + r @ shift, _quat(rot)
+            self._collision_style(g, material, dynamic)
+        return len(offsets)
+
     def _hull_geom(self, parent, piece, material, dynamic, name):
         mesh = self.spec.add_mesh()
         mesh.name = f"hull{self._mesh_id}"
         self._mesh_id += 1
         mesh.uservert = np.asarray(piece, np.float32).reshape(-1)
+        if dynamic and self.opt.max_hull_vertices:
+            mesh.maxhullvert = self.opt.max_hull_vertices
         self._piece_volume[mesh.name] = hulls.hull_volume(piece)
         g = parent.add_geom()
         g.name = name

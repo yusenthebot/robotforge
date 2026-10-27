@@ -10,6 +10,7 @@ Lab's python, such as ZenoBench's env_service (`$ISAACLAB_PYTHON`).
 
 from __future__ import annotations
 
+import logging
 import os
 import runpy
 import sys
@@ -20,6 +21,11 @@ from robotforge.zenobench.world import SUBSTEPS
 
 
 def prepare() -> Path:
+    if not logging.getLogger("robotforge").handlers:  # ZenoBench's scripts do not configure logging
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        logging.getLogger("robotforge").addHandler(handler)
+        logging.getLogger("robotforge").setLevel(logging.INFO)
     zb = source.check()
     if str(zb) not in sys.path:
         sys.path.insert(0, str(zb))

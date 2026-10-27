@@ -615,5 +615,339 @@
     "Warm capture timings and cached resource bytes are not cold download speed measurements",
     "Malo and Panda each use one additional existing shader program variant",
     "Broad visual-quality/playability goal remains active"
-  ]
+  ],
+  "integrated_main_followup": {
+    "delta": {
+      "base_main": "6b06e55792599de4e8cc8336e80a5396af03f6c0",
+      "prior_source": "7cca90dad2edf6202d91b59b760f26bcf65a38010c82fa30cba82374b2921f6b",
+      "integrated_source": "6d5f5a12f1f14b80d07b8d3d268933f77d82e07d62fc31d94d75e81dcdcd5b08",
+      "changed_production": [
+        "zenobench/world.py",
+        "zenobench/usd_mjcf.py",
+        "zenobench/python.py",
+        "zenobench/shim.py"
+      ],
+      "unchanged_production": 402,
+      "changed_other_inputs": [
+        "src/robotforge/zenobench/python.py",
+        "src/robotforge/zenobench/shim.py",
+        "src/robotforge/zenobench/usd_mjcf.py",
+        "src/robotforge/zenobench/world.py",
+        "tests/test_zenobench_mujoco.py"
+      ],
+      "no_added_product_files": true
+    },
+    "frozen_inputs": 737,
+    "production_files": 406,
+    "compatibility": {
+      "tests": 210,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "native_build": {
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "framework": {
+      "report": {
+        "issues": [],
+        "mode": "compare",
+        "source_changed": {
+          "active_source_sha256": {
+            "baseline": "258196f0c8df72d146af35b410c79bb0ec72e6fef6112e237572cee9fff0e7af",
+            "candidate": "6d5f5a12f1f14b80d07b8d3d268933f77d82e07d62fc31d94d75e81dcdcd5b08"
+          },
+          "git_commit": {
+            "baseline": "aae92839f5a8c91f4e143d4c90e893fa808309a2",
+            "candidate": "13aa2f848bed59676e18eb4e3c870ffdc8085ab4"
+          }
+        },
+        "status": "pass"
+      },
+      "source": {
+        "active_source_sha256": "6d5f5a12f1f14b80d07b8d3d268933f77d82e07d62fc31d94d75e81dcdcd5b08",
+        "git_commit": "13aa2f848bed59676e18eb4e3c870ffdc8085ab4",
+        "git_dirty": true,
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+        "plugins": [],
+        "python": "3.12.13"
+      },
+      "cases": 7
+    },
+    "budget": {
+      "started": "2026-10-27T17:55:50+08:00",
+      "sha": "13aa2f8-dirty",
+      "quick": false,
+      "partial": true,
+      "covers": [
+        "install",
+        "viewer"
+      ],
+      "machine": {
+        "system": "Darwin",
+        "release": "26.3.2",
+        "machine": "arm64",
+        "cpus": 18,
+        "python": "3.12.16",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "load": [
+          5.2,
+          5.0,
+          6.6
+        ]
+      },
+      "load_after": [
+        6.8,
+        5.4,
+        6.7
+      ],
+      "results": {
+        "install": {
+          "wheel_kb": {
+            "value": 3820.9717,
+            "unit": "KB",
+            "better": "lower"
+          },
+          "installed_mb": {
+            "value": 163.5478,
+            "unit": "MB",
+            "better": "lower",
+            "top": [
+              [
+                "mujoco==3.15.0",
+                71.4
+              ],
+              [
+                "numpy==2.5.4",
+                19.6
+              ],
+              [
+                "coacd==1.0.14",
+                14.2
+              ],
+              [
+                "pillow==12.3.0",
+                12.7
+              ],
+              [
+                "cryptography==50.0.2",
+                10.5
+              ],
+              [
+                "robotforge==0.0.1",
+                8.5
+              ],
+              [
+                "pyopengl==3.1.10",
+                7.5
+              ],
+              [
+                "pydantic-core==2.50.1",
+                4.5
+              ]
+            ]
+          },
+          "packages": {
+            "value": 42.0,
+            "unit": "",
+            "better": "lower",
+            "versions": [
+              "absl-py==2.5.1",
+              "annotated-types==0.8.0",
+              "anyio==4.15.1",
+              "attrs==26.1.0",
+              "cffi==2.1.1",
+              "click==8.5.0",
+              "coacd==1.0.14",
+              "cryptography==50.0.2",
+              "etils==1.14.0",
+              "fsspec==2026.9.0",
+              "glfw==2.10.2",
+              "h11==0.16.0",
+              "httpcore2==2.13.1",
+              "httpx2==2.13.1",
+              "idna==3.20",
+              "jsonschema-specifications==2025.9.1",
+              "jsonschema==4.26.0",
+              "mcp-types==2.3.0",
+              "mcp==2.3.0",
+              "mujoco==3.15.0",
+              "numpy==2.5.4",
+              "opentelemetry-api==1.45.1",
+              "pillow==12.3.0",
+              "pycparser==3.11",
+              "pydantic-core==2.50.1",
+              "pydantic==2.14.1",
+              "pyjwt==2.15.1",
+              "pyopengl==3.1.10",
+              "python-multipart==0.0.32",
+              "pyyaml==6.0.3",
+              "referencing==0.37.0",
+              "robotforge==0.0.1",
+              "rpds-py==2026.9.1",
+              "sse-starlette==3.5.0",
+              "starlette==1.8.0",
+              "trimesh==5.1.1",
+              "truststore==0.10.5",
+              "typing-extensions==4.16.0",
+              "typing-inspection==0.4.4",
+              "uvicorn==0.54.0",
+              "websockets==17.2",
+              "zipp==4.1.1"
+            ]
+          },
+          "download_mb": {
+            "value": 52.5149,
+            "unit": "MB",
+            "better": "lower"
+          }
+        },
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.5514,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.343
+          },
+          "fps": {
+            "value": 60.3092,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 2.6,
+            "unit": "ms",
+            "better": "lower",
+            "median": 2.599999964237213,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.2049,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.6,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4.599999964237213,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 134.5,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 560.0
+          },
+          "idle_cpu_pct": {
+            "value": 2.8,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        }
+      },
+      "budgets": {
+        "install.wheel_kb": "ok",
+        "install.installed_mb": "ok",
+        "install.download_mb": "ok",
+        "install.packages": "ok",
+        "imports.robotforge_cpu_ms": "not run",
+        "imports.cli_cpu_ms": "not run",
+        "imports.mcp_server_cpu_ms": "not run",
+        "imports.robotforge_heavy": "not run",
+        "imports.cli_heavy": "not run",
+        "imports.mcp_server_heavy": "not run",
+        "physics.dog_idle.steps_per_s": "not run",
+        "physics.dog_idle.controllers_share": "not run",
+        "physics.dog_walk.steps_per_s": "not run",
+        "physics.go2_idle.steps_per_s": "not run",
+        "physics.go2_idle.controllers_share": "not run",
+        "physics.go2_walk.steps_per_s": "not run",
+        "physics.go2_rl_idle.steps_per_s": "not run",
+        "physics.go2_rl_idle.controllers_share": "not run",
+        "physics.humanoid_idle.steps_per_s": "not run",
+        "physics.humanoid_idle.controllers_share": "not run",
+        "physics.arm_pick.steps_per_s": "not run",
+        "physics.warehouse_nav.steps_per_s": "not run",
+        "physics.objects_20.steps_per_s": "not run",
+        "physics.machine.steps_per_s": "not run",
+        "physics.dog_idle.peak_mb": "not run",
+        "physics.go2_walk.peak_mb": "not run",
+        "physics.warehouse_nav.peak_mb": "not run",
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok",
+        "mcp.start_s": "not run",
+        "mcp.new_world_ms": "not run",
+        "mcp.add_robot_ms": "not run",
+        "mcp.move_ms": "not run",
+        "mcp.observe_ms": "not run",
+        "mcp.server_rss_mb": "not run",
+        "mcp.idle_cpu_pct": "not run"
+      }
+    },
+    "package": {
+      "wheel": "dist-final/robotforge-0.0.1-py3-none-any.whl",
+      "bytes": 3912675,
+      "sha256": "dcb0083c1650c246738d46aed6c19024a0693c0b1a6cb3ae24da83d60bbe61f3",
+      "files": 406,
+      "source_and_installed_exact": true,
+      "cad_packaged": false
+    },
+    "receipts_sha256": {
+      "compatibility": "c550938a76466d86eb77d07665e2a7c98bdf70e0d35a1b378d42f0840fed7ad3",
+      "native-build": "661253a5b1779f1d01b635b7dc09c38bb184634c3e79ab525991db17c6e6de51",
+      "budget": "84f44f627cbb93f6c3d947de07ea19419e5f93b5936a5db2012ea8c9e689a920",
+      "smoke-source": "167dafe37efaad4cc25691dae0b255748df9bc8fd9d54b9a0ad14ef69316920b",
+      "zenobench-help": "46dbd0504d8cb873bb833c35b697fa57e562441f4c0ca452a0985a13d45bc372",
+      "build-final": "ebaf075c43c2e804d88bc2ed2e398ab821caaccbd06b8b18369983cfee0e5b9f",
+      "export-runtime": "c3b2fc1a2a877994bc29514d6c2e163ae91ec7ab97b2b8993953cac452117f2d",
+      "create-wheel-env": "38418c9a0a9612446b508b090934889b688d5a12e369172c7a6e7c66105fc1be",
+      "install-runtime": "569c6e8b849215193a7c3b6b6b0357574e24e7b0dc278aa4a14ffe4c2ce4f003",
+      "install-wheel": "95ff14d46958a332c2e08fc4f31d82264cf83ef6b7146e2a1a666e900642c960",
+      "smoke-installed": "9561ac0ee2ec9272f8a30bce907cd283ce24cf5871032a3090696c91f5352b46",
+      "framework-py31213-direct": "107b6d6163d85f64c240677f885d2fdf9f9e02f85551785e0c5097b5d80c7253"
+    },
+    "scope": "Prior 4001/128 and media remain on 7cca90da; final integration revalidates shared runtime, native UI, exact baseline and packaging. Only four optional ZenoBench modules differ; optional USD module skipped, new grasp lock/velocity/replay behavior not certified."
+  }
 }

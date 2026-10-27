@@ -603,6 +603,11 @@ def install(options: usd_mjcf.Options | None = None, substeps: int = SUBSTEPS) -
 
 def zeno_options() -> usd_mjcf.Options:
     """Conversion settings for ZenoBench scenes (Zeno Malo's base anchor, wheels dragged, not rolling)."""
+    import os
+
     return usd_mjcf.Options(
-        planar_anchors=("/World/ZenoMalo/base_anchor",), no_collision_bodies=("_wheel_link", "_steering_link")
+        planar_anchors=("/World/ZenoMalo/base_anchor",),
+        no_collision_bodies=("_wheel_link", "_steering_link"),
+        max_hull_vertices=int(os.environ.get("ZENOBENCH_MAXHULLVERT", "0")),
+        capsule_pads=("_finger_link",) if os.environ.get("ZENOBENCH_CAPSULE_PADS", "0") == "1" else (),
     )
