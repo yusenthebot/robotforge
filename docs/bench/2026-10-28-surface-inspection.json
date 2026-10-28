@@ -2758,5 +2758,102 @@
     "evidence_index_sha256": "139ccd5862749a136d0ad46675be1192ad1c4ed35517b028e337521bc5379966",
     "evidence_file": "acceptance-review.json",
     "sha256": "ff76c4f6db35ba65e28b37516af8201204efccd4451d319135eaa0ff8f361e76"
+  },
+  "integration": {
+    "upstream": "ab05dd1d8bd5bbea4143c27db099706d96ffc3d5",
+    "integration_commit": "dc1907ab0a4e2e5560ee6345f7947beca42b2c22",
+    "runtime_sha256": "b399c6c405fedc612c92f0e8323529f5f238b42bd01a03bd2df2fdb768d490ae",
+    "previous_runtime_sha256": "0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da",
+    "changed_frozen_inputs": [
+      "src/robotforge/zenobench/usd_mjcf.py",
+      "tests/test_zenobench_mujoco.py"
+    ],
+    "unchanged_frozen_inputs": 766,
+    "frozen_inputs": 768,
+    "viewer_files_and_tests_exact": true,
+    "new_usd_tests_passed": 28,
+    "phased_distinct_pytest_passes": 1017,
+    "receipts": {
+      "lint-integration": {
+        "returncode": 0,
+        "seconds": 0.11139320800066344,
+        "inputs_unchanged": true,
+        "sha256": "196af5acf60e1fd67eeb12927b5c2fc1fc1085c49c6161bb7d5c424c72bb5b23"
+      },
+      "format-integration": {
+        "returncode": 0,
+        "seconds": 0.07252812499973516,
+        "inputs_unchanged": true,
+        "sha256": "820b105a76278ae3d162baf60bee44c964f851458f7bd9b41161696b40574e5f"
+      },
+      "usd-integration": {
+        "returncode": 0,
+        "seconds": 1.8695260419999613,
+        "inputs_unchanged": true,
+        "sha256": "0716e2cd583b594a29eb4e94c18d2ad4392d81996690281c7ad71aed9985e94e"
+      },
+      "build-integration": {
+        "returncode": 0,
+        "seconds": 0.15782025000044086,
+        "inputs_unchanged": true,
+        "sha256": "f28e7495a557c28bf3fea8c060e40a580730875a4079f15f1925df445e5f1919"
+      },
+      "install-integration": {
+        "returncode": 0,
+        "seconds": 0.4481943749997299,
+        "inputs_unchanged": true,
+        "sha256": "13a26a28bed103626e7ed1118f46becb31ba453f624dc522516d6d4724fbf38d"
+      },
+      "smoke-source-integration": {
+        "returncode": 0,
+        "seconds": 4.077946959000656,
+        "inputs_unchanged": true,
+        "sha256": "43f1cf1049e5c5b9104144ec1acabb49b77b1a5458ac56c5e002840b7a5b880f"
+      },
+      "smoke-installed-integration": {
+        "returncode": 0,
+        "seconds": 19.64303283299978,
+        "inputs_unchanged": true,
+        "sha256": "da5563d03db155c77e16729a902b60caf160aa993b4709380325ebc9531ae499"
+      },
+      "framework-integration": {
+        "returncode": 0,
+        "seconds": 1.9082327500000247,
+        "inputs_unchanged": true,
+        "sha256": "3e9cdaef4189e839ff0351c0437e98f06bae6f54bd57602ce1be05bb21062205"
+      },
+      "package-integration": {
+        "returncode": 0,
+        "seconds": 0.2195635839998431,
+        "inputs_unchanged": true,
+        "sha256": "4268eae873d2f56d30ee5f4be7bf09a3aad223932e8a975718de9dbd82260bd7"
+      }
+    },
+    "package": {
+      "passed": true,
+      "product_files": 416,
+      "source_wheel_installed_exact": true,
+      "wheel_bytes": 3949875,
+      "wheel_sha256": "22297aa095c8f7d2120e14ef4d525b59c1d859a62c1655f3f5d101f571ba4101",
+      "previous_wheel_bytes": 3948453,
+      "wheel_delta_bytes": 1422,
+      "original_WIP_preserved": 13,
+      "frozen_inputs": 768,
+      "dependency_inputs_exact": true
+    },
+    "python_review": {
+      "verdict": "APPROVE",
+      "reviewer": "integration_python_review (gpt-6.1-sol, readonly)",
+      "scope": "No high-confidence blockers in native-event inspection Python tests or upstream zero-quaternion inertia fallback/regression. Ruff check/format of three Python files passed; no pytest/Chrome run or edits by reviewer."
+    },
+    "scope": "Upstream changed only optional USD adapter+its test and docs. Original989 pytest, native Chrome/media/24 visual controls and11 budgets retain0c9 source hash; all viewer/scripts/dependency and inspection-test bytes exactly unchanged. On b399 integrated source reran28 optional USD tests using existing extras env, full Ruff/format, offline build/fresh install, source+installed60-tool smoke and unchanged7canonical. Budget/capture/load cohorts not needlessly rerun. Final416 source/wheel/fresh installed files exact. Final wheel+1422B vs prior3b916 closure includes+102B upstream USD change; measured feature-only preintegration increase1320B. No new dependency.",
+    "integration_index_sha256": "c13347e2a3cb3e1b8ef27949094c8fc7b60422c3f98181ee66cd7fea6a3624b7",
+    "acceptance": {
+      "verdict": "APPROVE",
+      "reviewer": "inspection_review (readonly)",
+      "scope": "Verified two changed and766 unchanged inputs,9 current integration receipts/index,1017 distinct pytest XML IDs, source/package metrics and old/new evidence scope. No tests/Chrome or edits by reviewer.",
+      "evidence_file": "integration-acceptance.json",
+      "sha256": "5709b03d6dede88b8e7dc50bc6e1ee2c9d45cff15f43614b13b84efd97d303dd"
+    }
   }
 }

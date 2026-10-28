@@ -23,7 +23,8 @@ Existing MCP (60 tools), script, world and layout interfaces remain unchanged.
 ## Real verification
 
 Frozen runtime `0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da`;
-768 source/test/script/dependency inputs stay exact across all final receipts.
+768 source/test/script/dependency inputs stay exact across the preintegration
+final receipts. The later upstream integration is recorded below with a new hash.
 663 viewer-default/static-reader tests pass (six network opt-in manipulation
 cases skipped); all317 non-slow browser tests pass (one optional pxr collection
 skip); nine selected slow GPU tests pass. These are989 distinct pytest passes,
@@ -142,3 +143,27 @@ The JSON report records final receipt hashes, source bridge, native checkpoints,
 load samples, media hashes, costs, attempts and scope. Media is local, not a
 public GitHub attachment. No paid Actions, release/deployment or per-action success
 tuning. The broad visual-quality and creative-play goal remains active.
+
+## Latest-main integration before merge
+
+During verification, main advanced to `ab05dd1` with an independent USD inertia
+fix. It was merged normally into this feature branch (`dc1907a`), preserving it.
+Integrated runtime is `b399c6c405fedc612c92f0e8323529f5f238b42bd01a03bd2df2fdb768d490ae`.
+Only `zenobench/usd_mjcf.py` and its existing test differ among the768 frozen
+inputs; the other766, including all viewer files and seven inspection cases,
+are byte-exact. The full browser/native/video/control/load/budget evidence above
+retains its actual0c9 runtime hash; it is not mislabelled as a new full-suite run.
+
+On the integrated runtime,28 optional USD tests pass in the existing extras
+environment, explicitly importing this worktree's module (Python3.12.16,
+MuJoCo3.15.0, NumPy2.5.4). Together with the earlier989, these are1017 distinct
+phased pytest passes. Full Ruff/format, offline wheel/fresh installed package,
+source and installed60-tool smoke, and the unchanged seven canonical cases pass
+again. Python review approves the event tests and inertia fallback. No new
+dependencies were installed and no passing viewer budget was repeated.
+
+All416 integrated source/wheel/fresh installed product files agree. Final
+wheel3,949,875B is+1,422B versus the preceding3b916 closure, comprising the
+measured preintegration feature delta1,320B plus102B upstream change. Original
+13 WIP files remain exact. The integration-index.json chains to the prior evidence
+index and records the new receipts/package/source bridge.

@@ -151,3 +151,5 @@
 - Earlier frontiers remain recorded in progress.md: forward back-drag can flip a never-moved dog, idle gait cost, weak initial turns from kept walks, and counter-height limits of go2_arm. They were not revalidated in this round.
 - Next: improve shared material motion stability and indoor/outdoor scene quality within existing lightweight/loading budgets. Remaining execution adapters are maintenance work as needed; individual manipulation success rates remain deferred.
 - Updated: 2026-10-24
+
+Surface-inspection latest-main bridge: merged upstreamab05dd1 USD fix before PR; only2/768 frozen inputs change, allviewer bytes exact. Integrated runtimeb399c6c;28optional USD tests +989 earlier =1017phased distinct; rebuild/fresh offline install, both60-tool smoke, Ruff/format and7canonical pass. Integrated416files/13WIP exact; finalwheel3949875B(+1422 vs3b916, including102upstream). Original viewer/native/media/budget results retain0c9hash. See surface-inspection report integration section.
