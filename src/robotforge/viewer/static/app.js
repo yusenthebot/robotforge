@@ -32,7 +32,7 @@ translatePage();
 const canvas = $("view");
 let screenDrive = null;
 const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel: cancelCreation,
-  change: updateCreationPreview, coordinateChange: changePlacementSpacing });
+  change: changePlacementOptions, coordinateChange: changePlacementOptions });
 const creationGesture = createPlacementGesture();
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2356,7 +2356,7 @@ function resolveCreationAnchor() {
   return { point: placementCoordinates([point[0], point[1], hit.point.z], creator.spacing()), status: null };
 }
 
-function changePlacementSpacing() {
+function changePlacementOptions() {
   creationGesture.invalidate();
   const { point, status } = resolveCreationAnchor();
   setCreationPoint(point, status);
@@ -2662,7 +2662,7 @@ async function placeEntity(item, pos) {
     : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
-    : item.kind === "terrain-edit" ? { action: "edit_terrain", name: item.name, turns: item.turns, world_sha256: item.world_sha256 }
+    : item.kind === "terrain-edit" ? { action: "edit_terrain", name: item.name, yaw_delta: item.yaw_delta, world_sha256: item.world_sha256 }
     : item.kind === "terrain" ? { action: "add_terrain", preset: item.name, yaw: item.yaw, world_sha256: placementWorldSha }
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw,
         ...(item.material ? { material: item.material } : {}) };

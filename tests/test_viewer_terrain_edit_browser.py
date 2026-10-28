@@ -171,7 +171,7 @@ window.WebSocket=class extends Native {
   // Controlled boundary case: submit the exact authored coordinates, without pixel rounding.
   if(window.__noopWire.hold&&m.action==='edit_terrain'){
    m.pos=window.__robotforge.scene.terrain_edit.terrains.find(e=>e.name===m.name).pos;
-   m.turns=0;value=JSON.stringify(m);
+   m.yaw_delta=0;value=JSON.stringify(m);
   }
   super.send(value);
  }

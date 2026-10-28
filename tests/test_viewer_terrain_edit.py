@@ -73,6 +73,17 @@ def test_custom_fields_order_and_relative_heading_survive_move_and_undo(pg):  # 
         {"turns": 1.0},
         {"turns": 4},
         {"turns": -1},
+        {"yaw_delta": True},
+        {"yaw_delta": "15"},
+        {"yaw_delta": None},
+        {"yaw_delta": float("nan")},
+        {"yaw_delta": float("inf")},
+        {"yaw_delta": -float("inf")},
+        {"yaw_delta": 361},
+        {"yaw_delta": -361},
+        {"turns": 0, "yaw_delta": 15},
+        {"turns": 1, "yaw_delta": 0},
+        {"turns": 0, "yaw_delta": 0},
         {"yaw": 90},
         {"pos": [True, 0]},
         {"pos": ["3", 0]},
@@ -103,6 +114,42 @@ def test_metadata_uses_exact_owner_and_instance_geometry(pg):  # noqa: F811
         assert names == [entry["name"], *[f"{entry['name']}/{i}" for i in range(1, len(entry["boxes"]))]]
     pg.store.file.write_bytes(pg.store.file.read_bytes() + b"\n# outside editor\n")
     assert terrain_edit.metadata(pg) == {"terrains": []}
+
+
+@pytest.mark.parametrize("yaw", [13.5, 7213.5, -7213.5])
+@pytest.mark.parametrize("delta", [15, -15, 14.5])
+def test_relative_fine_heading_preserves_authored_turns_and_exact_undo(pg, yaw, delta):  # noqa: F811
+    pg.add_terrain("ramp", name="dock", pos=[3, 0], yaw=yaw, params={"length": 0.5, "landing": 0.3, "width": 0.6})
+    before = pg.current_world()
+    result = move(pg, yaw_delta=delta)
+    after = pg.current_world()
+    assert after.terrain[0].yaw == yaw + delta
+    assert after.terrain[0].model_dump(exclude={"pos", "yaw"}) == before.terrain[0].model_dump(exclude={"pos", "yaw"})
+    assert pg.session.paused and pg.session.data.time == 0
+    undo(pg, result)
+    assert pg.current_world() == before
+
+
+@pytest.mark.parametrize("delta", [0, -360, 360])
+def test_zero_net_rotation_keeps_model_world_and_previous_inverse(pg, delta):  # noqa: F811
+    dock(pg)
+    move(pg, yaw_delta=15)
+    receipt = pg._play_terrain_edit
+    before = snapshot(pg)
+    response = move(pg, pos=pg.current_world().terrain[0].pos, yaw_delta=delta)
+    assert response["unchanged"] and pg._play_terrain_edit is receipt
+    unchanged(pg, before)
+
+
+def test_relative_fine_rotation_cannot_bypass_target_clearance(pg):  # noqa: F811
+    dock(pg)
+    pg.add_object("blocker", shape="box", size=[0.1, 0.1, 0.2], pos=[6, 0.6], fixed=True)
+    before = snapshot(pg)
+    with pytest.raises(PlaygroundError, match="occupied"):
+        move(pg, yaw_delta=45)
+    unchanged(pg, before)
+    move(pg, yaw_delta=0)
+    assert pg.current_world().terrain[0].yaw == 0
 
 
 def test_heightfields_are_not_offered_as_movable_blocks(pg):  # noqa: F811
