@@ -21,6 +21,7 @@ import { placementCoordinates } from "./placement-coordinate.js";
 import { createPlacementPreview } from "./placement-preview.js";
 import { createScreenDrive } from "./screen-drive.js";
 import { cameraView, cameraArc, arcEye } from "./camera-views.js";
+import { initRobotSurface } from "./robot-surface.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -396,6 +397,7 @@ async function applyScene(desc) {
   renderScreenDrive();
   posedVersion = 0;
   renderedVersion = 0;
+  renderLayouts();
   renderRobotStart();
   $("loading").hidden = false;
   $("loading").querySelector(".spinner").hidden = false;
@@ -2228,6 +2230,12 @@ let busy = false;
 
 async function runChoice(button, msg, { frame = false, done, progress } = {}) {
   if (busy) return;
+  const changingMap = msg.type === "world" && msg.action === "scene";
+  if (changingMap) {
+    // Its reply can precede the new scene/state. Never re-enable the old world's layout actions.
+    ++layoutRequest; layoutLoading = false;
+    layoutCatalog = layoutConfirmation = null;
+  }
   busy = true;
   wantFrame = frame;
   button.classList.add("busy");
@@ -2242,6 +2250,7 @@ async function runChoice(button, msg, { frame = false, done, progress } = {}) {
     busy = false;
     button.classList.remove("busy");
     setPanelBusy(false);
+    if (changingMap && !layoutLoading && !$("world-panel").hidden) refreshLayouts();
   }
 }
 
@@ -2419,6 +2428,7 @@ function editableRobotStart() {
 
 function renderRobotStart() {
   renderEditableTerrains();
+  robotSurface.render();
   const button = $("robot-start");
   button.hidden = !editableRobotStart();
   button.disabled = busy || !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version
@@ -2431,6 +2441,61 @@ $("robot-start").addEventListener("click", () => {
     creator.repositionRobot({ ...entry, world_sha256: sceneDesc.robot_edit.world_sha256 });
   }
 });
+
+const robotSurface = initRobotSurface({
+  current: () => {
+    const info = sceneDesc?.robot_surface;
+    const entry = info && sceneDesc?.world && info.version === sceneDesc.version && !sceneDesc.lesson
+      ? info.robots.find((r) => r.name === selected) : null;
+    return entry ? { ...entry, version: info.version, world_sha256: info.world_sha256 } : null;
+  },
+  ready: () => !busy && !creator.active() && !selectingObjects && !creationGesture.active()
+    && sceneReadyToDraw() && renderedVersion === sceneDesc?.version && stateVersion === sceneDesc?.version
+    && Number.isInteger(stateGeneration),
+  apply: async (entry, body, surface, button) => {
+    stopDriving(); endDrag();
+    await runChoice(button, { type: "world", action: "set_robot_surface", name: entry.name, body,
+      surface_material: surface, version: entry.version, generation: stateGeneration,
+      world_sha256: entry.world_sha256 }, {
+      done: async (data) => {
+        if (data.unchanged) {
+          if (stateVersion !== data.version || stateGeneration !== data.generation) {
+            lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
+            throw new Error(t("create_scene_changed"));
+          }
+          toast(t("surface_unchanged")); return;
+        }
+        const receipt = data.undo_surface ? { ...data.undo_surface, kind: "robot_surface" } : null;
+        lastObjectEdit = receipt; lastAddition = lastRobotEdit = lastTerrainEdit = null;
+        try { await waitForCreation(data, true); }
+        catch (error) {
+          lastObjectEdit = stateVersion === data.version && stateGeneration === data.generation ? receipt : null;
+          updateUndo(); throw error;
+        }
+        updateUndo(); toast(t("surface_saved", { name: `${entry.name} / ${body}` }));
+      },
+    });
+  },
+});
+let robotSurfaceHighlight = null;
+function updateRobotSurfaceHighlight() {
+  const geoms = robotSurface.highlight();
+  if (!geoms.length || !worldRoot) {
+    if (robotSurfaceHighlight) {
+      scene3.remove(robotSurfaceHighlight); robotSurfaceHighlight.geometry.dispose();
+      robotSurfaceHighlight.material.dispose(); robotSurfaceHighlight = null;
+    }
+    return;
+  }
+  if (!robotSurfaceHighlight) {
+    robotSurfaceHighlight = new THREE.Box3Helper(new THREE.Box3(), theme.amber);
+    robotSurfaceHighlight.name = "robot-part-highlight"; robotSurfaceHighlight.material.depthTest = false;
+    scene3.add(robotSurfaceHighlight);
+  }
+  worldRoot.updateMatrixWorld(); robotSurfaceHighlight.box.makeEmpty();
+  worldRoot.traverse((o) => { if (o.isMesh && o.visible && geoms.includes(o.userData.geom)) robotSurfaceHighlight.box.expandByObject(o); });
+  robotSurfaceHighlight.visible = !robotSurfaceHighlight.box.isEmpty();
+}
 
 function editableTerrains() {
   const info = sceneDesc?.terrain_edit;
@@ -2621,10 +2686,12 @@ $("undo-edit").addEventListener("click", async () => {
   if (busy || (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit)) return;
   stopDriving(); endDrag();
   const robotStart = !!lastRobotEdit, terrainEdit = !!lastTerrainEdit;
-  await runChoice($("undo-edit"), { type: "world", action: terrainEdit ? "undo_terrain_edit" : robotStart ? "undo_robot_start" : "undo_object_edit", ...(lastTerrainEdit || lastRobotEdit || lastObjectEdit) }, {
+  const robotFinish = lastObjectEdit?.kind === "robot_surface";
+  const { kind: _kind, ...receipt } = lastTerrainEdit || lastRobotEdit || lastObjectEdit;
+  await runChoice($("undo-edit"), { type: "world", action: terrainEdit ? "undo_terrain_edit" : robotStart ? "undo_robot_start" : robotFinish ? "undo_robot_surface" : "undo_object_edit", ...receipt }, {
     done: async (data) => {
       await waitForCreation(data, true); lastObjectEdit = lastRobotEdit = lastTerrainEdit = null; updateUndo();
-      toast(t(terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed })); canvas.focus();
+      toast(t(terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : robotFinish ? "robot_surface_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed })); canvas.focus();
     },
   });
 });
@@ -2763,7 +2830,7 @@ async function placeEntity(item, pos) {
 function updateUndo() {
   $("undo-add").hidden = !lastAddition || creator.active() || selectingObjects || !!sceneDesc?.lesson;
   $("undo-edit").hidden = (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit) || creator.active() || selectingObjects || !!sceneDesc?.lesson;
-  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : "undo_object_edit");
+  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : "undo_object_edit");
   $("undo-edit").disabled = busy;
   $("undo-add").disabled = busy;
   $("undo-add").title = lastAddition?.name || "";
@@ -2833,6 +2900,7 @@ let lastMap = null; // the map picked here; a world does not remember which pres
 function layoutReady() {
   return layoutCatalog?.available && layoutCatalog.version === sceneDesc?.version
     && layoutCatalog.generation === stateGeneration && !sceneDesc?.lesson && sceneReadyToDraw()
+    && renderedVersion === sceneDesc.version
     && ws?.readyState === WebSocket.OPEN;
 }
 
@@ -3254,6 +3322,7 @@ function loop() {
     refreshDragVisual();
     updateObjectHighlight();
     updateTerrainHighlight();
+    updateRobotSurfaceHighlight();
     lessonFrame();
     if (water) waterFrame(water, latestTime, camera, scene3);
     sensorsFrame();
@@ -3267,6 +3336,7 @@ function loop() {
   if (ready && renderedVersion !== sceneDesc.version && !renderer.getContext().isContextLost()) {
     renderedVersion = sceneDesc.version;
     $("loading").hidden = true;
+    renderLayouts();
     renderScreenDrive();
     renderRobotStart();
     updateEmpty();
@@ -3284,6 +3354,7 @@ function loop() {
 
 canvas.addEventListener("webglcontextlost", () => {
   renderedVersion = 0;
+  renderLayouts();
   renderRobotStart();
   $("loading").hidden = false;
   updateEmpty();
