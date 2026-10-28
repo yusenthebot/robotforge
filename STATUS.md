@@ -1,5 +1,9 @@
 # STATUS
 
+- 2026-10-28 surface inspection: Views → Look here picks a current visible world point for robot/fixed-scene/terrain/flex orbit and zoom, with existing Back and gesture/editor/stale-state guards. Camera-only; water still level, no live body tracking or automatic magnification. No shared shader/material or action-success change.
+  663 viewer-default +317 non-slow browser +9 GPU =989 distinct pytest passes;7 canonical, source/fresh offline60-tool smoke and original11/11 budgets pass.24 main-canvas exact default pairs,6 fully decoded workflow movies/36root samples;3/3 pivot gates and sampled handler p95≤18.61ms. Native Mac Chrome80/90/100/110/100 now passes current-code buffer/GL/camera/all480model-array/state guards in an owned foreground tab, original zoom restored; earlier locked/failed attempts remain failed, not monitor switching.
+  Wheel3949773B(+1320),416source/wheel/installed files and13originalWIP exact;31HTTP resources unchanged, cold bytes+5265. Balanced fresh-profile Malo/Go2 mean cold−5.90/+4.05ms, no universal/causal speed or shader-quality gain claim. Report docs/bench/2026-10-28-surface-inspection.md/.json; broad goal active.
+
 - Goal: docs/GOAL.md; improve shared material quality and creative playability while keeping install lightweight, loading fast and interaction responsive. Broad goal active; single-action success tuning deferred.
 - 2026-10-28 robot part surfaces: opt-in direct-body Original/plastic/wood/steel on imported/library/template unmounted rigid robots, preserving base colours/physics/rays/sensor dressing; guarded pose-carry/reset/pause/noop/Undo/layout loop. Explicit user styling, no inferred CMF/global shader change.
   Frozen56078aa4/767inputs: pre-JS-fix full default4037pass/128skip with unchanged product Python/dependencies; final viewer-default663 and related browser57, GPU9 (4103distinct passes),7canonical,source/fresh offline60-tool smoke and original11/11budgets pass. Wheel3948453B(+6898),416product files exact,13originalWIP preserved.
@@ -147,3 +151,5 @@
 - Earlier frontiers remain recorded in progress.md: forward back-drag can flip a never-moved dog, idle gait cost, weak initial turns from kept walks, and counter-height limits of go2_arm. They were not revalidated in this round.
 - Next: improve shared material motion stability and indoor/outdoor scene quality within existing lightweight/loading budgets. Remaining execution adapters are maintenance work as needed; individual manipulation success rates remain deferred.
 - Updated: 2026-10-24
+
+Surface-inspection latest-main bridge: merged upstreamab05dd1 USD fix before PR; only2/768 frozen inputs change, allviewer bytes exact. Integrated runtimeb399c6c;28optional USD tests +989 earlier =1017phased distinct; rebuild/fresh offline install, both60-tool smoke, Ruff/format and7canonical pass. Integrated416files/13WIP exact; finalwheel3949875B(+1422 vs3b916, including102upstream). Original viewer/native/media/budget results retain0c9hash. See surface-inspection report integration section.

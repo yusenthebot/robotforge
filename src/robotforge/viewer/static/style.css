@@ -653,6 +653,7 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 8px 30px rgba(20, 30, 40, 0.15);
 }
 .view-panel .note { margin: 10px 0; }
+canvas.inspecting { cursor: crosshair; }
 .view-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .view-choices [aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); }
 .tool[aria-expanded="true"] { background: var(--hover); color: var(--ink); }

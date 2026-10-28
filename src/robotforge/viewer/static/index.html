@@ -58,8 +58,14 @@
       <button class="pill" type="button" data-camera-view="front" aria-pressed="false" data-i18n="view_front">Front · −Y</button>
       <button class="pill" type="button" data-camera-view="side" aria-pressed="false" data-i18n="view_side">Side · +X</button>
     </div>
+    <button class="pill" id="view-inspect" type="button" data-i18n="view_inspect">Look here</button>
     <button class="pill" id="view-back" type="button" disabled data-i18n="view_back">Return to original view</button>
   </section>
+
+  <div class="placement-bar" id="inspection-bar" role="status" hidden>
+    <div data-i18n="view_inspect_note">Tap a visible surface to orbit and zoom around it. Drag or pinch to adjust the view.</div>
+    <button class="pill" id="inspection-cancel" type="button" data-i18n="cancel_place">Cancel</button>
+  </div>
 
   <div class="learn-panel" id="learn-panel" hidden>
     <h2 class="learn-heading" data-i18n="learn_title">Learn robotics by doing</h2>
