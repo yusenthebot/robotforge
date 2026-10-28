@@ -1166,3 +1166,10 @@ PR32 创建时同步 main6b06e55 的四个独立 ZenoBench 模块及专属测试
 - 旧四份raw报告64个名为DPR1样本实际renderer2，仅更正已核实的fine-heading／environment-scale两族覆盖，旧图与哈希不变。当前单纯3→1通知限制、helper等待／浮点／相对路径／离线顺序假设失败全部保留；发现预览自动连到冒烟8737后清空旧页并单独复验两套冒烟，不重复已通过预算。
 - 阴影恢复筛查因Malo返回自动恢复且冻结阈值不覆盖Go2而拒绝，未实现或合并候选。下一轮先盘点实际可见透明表面／投影是否有两个普通视距正例，再决定是否做局部外部诊断，不能先假定共享shader收益；材质与自由搭建整体目标持续，小功能成功率未动。
 - 详见 docs/bench/2026-10-28-responsive-dpr.md/.json；本地证据 ../robotforge-evidence/2026-10-28-responsive-dpr/，拒绝筛查 ../robotforge-evidence/2026-10-28-shadow-recovery/。
+
+## 2026-10-28 — Native image quality applicability screen
+
+- 共享透明阴影静态盘点不足两个普通视距真实正例；Upkie躯干仍未导入／渲染，未修改阴影。
+- 外部唯一BOX→LANCZOS缩图候选保留原预算、色彩、共享和前端；36张Chrome/Metal实际DPR1/2截图、18张root查看与1810控制检查完成。普通视距双独立资产收益未建立，X2／ANYmal gzip分别+12.15%／+22.24%，超过事前10%门槛，拒绝且不调参。
+- 产品88dfa18d及760输入未改；64定向原实现测试、Ruff和离线wheel通过，413产品文件与源码／上轮wheel一致，13原WIP保持。无候选完整预算、全套、安装或运动视频认证；初始pytest文件名和比较器时序假设失败、v1汇总缺陷及DPR1错误覆盖限制均归档。
+- 报告 docs/bench/2026-10-28-native-resampling-screen.md/.json；整体目标持续，下一步核实既有坡道／台阶重复放置的搭建成本，复用保护／Undo。小功能成功率未动。

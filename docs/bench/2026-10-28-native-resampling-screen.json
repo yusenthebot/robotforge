@@ -1,0 +1,155 @@
+{
+  "date": "2026-10-28",
+  "base": "1f8d5e3c19028c86833f2887f2ef4a90008ab1e7",
+  "source_sha256": "88dfa18d0afff74c525b4bf261944f5021bd2273bcfd3cbb9b07bf3519099d90",
+  "product_runtime_unchanged": true,
+  "accepted": false,
+  "external_candidate_executed": true,
+  "candidate_promoted": false,
+  "decision": {
+    "accepted": false,
+    "reason": [
+      "no clear ordinary-distance gain established across X2 and ANYmal C at actual DPR1/2",
+      "all three texture gzip payloads exceed frozen +10 percent cost gate"
+    ],
+    "visual_review": {
+      "root_viewed_pngs": 18,
+      "views": [
+        "wide DPR1 before/candidate for all3",
+        "low DPR1 before/candidate for all3",
+        "wide DPR2 before/candidate for all3"
+      ],
+      "DPR2_display_note": "2560x1600 source images displayed resized to1996x1248 by tool; buffer sizes asserted independently. No single-device-pixel visual certification.",
+      "observations": "Overall robot identity, red shell and dark drone details look similar at ordinary view; subtle close detail differences do not establish both-asset benefit. No temporal/ringing-free certification."
+    },
+    "controls_passed": true,
+    "cost": {
+      "x2": {
+        "before_gzip": 126978,
+        "candidate_gzip": 142403,
+        "delta_bytes": 15425,
+        "relative_increase": 0.1214777363007764,
+        "gzip_gate_passed": false,
+        "before_payload_wall_seconds": 0.06635495804948732,
+        "candidate_payload_wall_seconds": 0.06691691698506474,
+        "timing_scope": "one cache-miss payload build, diagnostic only; not ABBA or browser first complete main frame"
+      },
+      "anymal": {
+        "before_gzip": 149100,
+        "candidate_gzip": 182255,
+        "delta_bytes": 33155,
+        "relative_increase": 0.2223675385647217,
+        "gzip_gate_passed": false,
+        "before_payload_wall_seconds": 0.19349787500686944,
+        "candidate_payload_wall_seconds": 0.36020100000314415,
+        "timing_scope": "one cache-miss payload build, diagnostic only; not ABBA or browser first complete main frame"
+      },
+      "composite": {
+        "before_gzip": 126978,
+        "candidate_gzip": 142403,
+        "delta_bytes": 15425,
+        "relative_increase": 0.1214777363007764,
+        "gzip_gate_passed": false,
+        "before_payload_wall_seconds": 0.04742754204198718,
+        "candidate_payload_wall_seconds": 0.051312124996911734,
+        "timing_scope": "one cache-miss payload build, diagnostic only; not ABBA or browser first complete main frame"
+      }
+    },
+    "stop": "No retuning filter/threshold; no formal ABBA/full budget/full suite/lifecycle run for rejected candidate, no new video after static rejection. 36 actual static PNGs retained, not mislabeled as a movie.",
+    "transparent_shadow": "Static applicability only; one Upkie candidate not imported or rendered, no two-world gate.",
+    "next": "Switch to creative play: inspect native duplicate/reuse of existing ramps and stairs, reusing current protected terrain placement and shared materials; confirm actual repeated-building friction before implementation. Single-action success rates deferred.",
+    "broad_goal": "active",
+    "product_candidate_promoted": false
+  },
+  "static_capture": {
+    "actual_pngs": 36,
+    "root_viewed": 18,
+    "worlds": [
+      "cached Skydio X2",
+      "cached ANYmal C",
+      "two X2 plus rover and arm"
+    ],
+    "viewport_css": [
+      1280,
+      800
+    ],
+    "asserted_DPRs": [
+      1,
+      2
+    ],
+    "buffers": [
+      [
+        1280,
+        800
+      ],
+      [
+        2560,
+        1600
+      ]
+    ],
+    "physics": "exact frozen paused initial/final",
+    "videos_created_this_screen": 0,
+    "scope": "ordinary/inspection views, no temporal validation; DPR2 display resized by tool"
+  },
+  "controls": {
+    "passed": true,
+    "checks": 1810,
+    "actual_cached_asset_files": 59,
+    "model_paths_field": "retained separately and excluded from array equality because evidence world roots differ; actual cache sources independently hashed after captures against retained historical asset manifest"
+  },
+  "tests": {
+    "passed": 64,
+    "selection": [
+      "tests/test_viewer_textures.py",
+      "tests/test_viewer_native_textures_browser.py",
+      "tests/test_experiments.py"
+    ],
+    "candidate_scope": "unchanged product source, no LANCZOS candidate regression certification",
+    "full_suite": false,
+    "new_budget_run": false,
+    "new_installed_smoke": false,
+    "ruff": "pass",
+    "wheel": "offline build pass,413 product files equal to source and previous merged wheel",
+    "optional_unavailable": [
+      "mypy",
+      "pyright",
+      "bandit",
+      "pip_audit"
+    ]
+  },
+  "package": {
+    "passed": true,
+    "product_files": 413,
+    "source_and_previous_merged_wheel_exact": true,
+    "inputs": 760,
+    "original_WIP_files_preserved": 13,
+    "wheel_path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-native-resampling/dist/robotforge-0.0.1-py3-none-any.whl",
+    "wheel_bytes": 3941294,
+    "wheel_sha256": "bccb22bb9497948c65a54bb387f5f51bb9d1ee883afa6b7f5e2222c922d616aa",
+    "previous_wheel_bytes": 3941294,
+    "wheel_byte_difference": 0,
+    "fresh_install_or_budget_run": false
+  },
+  "evidence_directory": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-native-resampling",
+  "failures_retained": [
+    "baseline capturev1 lacked final aggregation; its3cases actually stopped/passed, independently audited; candidate v2 asserts cases",
+    "comparev1 treated asynchronous frame counter and resource completion order as exact controls; comparev2 excludes only frame counter and compares resource-path multiplicity, keeps draw work exact",
+    "initial pytest invocation named nonexistent test_experiment_records.py: no cases ran, exit4; corrected final selection64pass"
+  ],
+  "limits": [
+    "DPR1 errors were not separately retained before navigation; no all-page-error-free claim",
+    "paths model field separately retained; cache sources hashed after capture against frozen historical asset index",
+    "harnessv1 baseline aggregate corrected by independent per-case audit; v2 candidate capture differs only validation logic",
+    "static screen only; no temporal/first-frame/steady-FPS/RSS certification"
+  ],
+  "transparency_inventory": "static only,9existingworlds; hidden collision and separate water matches,one meaningful cached Upkie visual unrendered; no exhaustive DAE/PNG alpha scan",
+  "evidence_references": {
+    "plan.json": "19dd91f61f7b8dfaceeb79fe2b067f9da47e81778377d5fdb9a9c0242e9a493e",
+    "decision.json": "bfe077107c921510c0181d7f7fabcf2b74d45b029383d9100b821469ad85cd96",
+    "comparison.json": "b26cb72aa421ce4a689145affe6603e9609b210a5c5249d49383cbe927b605c9",
+    "transparent-applicability.json": "e97758c3eedbd0f75ffc825ec11febf9069f67cd07c718e709ebd60d0005a378",
+    "package-bridge.json": "dcfe4e56754947ca8aae7c9ffbf257c3ac3068163d82fd8e981ca483f799b004",
+    "targeted-v2.xml": "45663264c14c4ac4c63aee223f4fa64c6d4cce7e0f21450697bab4dd7f7773f3"
+  },
+  "next": "Assess repeated native ramp/stair placement using current protected placement and Undo; no action-success tuning. Broad goal active."
+}
