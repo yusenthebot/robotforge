@@ -452,7 +452,10 @@ class _Builder:
             body.mass = mass
             body.ipos = np.asarray(com, float) * np.abs(scale)
             body.inertia = np.asarray(inertia, float)
-            body.iquat = _gf_quat(axes) if axes is not None else (1, 0, 0, 0)
+            # unauthored principal axes read as the schema's fallback (0, 0, 0, 0), which means identity;
+            # MuJoCo would take it literally and give the body no rotational inertia
+            quat = _gf_quat(axes) if axes is not None else np.array([1.0, 0, 0, 0])
+            body.iquat = quat if np.linalg.norm(quat) > 1e-9 else np.array([1.0, 0, 0, 0])
         elif mass > 0:
             body.userdata = [mass]  # spread over the collision geoms by volume in finish()
 
