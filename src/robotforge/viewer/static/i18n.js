@@ -2,6 +2,11 @@
 
 const STRINGS = {
   en: {
+    robot_surface: "Part surface",
+    robot_surface_body: "Part",
+    robot_surface_lead: "Style one highlighted part, including all its visible surfaces. Base colours and physics stay the same. Applies at the current pose, resets motion and pauses.",
+    undo_robot_surface: "Undo part surface",
+    robot_surface_undone: "Restored the previous surface of {name}.",
     robots: "Robots",
     joints: "Joints",
     other: "Other",
@@ -387,6 +392,11 @@ const STRINGS = {
     mode_hover_mpc_desc: "Tries out futures every 20 ms and keeps the best.",
   },
   zh: {
+    robot_surface: "部件外观",
+    robot_surface_body: "部件",
+    robot_surface_lead: "修改高亮部件的全部可见表面，保留底色与物理属性。应用后保留当前姿态、清零运动并暂停。",
+    undo_robot_surface: "撤销部件外观",
+    robot_surface_undone: "已恢复 {name} 的上一次部件外观。",
     robots: "机器人",
     joints: "关节",
     other: "其他",

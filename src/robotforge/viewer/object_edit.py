@@ -371,7 +371,7 @@ def undo(pg: Playground, message: dict) -> dict:
     request = _parse(UndoEdit, message, "undo object edit")
     with pg.session.execution.command("viewer_undo_object_edit"):
         receipt = pg._play_edit
-        if receipt is None or receipt.token != request.token:
+        if not isinstance(receipt, Edit) or receipt.token != request.token:
             raise PlaygroundError("that object edit is no longer available to undo")
         with pg.lessons._lock, pg.session.lock:
             _guard(pg, receipt.store, request.version, request.generation, receipt.world_sha256)

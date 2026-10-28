@@ -1190,3 +1190,10 @@ PR32 创建时同步 main6b06e55 的四个独立 ZenoBench 模块及专属测试
 - 初ABBA原工作区冷+103.55／+174.20ms，反序BAAB补充+7.15／−32.05ms；全部保留，合并4样本均值仍为+55.35／+71.08ms，不推断因果或普遍提速。HTTP冷+1137B／暖+329B、请求数30未增，无新资产、依赖、贴图或pass。未跑完整default／slow／all-browser；可选类型／安全工具不可用已披露。
 - 初始测试await优先级／reset凭据假设、Ruff行长与系统Python环境问题均保留；最终测试及独立代码／Python审查通过。报告 docs/bench/2026-10-28-repeat-terrain.md/.json；证据 ../robotforge-evidence/2026-10-28-repeat-terrain/。
 - 下一步先筛查真实47MBMalo／20MBGo2网格响应的协商压缩／当前版本复用，原始解码字节、接口、CPU／事件循环／内存和冷加载仍要验证，尚未实现。整体质感／轻量／可玩性目标持续，小功能成功率未动。
+
+
+## 2026-10-28 — Robot part surfaces
+
+- 2026-10-28 robot part surfaces: opt-in direct-body Original/plastic/wood/steel on imported/library/template unmounted rigid robots, preserving base colours/physics/rays/sensor dressing; guarded pose-carry/reset/pause/noop/Undo/layout loop. Explicit user styling, no inferred CMF/global shader change.
+  Frozen56078aa4/767inputs: pre-JS-fix full default4037pass/128skip with unchanged product Python/dependencies; final viewer-default663 and related browser57, GPU9 (4103distinct passes),7canonical,source/fresh offline60-tool smoke and original11/11budgets pass. Wheel3948453B(+6898),416product files exact,13originalWIP preserved.
+  Three native full workflows decode/18root samples;24untouched-world main-canvas exact pairs (light media; one whole-window PNG differs),444nonappearance arrays per styled native session. Native OS zoom status:pending_manual_unlock; locked setup/no-op inputs are not passes; not monitor switching. No all-browser/Windows/every-frame/motion-success claim. Report docs/bench/2026-10-28-robot-body-surfaces.md/.json; broad goal active.

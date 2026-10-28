@@ -205,6 +205,13 @@
       <h2 class="section-title"><span data-i18n="robots">Robots</span></h2>
       <div class="robot-list" id="robot-list"></div>
       <button class="pill" id="robot-start" type="button" hidden data-i18n="robot_start">Set start / heading</button>
+      <button class="pill" id="robot-surface" type="button" hidden aria-expanded="false" aria-controls="robot-surface-controls" data-i18n="robot_surface">Part surface</button>
+      <div id="robot-surface-controls" hidden>
+        <p class="note" data-i18n="robot_surface_lead">Style one highlighted part, including all its visible surfaces. Base colours and physics stay the same. Applies at the current pose, resets motion and pauses.</p>
+        <label class="prop-material-control"><span data-i18n="robot_surface_body">Part</span><select id="robot-surface-body"></select></label>
+        <label class="prop-material-control"><span data-i18n="prop_surface">Surface</span><select id="robot-surface-material"><option value="" data-i18n="surface_original">Original</option><option value="plastic" data-i18n="material_plastic">Plastic</option><option value="wood" data-i18n="material_wood">Wood</option><option value="steel" data-i18n="material_steel">Steel</option></select></label>
+        <button class="pill" id="robot-surface-apply" type="button" data-i18n="surface_apply">Apply and reset</button>
+      </div>
     </section>
     <section id="sensor-section" hidden>
       <h2 class="section-title"><span data-i18n="sensors">Sensors</span><span class="count" id="sensor-count"></span></h2>

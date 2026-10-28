@@ -162,3 +162,109 @@ def test_reset_during_first_pending_list_discards_its_old_generation_reply(viewe
         assert await tab.eval(READY) and not tab.errors
 
     viewer("laptop", "en", scenario, world=course)
+
+
+HOLD_MAP_WORLD = """
+const onmessage=Object.getOwnPropertyDescriptor(WebSocket.prototype,'onmessage');
+Object.defineProperty(WebSocket.prototype,'onmessage',{
+ get:onmessage.get,set(fn){onmessage.set.call(this,ev=>{
+  const msg=typeof ev.data==='string'?JSON.parse(ev.data):null;
+  if(window.__holdMapWorld){
+   if(msg?.type==='scene'){window.__heldMapScene=ev;window.__releaseMapScene=()=>fn.call(this,ev);return;}
+   if(msg?.type==='state'||msg?.type==='robot_info'||!msg){
+    if(!msg)this.send(JSON.stringify({type:'seen'}));return;
+   }
+   if(msg?.type==='reply'&&msg.ok&&msg.data?.world&&!msg.data.entries)window.__mapReplyDelivered=true;
+  }
+  return fn.call(this,ev);
+ });}
+});
+"""
+
+
+@pytest.mark.parametrize("size,lang", [("laptop", "en"), ("laptop", "zh-CN"), ("phone", "en"), ("phone", "zh-CN")])
+def test_map_reply_does_not_reenable_old_layouts_before_new_scene(viewer, size, lang):  # noqa: F811
+    """The map is committed on the server while its scene/state are deliberately held in transit."""
+
+    async def scenario(tab, server):
+        await tab.page.call("Page.addScriptToEvaluateOnNewDocument", source=HOLD_MAP_WORLD)
+        await tab.navigate()
+        await open_layouts(tab)
+        await click(tab, "#layout-name")
+        await tab.page.call("Input.insertText", text="Delivery boundary")
+        await click(tab, "#layout-save")
+        await tab.until("document.querySelectorAll('.layout-row').length===1 && " + READY)
+        original = server.pg.current_world().model_dump(mode="json")
+        old = server.pg.session.version
+        await tab.run("window.__holdMapWorld=true")
+        await click(tab, "#map-list .choice:first-child")
+        await tab.until(
+            "!!window.__mapReplyDelivered && !!window.__heldMapScene && window.__robotforge.busy().pending===0"
+        )
+        assert server.pg.session.version > old and not server.pg.current_world().objects
+        state = await tab.run("""
+          return {version:window.__robotforge.scene.version,rendered:window.__robotforge.renderedVersion,
+            saveDisabled:document.getElementById('layout-save').disabled,
+            restoreDisabled:document.querySelector('[data-layout-action=restore]')?.disabled??true};
+        """)
+        assert state["version"] == state["rendered"] == old
+        assert state["saveDisabled"] and state["restoreDisabled"], state
+        await tab.run("window.__holdMapWorld=false;window.__releaseMapScene()")
+        await tab.until(f"window.__robotforge.renderedVersion==={server.pg.session.version} && " + READY)
+        await click(tab, RESTORE)
+        await tab.until(
+            "!document.getElementById('layout-confirm').hidden && document.activeElement.id==='layout-cancel'"
+        )
+        await click(tab, "#layout-apply")
+        await tab.until("!window.__robotforge.busy().busy && " + READY)
+        assert server.pg.current_world().model_dump(mode="json") == original and not tab.errors
+
+    viewer(size, lang, scenario, world=course)
+
+
+def test_failed_map_request_refreshes_the_still_current_layout_catalog(viewer):  # noqa: F811
+    async def scenario(tab, server):
+        await open_layouts(tab)
+        await click(tab, "#layout-name")
+        await tab.page.call("Input.insertText", text="Keep this layout")
+        await click(tab, "#layout-save")
+        await tab.until("document.querySelectorAll('.layout-row').length===1 && " + READY)
+        saved = server.pg.store.file.read_bytes()
+        version = server.pg.session.version
+        await tab.run("""
+          const send=WebSocket.prototype.send;
+          WebSocket.prototype.send=function(s){const m=JSON.parse(s);
+            if(m.type==='world'&&m.action==='scene')m.preset='missing-map-boundary';
+            return send.call(this,JSON.stringify(m));};
+        """)
+        await click(tab, "#map-list .choice:first-child")
+        await tab.until("!window.__robotforge.busy().busy && " + READY)
+        assert server.pg.session.version == version and server.pg.store.file.read_bytes() == saved
+        assert await tab.eval("document.getElementById('toast').textContent.includes('missing-map-boundary')")
+        await click(tab, RESTORE)
+        await tab.until("!document.getElementById('layout-confirm').hidden")
+        assert not tab.errors
+
+    viewer("laptop", "en", scenario, world=course)
+
+
+def test_context_loss_disables_layout_actions_until_the_main_view_returns(viewer):  # noqa: F811
+    async def scenario(tab, _server):
+        await open_layouts(tab)
+        await click(tab, "#layout-name")
+        await tab.page.call("Input.insertText", text="Context recovery")
+        await click(tab, "#layout-save")
+        await tab.until("document.querySelectorAll('.layout-row').length===1 && " + READY)
+        await tab.run("""
+          window.__layoutLoss=window.__robotforge.three().renderer.getContext().getExtension('WEBGL_lose_context');
+          window.__layoutLoss.loseContext();
+        """)
+        await tab.until("window.__robotforge.renderedVersion===0 && document.getElementById('layout-save').disabled")
+        assert await tab.eval("[...document.querySelectorAll('[data-layout-action]')].every(b=>b.disabled)")
+        await tab.run("window.__layoutLoss.restoreContext()")
+        await tab.until("window.__robotforge.renderedVersion===window.__robotforge.scene.version && " + READY)
+        await click(tab, RESTORE)
+        await tab.until("!document.getElementById('layout-confirm').hidden")
+        assert not tab.errors
+
+    viewer("laptop", "en", scenario, world=course)
