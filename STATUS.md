@@ -1,6 +1,7 @@
 # STATUS
 
 - Goal: docs/GOAL.md; improve shared material quality and creative playability while keeping install lightweight, loading fast and interaction responsive. Broad goal active; single-action success tuning deferred.
+- 2026-10-28 native image quality screen: rejected external BOX→LANCZOS; ordinary-distance two-asset benefit insufficient and X2/ANYmal gzip+12.15%/+22.24% exceed frozen10% gate.36actual DPR1/2 static PNGs,18root-viewed,1810control checks; product88dfa18d/760inputs unchanged.64selected product tests/Ruff/offline wheel pass,413package files exact,13originalWIP retained. No new candidate movie/full-suite/budget/installed certification; transparency inventory static and insufficient. Report docs/bench/2026-10-28-native-resampling-screen.md/.json; next inspect repeated protected ramp/stair building. Broad goal active.
 - 2026-10-28 display-density events: refresh the capped main drawing-buffer ratio on actual resolution/resize events, retaining CSS placement and density-only camera projection.
   Frozen88dfa18d/760inputs:290non-slow browser pass/1optional collection skip,9GPU,579backend=878distinct,7canonical,isolated source/fresh offline60-tool smoke and original11/11budgets pass.
   Three original worlds54stills/12fixed-control exact pairs,6fully decoded metric-change movies/36root samples; wheel3941294B(+239),413product files exact,13originalWIP retained; no extra assets/pass/dependency.
