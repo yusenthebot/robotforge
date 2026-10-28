@@ -2724,6 +2724,19 @@ async function placeEntity(item, pos) {
         throw error;
       }
       if (placementSession !== creator.session()) return;
+      if (item.kind === "terrain" && creator.repeating()) {
+        const info = sceneDesc?.terrain_edit;
+        const current = Number.isInteger(data.generation)
+          && stateVersion === data.version && stateGeneration === data.generation;
+        // Scene extras are collected separately: never carry a digest from another displayed world.
+        if (!current || loadingScene || sceneDesc?.version !== data.version || posedVersion !== data.version
+            || renderedVersion !== data.version || info?.version !== data.version
+            || !/^[0-9a-f]{64}$/.test(info?.world_sha256 ?? "")) {
+          lastAddition = current ? data.undo || null : null;
+          cancelCreation(true); throw new Error(t("create_scene_changed"));
+        }
+        placementWorldSha = info.world_sha256;
+      }
       lastAddition = data.undo || null;
       lastObjectEdit = data.undo_edit || null;
       lastRobotEdit = data.undo_robot_start || null;

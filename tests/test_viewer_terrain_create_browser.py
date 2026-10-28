@@ -32,7 +32,8 @@ async def choose(tab, name):
     await click(tab, '[data-tab="terrain"]')
     await click(tab, f'#terrain-create-list [data-terrain="{name}"]')
     await tab.until("!document.getElementById('placement-bar').hidden")
-    assert await tab.eval("document.querySelector('.repeat-placement').hidden")
+    assert not await tab.eval("document.querySelector('.repeat-placement').hidden")
+    assert not await tab.eval("document.getElementById('place-repeat').checked")
     assert await tab.eval("[...document.querySelectorAll('.prop-size-control')].every(e=>e.hidden)")
 
 
@@ -170,12 +171,15 @@ window.WebSocket=class extends Native{
 """
 
 
-def test_committed_terrain_keeps_undo_after_reply_before_poses_and_real_context_loss(viewer):  # noqa: F811
+@pytest.mark.parametrize("repeat", [False, True])
+def test_committed_terrain_keeps_undo_after_reply_before_poses_and_real_context_loss(viewer, repeat):  # noqa: F811
     async def scenario(tab, server):
         await tab.page.call("Page.addScriptToEvaluateOnNewDocument", source=HOLD)
         await tab.navigate()
         await prepare(tab)
         await choose(tab, "ramp")
+        if repeat:
+            await click(tab, "#place-repeat")
         await tab.run("window.__terrainWire.afterVersion=window.__robotforge.scene.version")
         await tap(tab, [2, -2, 0])
         await tab.until("!!window.__terrainWire.reply && window.__terrainWire.poses.length>0")
