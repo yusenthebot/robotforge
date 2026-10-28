@@ -1,0 +1,2762 @@
+{
+  "status": "accepted",
+  "goal_active": true,
+  "base_commit": "3b91619e9f74adbf1e547da0b457400376d3d81c",
+  "code_commit": "9ea01c63d3a43d7081a5c2f8699ddc50e07bb7e0",
+  "runtime_sha256": "0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da",
+  "frozen_inputs": 768,
+  "decision": "Explicit one-shot inspect surface mode; actual nearest visible geometry point becomes orbit target; direction and eye-to-hit distance retained. Return reuses existing view history. Camera-only, no world/physics writes.",
+  "gates": {
+    "benefit_categories_passed": 3,
+    "canvas_exact_pairs": 24,
+    "wheel_growth_bytes": 1320,
+    "http_cold_growth_bytes": 5265,
+    "http_request_count": 31,
+    "handler_p95_max_ms": 18.610000000102445
+  },
+  "verification": {
+    "viewer-default": {
+      "passed": 663,
+      "skipped": 6,
+      "failures": 0
+    },
+    "browser": {
+      "passed": 317,
+      "skipped": 1,
+      "failures": 0
+    },
+    "gpu": {
+      "passed": 9,
+      "skipped": 0,
+      "failures": 0
+    },
+    "distinct_pytest_passes": 989,
+    "scope": "663 viewer default/static-reader, all 317 non-slow browser and selected nine slow GPU tests. New seven inspection cases are part of browser count; no whole default/all slow certification."
+  },
+  "framework": {
+    "cases": 7,
+    "status": "pass",
+    "source": {
+      "active_source_sha256": "0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da",
+      "git_commit": "9ea01c63d3a43d7081a5c2f8699ddc50e07bb7e0",
+      "git_dirty": true,
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+      "plugins": [],
+      "python": "3.12.13"
+    }
+  },
+  "receipts": {
+    "build-final": {
+      "returncode": 0,
+      "seconds": 0.2001411249998455,
+      "inputs_unchanged": true,
+      "receipt_sha256": "fd8ed410c7d4c0ef269024e24f909813eeb7b077deb93b3d8a024cf357791659"
+    },
+    "lint-final": {
+      "returncode": 0,
+      "seconds": 0.08871566600009828,
+      "inputs_unchanged": true,
+      "receipt_sha256": "3c266899e6dca8af4451a224f388a4f0475d282deaf721498b47cfc204c6efa3"
+    },
+    "format-final": {
+      "returncode": 0,
+      "seconds": 0.08849987500025236,
+      "inputs_unchanged": true,
+      "receipt_sha256": "eea6e48f487415585c9a163692fe4d276387983298193a41ba5f18fb4fa4a083"
+    },
+    "syntax-final": {
+      "returncode": 0,
+      "seconds": 0.17255837499988047,
+      "inputs_unchanged": true,
+      "receipt_sha256": "e0c10ee27376f4041d833772a40f92f7bd6824e1102a234e7ead2a61758a666b"
+    },
+    "selection-extra": {
+      "returncode": 0,
+      "seconds": 20.07814108299999,
+      "inputs_unchanged": true,
+      "receipt_sha256": "6b5e1ad3568dd8d43da366a7c4f24091366d274bbb4008f22ec9e85fccbce21c"
+    },
+    "viewer-default": {
+      "returncode": 0,
+      "seconds": 105.23872670800029,
+      "inputs_unchanged": true,
+      "receipt_sha256": "bc7d7f529c01b42ac75f7bf56ff5a307e63f322387de0957979fb56f3e4d846c"
+    },
+    "browser": {
+      "returncode": 0,
+      "seconds": 1659.763466084,
+      "inputs_unchanged": true,
+      "receipt_sha256": "f7174fb6d9318ccb1c000a120f3ad0ddb52a7026b0e625aee2ebac526aea6646"
+    },
+    "gpu": {
+      "returncode": 0,
+      "seconds": 46.76217850000012,
+      "inputs_unchanged": true,
+      "receipt_sha256": "4b5bab4f0441404f7e409bc7131768b5224ba61ae293cf092f7a3cdcb9942185"
+    },
+    "smoke-source": {
+      "returncode": 0,
+      "seconds": 4.701715709000382,
+      "inputs_unchanged": true,
+      "receipt_sha256": "ef94af1542a5f762e82eddf47f05e30e26b273211f377ca1c4db6ec82df79371"
+    },
+    "wheel-install": {
+      "returncode": 0,
+      "seconds": 0.5345992910006316,
+      "inputs_unchanged": true,
+      "receipt_sha256": "c67a0d445a2ebf6095c9a8bb5164852716cda09de5378bb9f0647a3c704e7292"
+    },
+    "smoke-installed": {
+      "returncode": 0,
+      "seconds": 19.825362875000792,
+      "inputs_unchanged": true,
+      "receipt_sha256": "de582dc072b8cd086f23e6ee1b57a400122650169592fe231dae370bdbd64eb6"
+    },
+    "framework": {
+      "returncode": 0,
+      "seconds": 3.1831116250004925,
+      "inputs_unchanged": true,
+      "receipt_sha256": "ae51bdc053e4da6f730a4c55c54be60521f0811567a433cb128ec26fc7e41b9d"
+    },
+    "budget": {
+      "returncode": 0,
+      "seconds": 31.40898500000003,
+      "inputs_unchanged": true,
+      "receipt_sha256": "0b15bb9916fb24bfae42d89b3373d1a5f86130e1a0dd728f735d275c57f41e74"
+    },
+    "native-zoom-v2": {
+      "returncode": 0,
+      "seconds": 175.51686820900068,
+      "inputs_unchanged": true,
+      "receipt_sha256": "abe01efcae3ffde8c60c662cb7e888512c17e40b040c16c9ed131fc79728a235"
+    },
+    "controls-before": {
+      "returncode": 0,
+      "seconds": 44.00868300000002,
+      "inputs_unchanged": true,
+      "receipt_sha256": "e1f7b18f9c50543aa26df1d23bbc958a75a7701104159f9f5d7820601e391c72"
+    },
+    "controls-candidate": {
+      "returncode": 0,
+      "seconds": 47.97962695800015,
+      "inputs_unchanged": true,
+      "receipt_sha256": "0c8546c3d2a629ebb9865dac46d2576cd07f43289e5e852a32ea361fe0169876"
+    },
+    "compare-controls": {
+      "returncode": 0,
+      "seconds": 3.1076948329991865,
+      "inputs_unchanged": true,
+      "receipt_sha256": "ade42e5a208d8508ef8290a9c124e55388230d97711081d6d0d21ba48d438c84"
+    },
+    "candidate-workflows": {
+      "returncode": 0,
+      "seconds": 113.4870773749999,
+      "inputs_unchanged": true,
+      "receipt_sha256": "eb977529f3f38661295a7b2d4c87729007d4e1e9b213e5f1a7c399cbbccf93c9"
+    },
+    "package-bridge": {
+      "returncode": 0,
+      "seconds": 0.4123983330000556,
+      "inputs_unchanged": true,
+      "receipt_sha256": "5843ee2d8b1b057f8bb5bbb544b559d8791d9579761771f2aa112f549d35928f"
+    },
+    "aggregate": {
+      "returncode": 0,
+      "seconds": 0.146749374999672,
+      "inputs_unchanged": true,
+      "receipt_sha256": "1bfceff4572ec90501a3c3165f5f9993c56bc71f9f91b8d5db21ceea20a56d09"
+    },
+    "encode-before-malo-head": {
+      "returncode": 0,
+      "seconds": 4.58328554200034,
+      "inputs_unchanged": true,
+      "receipt_sha256": "2a96d371ee07c2f1744006552e23b6a53a2a0e649f805c78b1a0a7bfea1c588f"
+    },
+    "encode-before-go2-rack": {
+      "returncode": 0,
+      "seconds": 5.29489250000006,
+      "inputs_unchanged": true,
+      "receipt_sha256": "3d8c9a27c4d4b960df370ab39edf23d8ecef6fbe404475d9ec16d1af4a5ec1dd"
+    },
+    "encode-before-go2-dock": {
+      "returncode": 0,
+      "seconds": 6.185441499999797,
+      "inputs_unchanged": true,
+      "receipt_sha256": "34e3bce43f5f781b27e43b854f626d0c1589a01a2b321541c8968de53c08dc0f"
+    },
+    "encode-candidate-malo-head": {
+      "returncode": 0,
+      "seconds": 4.29605037500005,
+      "inputs_unchanged": true,
+      "receipt_sha256": "52afabdb639be93fcfd39d065db2fb7afb1995c8d58dc4faecde39a9fc79cd97"
+    },
+    "encode-candidate-go2-rack": {
+      "returncode": 0,
+      "seconds": 4.8981790830002865,
+      "inputs_unchanged": true,
+      "receipt_sha256": "1836607f901c23982e4edfa1331605317e4e0180c54a249991b4034eec0ec387"
+    },
+    "encode-candidate-go2-dock": {
+      "returncode": 0,
+      "seconds": 4.526654041999791,
+      "inputs_unchanged": true,
+      "receipt_sha256": "779e088720a95a56d46dc7d4976473f18e92a859d43ee40ac740a29e850941c7"
+    },
+    "load-0-before-malo": {
+      "returncode": 0,
+      "seconds": 6.631361083000229,
+      "inputs_unchanged": true,
+      "receipt_sha256": "0625d77f130e2466f85c7404acf23e90a93cd75fba107e97e3e6b3e0543859ef"
+    },
+    "load-0-before-go2": {
+      "returncode": 0,
+      "seconds": 4.4271592499999315,
+      "inputs_unchanged": true,
+      "receipt_sha256": "e9e8db82bed29e0024ef7caa88bca737ed3aed15172e4c181f10051a5ae117ea"
+    },
+    "load-1-candidate-malo": {
+      "returncode": 0,
+      "seconds": 6.190812541000014,
+      "inputs_unchanged": true,
+      "receipt_sha256": "1deb457986ac55d6a249e4013b4c50ba55e72c3c60a0bfb7aa9d62deb27545bb"
+    },
+    "load-1-candidate-go2": {
+      "returncode": 0,
+      "seconds": 4.137399457999891,
+      "inputs_unchanged": true,
+      "receipt_sha256": "5f9450f0bb30d22baa3763e3610d1c1deee597b3917555c490f14e809ac2db84"
+    },
+    "load-2-candidate-malo": {
+      "returncode": 0,
+      "seconds": 6.3198071249998975,
+      "inputs_unchanged": true,
+      "receipt_sha256": "6a55ca9424d77b1782a5220e0a3849614888becef14319c7033eab6e3d823088"
+    },
+    "load-2-candidate-go2": {
+      "returncode": 0,
+      "seconds": 4.3517352910002955,
+      "inputs_unchanged": true,
+      "receipt_sha256": "cf2ed54813fbbf8c0328747d8fe7e36021231dde66160d3272d4c8354180e5ab"
+    },
+    "load-3-before-malo": {
+      "returncode": 0,
+      "seconds": 6.282035957999142,
+      "inputs_unchanged": true,
+      "receipt_sha256": "62b41cfb08906e9301177fddd06906b133f4958d3320b274d850640a787e2a18"
+    },
+    "load-3-before-go2": {
+      "returncode": 0,
+      "seconds": 4.26448791599978,
+      "inputs_unchanged": true,
+      "receipt_sha256": "2c0dc9433986cc7bf45007da0e38027be50b036726ddae96232da9d1bb5a489e"
+    },
+    "load-4-candidate-malo": {
+      "returncode": 0,
+      "seconds": 6.388980624999931,
+      "inputs_unchanged": true,
+      "receipt_sha256": "1cb194d5017dc18916d7bbd551f8d026cbf2ce5950e2433cfb61168e3818018a"
+    },
+    "load-4-candidate-go2": {
+      "returncode": 0,
+      "seconds": 4.663994292000098,
+      "inputs_unchanged": true,
+      "receipt_sha256": "690d9f469ead4858c353d365bbc3cd952040b75e7ea7fa09aa13f8aa2c0aab6c"
+    },
+    "load-5-before-malo": {
+      "returncode": 0,
+      "seconds": 6.577692542000477,
+      "inputs_unchanged": true,
+      "receipt_sha256": "b0f00707ef98b356d1b20add634441d49944c80f86ed572229a4e6be1f7f2721"
+    },
+    "load-5-before-go2": {
+      "returncode": 0,
+      "seconds": 4.647847332999845,
+      "inputs_unchanged": true,
+      "receipt_sha256": "279e421deb7c7b74fed32a1d5968d7bf45aa5d233587122cc5a6e53c5648aa3a"
+    },
+    "load-6-before-malo": {
+      "returncode": 0,
+      "seconds": 6.1401702499997555,
+      "inputs_unchanged": true,
+      "receipt_sha256": "4c0934a0b2be101384b650b70d53b73a9db214717b8672b0fa70addcd1d69a8b"
+    },
+    "load-6-before-go2": {
+      "returncode": 0,
+      "seconds": 4.194841791999352,
+      "inputs_unchanged": true,
+      "receipt_sha256": "7f0c68b443f290322f9855801b4ced7530b2f59d174679874598b4d6712ec696"
+    },
+    "load-7-candidate-malo": {
+      "returncode": 0,
+      "seconds": 5.856995874999484,
+      "inputs_unchanged": true,
+      "receipt_sha256": "14767921d7e0a33c18b19b1fa93750939cfa21d9af8d6478b3d0caf99865df5e"
+    },
+    "load-7-candidate-go2": {
+      "returncode": 0,
+      "seconds": 4.276449249999132,
+      "inputs_unchanged": true,
+      "receipt_sha256": "ef759f82de6c8ad2dec39c9591f1630d1947e40424fb516c7fb1b06b2c03ee2a"
+    }
+  },
+  "earlier_targeted_run": {
+    "name": "inspection-v11",
+    "passed": 7,
+    "frozen_difference": [
+      "tests/test_viewer_inspection_browser.py"
+    ],
+    "scope": "Product inputs identical; test file later extended. Final browser317 reruns all seven frozen cases. Not represented as a full frozen-input run."
+  },
+  "optional_tools": {
+    "available": {
+      "mypy": false,
+      "pyright": false,
+      "bandit": false,
+      "pip_audit": false
+    },
+    "status": "unavailable; not passing checks. No new product Python/TypeScript."
+  },
+  "code_review": {
+    "approved": true,
+    "source_sha256": "0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da",
+    "scope": "Readonly specialized code reviewer inspected current frontend and seven browser cases. No high-confidence blockers. No runtime tests executed by reviewer. Latest tests additionally verify object selection bar restoration; root runs the full browser selection.",
+    "reviewed_guards": [
+      "camera-space near/far",
+      "same inspection identity/version/generation/session/gesture epoch",
+      "keyboard reentry and editing bar recovery",
+      "bounded water still-level analytic hit; no water triangle traversal",
+      "flex/current matrices; ancestor visibility and actual face material"
+    ],
+    "unproven": [
+      "generic test ray is not a hidden/clip/material oracle; dedicated foreground tests use independent depth assertions",
+      "no physical-phone/monitor or every-frame quality certification"
+    ]
+  },
+  "default_controls": {
+    "checks": 1770,
+    "canvas_exact_pairs": 24,
+    "cases": {
+      "malo": {
+        "views": {
+          "dpr1-studio-normal": {
+            "before_sha256": "4fc67f5ac8a512c514ef1e17bc20f60097c047be870b6b1429e810b4dcd53f9f",
+            "candidate_sha256": "4fc67f5ac8a512c514ef1e17bc20f60097c047be870b6b1429e810b4dcd53f9f",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-studio-detail": {
+            "before_sha256": "43ce938a2c9a16cc6ede64d28c0d1f3abf4a8ac0a0aae3d1a2c1f59343666afc",
+            "candidate_sha256": "43ce938a2c9a16cc6ede64d28c0d1f3abf4a8ac0a0aae3d1a2c1f59343666afc",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-daylight-normal": {
+            "before_sha256": "166cd7a81cbcc398d45ff9188b66b98f3a9e2fa0d5e604304c9bf32a3ba0b934",
+            "candidate_sha256": "166cd7a81cbcc398d45ff9188b66b98f3a9e2fa0d5e604304c9bf32a3ba0b934",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-daylight-detail": {
+            "before_sha256": "33a41d6bb36c6c3d3d31c431adf77e8e0c5eff60fa2506b6284a934d3c3aa4f3",
+            "candidate_sha256": "33a41d6bb36c6c3d3d31c431adf77e8e0c5eff60fa2506b6284a934d3c3aa4f3",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-studio-normal": {
+            "before_sha256": "38e2b59a5f0abe6d13179b836596a900e98d5ed5d30b04405f2e70ad024f8210",
+            "candidate_sha256": "38e2b59a5f0abe6d13179b836596a900e98d5ed5d30b04405f2e70ad024f8210",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-studio-detail": {
+            "before_sha256": "379ecfc60122c221bf905742c4b6f780f17ee47af6b972b617d9744b1567dc28",
+            "candidate_sha256": "379ecfc60122c221bf905742c4b6f780f17ee47af6b972b617d9744b1567dc28",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-daylight-normal": {
+            "before_sha256": "27db030afd1456f0d98421f2b8405c95b56580756c80013e4c4915e1812f894e",
+            "candidate_sha256": "27db030afd1456f0d98421f2b8405c95b56580756c80013e4c4915e1812f894e",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-daylight-detail": {
+            "before_sha256": "c77130f7ae91ab2e991d3ffd3dc2a4036efa7daf2495eb4654e4395700d4202f",
+            "candidate_sha256": "c77130f7ae91ab2e991d3ffd3dc2a4036efa7daf2495eb4654e4395700d4202f",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          }
+        },
+        "model_state_arrays": 485,
+        "excluded_path_metadata": [
+          "paths",
+          "mesh_pathadr"
+        ]
+      },
+      "go2": {
+        "views": {
+          "dpr1-studio-normal": {
+            "before_sha256": "fb6e3f26666e97da6b76501c049eab7385a0ce09015da249f15d2c7f76d4d5e9",
+            "candidate_sha256": "fb6e3f26666e97da6b76501c049eab7385a0ce09015da249f15d2c7f76d4d5e9",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-studio-detail": {
+            "before_sha256": "327327e1c75d80335e037fadd6d920d1d62ac308bb016a4708d8431303a8130e",
+            "candidate_sha256": "327327e1c75d80335e037fadd6d920d1d62ac308bb016a4708d8431303a8130e",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-daylight-normal": {
+            "before_sha256": "eff5010941e2b58c43ee8cd221e6fe6cac76831bacebf3f36371a184667c6a8a",
+            "candidate_sha256": "eff5010941e2b58c43ee8cd221e6fe6cac76831bacebf3f36371a184667c6a8a",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-daylight-detail": {
+            "before_sha256": "ba19c61dd68d4e2aef19b4ee7fe17e1e0a27bff05348532da2c1198eae80f12a",
+            "candidate_sha256": "ba19c61dd68d4e2aef19b4ee7fe17e1e0a27bff05348532da2c1198eae80f12a",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-studio-normal": {
+            "before_sha256": "73229eae4b99e0d3c8085d70b23fa6385fb61099f280ac599e20f72a53455ee4",
+            "candidate_sha256": "1b2fb667d1937a5cea75aed71a8c3586425a6289b0c5835637d10aec7af51817",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": false,
+            "whole_window_different_pixels": 879,
+            "whole_window_max_channel_delta": 167,
+            "whole_window_mean_channel_delta": 0.016707356770833334
+          },
+          "dpr2-studio-detail": {
+            "before_sha256": "42879eb1b095f8c2e7e6fc65c62b83242be175b641769b541261c03163fa0bf6",
+            "candidate_sha256": "42879eb1b095f8c2e7e6fc65c62b83242be175b641769b541261c03163fa0bf6",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-daylight-normal": {
+            "before_sha256": "7767c0d187968ebd906a425a072734b30716f83aaf3c039ee4ce508bf0083529",
+            "candidate_sha256": "7767c0d187968ebd906a425a072734b30716f83aaf3c039ee4ce508bf0083529",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-daylight-detail": {
+            "before_sha256": "cd7ccf76ef7da2fdcec27cf0b20603ece907f0414a8e9efefabe2da47aaa5206",
+            "candidate_sha256": "cd7ccf76ef7da2fdcec27cf0b20603ece907f0414a8e9efefabe2da47aaa5206",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          }
+        },
+        "model_state_arrays": 485,
+        "excluded_path_metadata": [
+          "paths",
+          "mesh_pathadr"
+        ]
+      },
+      "panda": {
+        "views": {
+          "dpr1-studio-normal": {
+            "before_sha256": "d42f3176de9f34b0610a51f4faac51e71df579bd9f520a7f2aa2da92dbbbe4d0",
+            "candidate_sha256": "d42f3176de9f34b0610a51f4faac51e71df579bd9f520a7f2aa2da92dbbbe4d0",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-studio-detail": {
+            "before_sha256": "a76e0c0c13dbb3216581dcd4077d6267561dedd7e07f5d9bba57e42716bcae45",
+            "candidate_sha256": "a76e0c0c13dbb3216581dcd4077d6267561dedd7e07f5d9bba57e42716bcae45",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-daylight-normal": {
+            "before_sha256": "882b0077ebd63c6abfe27e98a5848dafd11a9d6b93a34e212b50df4b5f5de045",
+            "candidate_sha256": "882b0077ebd63c6abfe27e98a5848dafd11a9d6b93a34e212b50df4b5f5de045",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr1-daylight-detail": {
+            "before_sha256": "638a0084020641b798378346c746df88a8c97b095b5a7d9695f313c689f6b41a",
+            "candidate_sha256": "638a0084020641b798378346c746df88a8c97b095b5a7d9695f313c689f6b41a",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-studio-normal": {
+            "before_sha256": "e2df91b92fd904938651f829fd3fee8730fa7f9161c653de219dd8479b56bdb9",
+            "candidate_sha256": "e2df91b92fd904938651f829fd3fee8730fa7f9161c653de219dd8479b56bdb9",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-studio-detail": {
+            "before_sha256": "fd860fface32bbf606d943b417d0811f5bbbd8b0ea1cd0a5effed5398b1e4800",
+            "candidate_sha256": "fd860fface32bbf606d943b417d0811f5bbbd8b0ea1cd0a5effed5398b1e4800",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-daylight-normal": {
+            "before_sha256": "a589608f82e2fee4b430d170be58e3d47c83e6139dafce6456a8ef24fd542842",
+            "candidate_sha256": "a589608f82e2fee4b430d170be58e3d47c83e6139dafce6456a8ef24fd542842",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          },
+          "dpr2-daylight-detail": {
+            "before_sha256": "2f61f1c61fc854d19b1864da328200920276493039c33c56684d8f5d5e5b1d3b",
+            "candidate_sha256": "2f61f1c61fc854d19b1864da328200920276493039c33c56684d8f5d5e5b1d3b",
+            "main_canvas_exact": true,
+            "whole_window_png_exact": true,
+            "whole_window_different_pixels": 0,
+            "whole_window_max_channel_delta": 0,
+            "whole_window_mean_channel_delta": 0.0
+          }
+        },
+        "model_state_arrays": 485,
+        "excluded_path_metadata": [
+          "paths",
+          "mesh_pathadr"
+        ]
+      }
+    },
+    "scope": "Source-separated original Malo/Go2/Panda, explicit light media, browser-emulated actual DPR1/2, two lighting presets, normal/detail. One full-window Go2 status-region PNG differs:879 pixels/max167; main canvas remains exact. Path metadata paths/mesh_pathadr excluded cross-process; camera eye/target1e-10. Relative asset labels alone are not independently resolved asset proof."
+  },
+  "workflows": [
+    {
+      "kind": "malo-head",
+      "before_pan_gestures": 2,
+      "before_pivot_error_m": 0.2285946638609245,
+      "candidate_stages": [
+        {
+          "label": "inspected",
+          "eye": [
+            2.585831482962928,
+            -3.9670163958152105,
+            3.2227539152941374
+          ],
+          "target": [
+            0.15585596549197567,
+            -0.07905556786171596,
+            1.327373011666802
+          ],
+          "point": [
+            0.15585591980812774,
+            -0.07905557780056838,
+            1.327372986304959
+          ],
+          "screen": [
+            471.9999914340633,
+            387.0000033883859
+          ],
+          "center": [
+            472,
+            387
+          ],
+          "target_error": 5.318851222558455e-08,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        },
+        {
+          "label": "orbited",
+          "eye": [
+            5.117054327283583,
+            -0.07905556786171626,
+            1.3273730116668023
+          ],
+          "target": [
+            0.15585596549197567,
+            -0.07905556786171596,
+            1.327373011666802
+          ],
+          "point": [
+            0.15585591980812774,
+            -0.07905557780056838,
+            1.327372986304959
+          ],
+          "screen": [
+            471.99999806542615,
+            387.00000493662225
+          ],
+          "center": [
+            472,
+            387
+          ],
+          "target_error": 5.318851222558455e-08,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        },
+        {
+          "label": "zoomed",
+          "eye": [
+            3.80279264902702,
+            -0.07905556786171618,
+            1.3273730116668023
+          ],
+          "target": [
+            0.15585596549197567,
+            -0.07905556786171596,
+            1.327373011666802
+          ],
+          "point": [
+            0.15585591980812774,
+            -0.07905557780056838,
+            1.327372986304959
+          ],
+          "screen": [
+            471.9999973682558,
+            387.00000671565317
+          ],
+          "center": [
+            472,
+            387
+          ],
+          "target_error": 5.318851222558455e-08,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        }
+      ],
+      "handler_p95_ms": 18.610000000102445,
+      "handler_samples": [
+        {
+          "received": 13283.899999999441,
+          "trusted": true,
+          "ray_ms": 1.6000000005587935,
+          "pointerup_to_bar_hide_ms": 18.5
+        },
+        {
+          "received": 15567.5,
+          "trusted": true,
+          "ray_ms": 2,
+          "pointerup_to_bar_hide_ms": 18.09999999962747
+        },
+        {
+          "received": 17850.700000000186,
+          "trusted": true,
+          "ray_ms": 1.900000000372529,
+          "pointerup_to_bar_hide_ms": 17.399999999441206
+        },
+        {
+          "received": 20134.39999999944,
+          "trusted": true,
+          "ray_ms": 1.699999999254942,
+          "pointerup_to_bar_hide_ms": 17.800000000745058
+        },
+        {
+          "received": 22417.599999999627,
+          "trusted": true,
+          "ray_ms": 1.699999999254942,
+          "pointerup_to_bar_hide_ms": 17.700000000186265
+        },
+        {
+          "received": 24700.599999999627,
+          "trusted": true,
+          "ray_ms": 1.7999999998137355,
+          "pointerup_to_bar_hide_ms": 18.700000000186265
+        },
+        {
+          "received": 26984.599999999627,
+          "trusted": true,
+          "ray_ms": 1.7000000001862645,
+          "pointerup_to_bar_hide_ms": 17.5
+        },
+        {
+          "received": 29267.599999999627,
+          "trusted": true,
+          "ray_ms": 1.2999999998137355,
+          "pointerup_to_bar_hide_ms": 17.200000000186265
+        },
+        {
+          "received": 31551.200000000186,
+          "trusted": true,
+          "ray_ms": 1.6000000005587935,
+          "pointerup_to_bar_hide_ms": 16.699999999254942
+        },
+        {
+          "received": 33833.59999999963,
+          "trusted": true,
+          "ray_ms": 1.599999999627471,
+          "pointerup_to_bar_hide_ms": 17.5
+        }
+      ],
+      "handler_scope": "Native pointerup receipt to same-main-thread zero-timeout handler and microtask-observed bar hide. Includes source ray intersection/filter/camera/DOM update; excludes CDP delivery, physical input and next GPU presentation. Ten serial warm samples, no causal/universal latency guarantee.",
+      "model_arrays_unchanged": 480,
+      "scope": "Paused original world; scripted initial camera and visible target chosen by source geometry/body name. Thereafter trusted native Look here tap, Side orbit, wheel and Back. Not human discovery/latency; expected surface ray point within1e-6, exact return1e-8. Frozen before-control workflows retained separately."
+    },
+    {
+      "kind": "go2-rack",
+      "before_pan_gestures": 2,
+      "before_pivot_error_m": 0.742993081460877,
+      "candidate_stages": [
+        {
+          "label": "inspected",
+          "eye": [
+            9.691414686898288,
+            -8.61017975687379,
+            7.442091445234925
+          ],
+          "target": [
+            2.0032709290828663,
+            0.9999999403953552,
+            1.0032710480645985
+          ],
+          "point": [
+            2.0032709497647696,
+            0.9999999403953552,
+            1.0032709626798113
+          ],
+          "screen": [
+            640.0000011228298,
+            387.0000056764474
+          ],
+          "center": [
+            640,
+            387
+          ],
+          "target_error": 8.78538730864039e-08,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        },
+        {
+          "label": "orbited",
+          "eye": [
+            15.892889943355858,
+            0.9999999403953543,
+            1.0032710480645994
+          ],
+          "target": [
+            2.0032709290828663,
+            0.9999999403953552,
+            1.0032710480645985
+          ],
+          "point": [
+            2.0032709497647696,
+            0.9999999403953552,
+            1.0032709626798113
+          ],
+          "screen": [
+            640,
+            387.0000059364367
+          ],
+          "center": [
+            640,
+            387
+          ],
+          "target_error": 8.78538730864039e-08,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        },
+        {
+          "label": "zoomed",
+          "eye": [
+            12.213417230345746,
+            0.9999999403953546,
+            1.0032710480645992
+          ],
+          "target": [
+            2.0032709290828663,
+            0.9999999403953552,
+            1.0032710480645985
+          ],
+          "point": [
+            2.0032709497647696,
+            0.9999999403953552,
+            1.0032709626798113
+          ],
+          "screen": [
+            640,
+            387.0000080757751
+          ],
+          "center": [
+            640,
+            387
+          ],
+          "target_error": 8.78538730864039e-08,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        }
+      ],
+      "handler_p95_ms": 16.81000000028871,
+      "handler_samples": [
+        {
+          "received": 11437.400000000373,
+          "trusted": true,
+          "ray_ms": 0.20000000018626451,
+          "pointerup_to_bar_hide_ms": 16.09999999962747
+        },
+        {
+          "received": 13803.5,
+          "trusted": true,
+          "ray_ms": 0.20000000018626451,
+          "pointerup_to_bar_hide_ms": 16.600000000558794
+        },
+        {
+          "received": 16153.600000000559,
+          "trusted": true,
+          "ray_ms": 0.09999999962747097,
+          "pointerup_to_bar_hide_ms": 16.59999999962747
+        },
+        {
+          "received": 18520,
+          "trusted": true,
+          "ray_ms": 0.20000000018626451,
+          "pointerup_to_bar_hide_ms": 16.40000000037253
+        },
+        {
+          "received": 20887,
+          "trusted": true,
+          "ray_ms": 0.09999999962747097,
+          "pointerup_to_bar_hide_ms": 16.200000000186265
+        },
+        {
+          "received": 23236.900000000373,
+          "trusted": true,
+          "ray_ms": 0.20000000018626451,
+          "pointerup_to_bar_hide_ms": 16.299999999813735
+        },
+        {
+          "received": 25637.200000000186,
+          "trusted": true,
+          "ray_ms": 0.2999999998137355,
+          "pointerup_to_bar_hide_ms": 16.90000000037253
+        },
+        {
+          "received": 27986,
+          "trusted": true,
+          "ray_ms": 0.20000000018626451,
+          "pointerup_to_bar_hide_ms": 16.700000000186265
+        },
+        {
+          "received": 30336.400000000373,
+          "trusted": true,
+          "ray_ms": 0.09999999962747097,
+          "pointerup_to_bar_hide_ms": 16.200000000186265
+        },
+        {
+          "received": 32736.200000000186,
+          "trusted": true,
+          "ray_ms": 0.09999999962747097,
+          "pointerup_to_bar_hide_ms": 15.599999999627471
+        }
+      ],
+      "handler_scope": "Native pointerup receipt to same-main-thread zero-timeout handler and microtask-observed bar hide. Includes source ray intersection/filter/camera/DOM update; excludes CDP delivery, physical input and next GPU presentation. Ten serial warm samples, no causal/universal latency guarantee.",
+      "model_arrays_unchanged": 480,
+      "scope": "Paused original world; scripted initial camera and visible target chosen by source geometry/body name. Thereafter trusted native Look here tap, Side orbit, wheel and Back. Not human discovery/latency; expected surface ray point within1e-6, exact return1e-8. Frozen before-control workflows retained separately."
+    },
+    {
+      "kind": "go2-dock",
+      "before_pan_gestures": 3,
+      "before_pivot_error_m": 2.281950045035488,
+      "candidate_stages": [
+        {
+          "label": "inspected",
+          "eye": [
+            12.629066390318641,
+            -10.028520720533491,
+            4.984188513525665
+          ],
+          "target": [
+            4.0914148576978455,
+            -1.4908691879127551,
+            0.16041539759494677
+          ],
+          "point": [
+            4.091414343140312,
+            -1.4908689053700601,
+            0.16041532527860144
+          ],
+          "screen": [
+            639.9999878149711,
+            386.999989456716
+          ],
+          "center": [
+            640,
+            387
+          ],
+          "target_error": 5.914638480595581e-07,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        },
+        {
+          "label": "orbited",
+          "eye": [
+            17.093406030548977,
+            -1.490869187912756,
+            0.16041539759494758
+          ],
+          "target": [
+            4.0914148576978455,
+            -1.4908691879127551,
+            0.16041539759494677
+          ],
+          "point": [
+            4.091414343140312,
+            -1.4908689053700601,
+            0.16041532527860144
+          ],
+          "screen": [
+            640.0000209850436,
+            387.000005371088
+          ],
+          "center": [
+            640,
+            387
+          ],
+          "target_error": 5.914638480595581e-07,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        },
+        {
+          "label": "zoomed",
+          "eye": [
+            13.649073130838541,
+            -1.4908691879127558,
+            0.16041539759494736
+          ],
+          "target": [
+            4.0914148576978455,
+            -1.4908691879127551,
+            0.16041539759494677
+          ],
+          "point": [
+            4.091414343140312,
+            -1.4908689053700601,
+            0.16041532527860144
+          ],
+          "screen": [
+            640.0000285475103,
+            387.00000730668893
+          ],
+          "center": [
+            640,
+            387
+          ],
+          "target_error": 5.914638480595581e-07,
+          "device": 2,
+          "ratio": 2,
+          "gl": 0
+        }
+      ],
+      "handler_p95_ms": 16.955000000167637,
+      "handler_samples": [
+        {
+          "received": 10734.400000000373,
+          "trusted": true,
+          "ray_ms": 0.10000000055879354,
+          "pointerup_to_bar_hide_ms": 15.699999999254942
+        },
+        {
+          "received": 13084.099999999627,
+          "trusted": true,
+          "ray_ms": 0,
+          "pointerup_to_bar_hide_ms": 16.90000000037253
+        },
+        {
+          "received": 15433.799999999814,
+          "trusted": true,
+          "ray_ms": 0.09999999962747097,
+          "pointerup_to_bar_hide_ms": 15.5
+        },
+        {
+          "received": 17783.400000000373,
+          "trusted": true,
+          "ray_ms": 0.09999999962747097,
+          "pointerup_to_bar_hide_ms": 16.799999999813735
+        },
+        {
+          "received": 20133,
+          "trusted": true,
+          "ray_ms": 0.09999999962747097,
+          "pointerup_to_bar_hide_ms": 17
+        },
+        {
+          "received": 22483.5,
+          "trusted": true,
+          "ray_ms": 0.10000000055879354,
+          "pointerup_to_bar_hide_ms": 16.299999999813735
+        },
+        {
+          "received": 24834.400000000373,
+          "trusted": true,
+          "ray_ms": 0,
+          "pointerup_to_bar_hide_ms": 16.09999999962747
+        },
+        {
+          "received": 27183.200000000186,
+          "trusted": true,
+          "ray_ms": 0.10000000055879354,
+          "pointerup_to_bar_hide_ms": 16.899999999441206
+        },
+        {
+          "received": 29532.700000000186,
+          "trusted": true,
+          "ray_ms": 0,
+          "pointerup_to_bar_hide_ms": 16.09999999962747
+        },
+        {
+          "received": 31884.299999999814,
+          "trusted": true,
+          "ray_ms": 0.09999999962747097,
+          "pointerup_to_bar_hide_ms": 15.100000000558794
+        }
+      ],
+      "handler_scope": "Native pointerup receipt to same-main-thread zero-timeout handler and microtask-observed bar hide. Includes source ray intersection/filter/camera/DOM update; excludes CDP delivery, physical input and next GPU presentation. Ten serial warm samples, no causal/universal latency guarantee.",
+      "model_arrays_unchanged": 480,
+      "scope": "Paused original world; scripted initial camera and visible target chosen by source geometry/body name. Thereafter trusted native Look here tap, Side orbit, wheel and Back. Not human discovery/latency; expected surface ray point within1e-6, exact return1e-8. Frozen before-control workflows retained separately."
+    }
+  ],
+  "media": [
+    {
+      "cohort": "before",
+      "kind": "malo-head",
+      "evidence_path": "before-malo-head-v2/workflow.mp4",
+      "video_sha256": "e70b824260321bd47207687538257e54488074aeed1d626d708fa09d46ce170a",
+      "video_bytes": 856250,
+      "duration_seconds": 9.3,
+      "decoded_frame_count": 279,
+      "raw_frame_count": 356,
+      "raw_timestamp_span_seconds": 9.182965993881226,
+      "decode_exit_code": 0,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+    },
+    {
+      "cohort": "candidate",
+      "kind": "malo-head",
+      "evidence_path": "candidate-malo-head-v2/workflow.mp4",
+      "video_sha256": "81ca81f45b67e9ee17e586eb37835715e8a516256f4e7307371a25c0f25af3d3",
+      "video_bytes": 910935,
+      "duration_seconds": 7.6,
+      "decoded_frame_count": 228,
+      "raw_frame_count": 253,
+      "raw_timestamp_span_seconds": 7.483123064041138,
+      "decode_exit_code": 0,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+    },
+    {
+      "cohort": "before",
+      "kind": "go2-rack",
+      "evidence_path": "before-go2-rack-v2/workflow.mp4",
+      "video_sha256": "8065d2d950a19aba9c0dc74c275e889fcbe108fad102d90b3cce214003c666ee",
+      "video_bytes": 1084933,
+      "duration_seconds": 9.733333,
+      "decoded_frame_count": 292,
+      "raw_frame_count": 370,
+      "raw_timestamp_span_seconds": 9.616281032562256,
+      "decode_exit_code": 0,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+    },
+    {
+      "cohort": "candidate",
+      "kind": "go2-rack",
+      "evidence_path": "candidate-go2-rack-v2/workflow.mp4",
+      "video_sha256": "60c5f7bd5235faf28fa622b5dea18b3fa71012daac35d64b0a14d635b2a2fb79",
+      "video_bytes": 1368992,
+      "duration_seconds": 7.733333,
+      "decoded_frame_count": 232,
+      "raw_frame_count": 257,
+      "raw_timestamp_span_seconds": 7.616379022598267,
+      "decode_exit_code": 0,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+    },
+    {
+      "cohort": "before",
+      "kind": "go2-dock",
+      "evidence_path": "before-go2-dock-v2/workflow.mp4",
+      "video_sha256": "1c45d45ef28d23f03f909b3635af2648ea22cbd3522c87b88f10f4dc8df5ac82",
+      "video_bytes": 1340139,
+      "duration_seconds": 13.7,
+      "decoded_frame_count": 411,
+      "raw_frame_count": 510,
+      "raw_timestamp_span_seconds": 13.566124200820923,
+      "decode_exit_code": 0,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+    },
+    {
+      "cohort": "candidate",
+      "kind": "go2-dock",
+      "evidence_path": "candidate-go2-dock-v2/workflow.mp4",
+      "video_sha256": "a33f46856477c1bf32bf7f6f2cd8e669102431cb1f98f198e905d67155a20677",
+      "video_bytes": 1210294,
+      "duration_seconds": 7.166667,
+      "decoded_frame_count": 215,
+      "raw_frame_count": 248,
+      "raw_timestamp_span_seconds": 7.049726963043213,
+      "decode_exit_code": 0,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+    }
+  ],
+  "visual_review": {
+    "workflow_decoded_samples_root_viewed": [
+      {
+        "cohort": "before",
+        "kind": "malo-head",
+        "contact_sheet_sha256": "2504554ab3f2d5768a37765b2cc77923e26f16799db915e5ef2ff4eaf40c6eea",
+        "samples": [
+          {
+            "seconds": 0.18600000000000003,
+            "path": "t0.186.png",
+            "sha256": "b61c716ea058c5d8ea3dc85def4d3da36b85a943430c9ad17e24ed7d56327cc5"
+          },
+          {
+            "seconds": 1.8600000000000003,
+            "path": "t1.860.png",
+            "sha256": "4280d12cd4023be314a5ed170ecf9dbb7c9fbdf1136e459105956586401e0bda"
+          },
+          {
+            "seconds": 3.7200000000000006,
+            "path": "t3.720.png",
+            "sha256": "80c4face81b7e8875a8f690272650b8953790799057061989d4694d6edf6e022"
+          },
+          {
+            "seconds": 5.58,
+            "path": "t5.580.png",
+            "sha256": "6dbb7af0a115df54107fc579b011ddb6f1c6848f119dbcf2f8efe4dea6bdc456"
+          },
+          {
+            "seconds": 7.440000000000001,
+            "path": "t7.440.png",
+            "sha256": "5930c64f14f85160260b1de5cf2190694cd7cf2d7ebfe7dfe5fa411333e043aa"
+          },
+          {
+            "seconds": 9.114,
+            "path": "t9.114.png",
+            "sha256": "bfe2923e20fc11b08b71bc62afa03d750778e98c8df43add3b4eb660393c8ace"
+          }
+        ]
+      },
+      {
+        "cohort": "before",
+        "kind": "go2-rack",
+        "contact_sheet_sha256": "28e3063849668c860e3411e74e4a89b2679955b5379f2c5c91983131c3663a59",
+        "samples": [
+          {
+            "seconds": 0.19466666,
+            "path": "t0.195.png",
+            "sha256": "8f9d62656c27b5057d6790bbda5e43c0c43bcf553161ea3d257f3172e5928c00"
+          },
+          {
+            "seconds": 1.9466666000000001,
+            "path": "t1.947.png",
+            "sha256": "87ad6d70726479f8eba79fe10878d6a21061452c61a069dbc88abd67b27d0bf9"
+          },
+          {
+            "seconds": 3.8933332000000003,
+            "path": "t3.893.png",
+            "sha256": "2eb82dd03bfa942b914a082cf1a95e8aad555860e1906a9ec9e5278f3ccaab8f"
+          },
+          {
+            "seconds": 5.8399998,
+            "path": "t5.840.png",
+            "sha256": "534d86381b5ec40d1f97f927ed2bd7ffaa7deae3541cd7fba9848934f937180f"
+          },
+          {
+            "seconds": 7.7866664000000005,
+            "path": "t7.787.png",
+            "sha256": "ac54abbc66d9ac37df245dc4da018b071b602e22393bfa290a0c734605a364c8"
+          },
+          {
+            "seconds": 9.53866634,
+            "path": "t9.539.png",
+            "sha256": "b1d97b5758e43012e9551557e1594dc1f48ae7f04e0ce57fb93fc3ed241e058e"
+          }
+        ]
+      },
+      {
+        "cohort": "before",
+        "kind": "go2-dock",
+        "contact_sheet_sha256": "34a596430d4d566b61f89daf34b214aec64009ea640586bd4044e737266d2e8e",
+        "samples": [
+          {
+            "seconds": 0.27399999999999997,
+            "path": "t0.274.png",
+            "sha256": "91af49e5129f6c2631d205152a8edc7c21597f34df24c9f68a8206469a9bf768"
+          },
+          {
+            "seconds": 2.74,
+            "path": "t2.740.png",
+            "sha256": "ad817abec989076ec06e492269528bb8d8ecd6cbc5fc978dfb756b49ad6e005e"
+          },
+          {
+            "seconds": 5.48,
+            "path": "t5.480.png",
+            "sha256": "a4a75a075ee882c3a6ee9cd668d20708cd2c700d3b8dca77050e408e9f89b330"
+          },
+          {
+            "seconds": 8.219999999999999,
+            "path": "t8.220.png",
+            "sha256": "ad8102a83cc165b6ca01e4e98d9dd12870a216e45dc73cc7deb18b51f4e86137"
+          },
+          {
+            "seconds": 10.96,
+            "path": "t10.960.png",
+            "sha256": "72622b9ca532fb115d4c6bdffecae34a32557d8094bb3334c97e5589458104a6"
+          },
+          {
+            "seconds": 13.425999999999998,
+            "path": "t13.426.png",
+            "sha256": "5f1e0c7de330aa821cee77d60bdd904aa6d065a5cfdbb175acb9a5aa90a29636"
+          }
+        ]
+      },
+      {
+        "cohort": "candidate",
+        "kind": "malo-head",
+        "contact_sheet_sha256": "db2639cec1449212436bd6bc073785498e62a6ce0210440bbc0fdb87dbd3bc8d",
+        "samples": [
+          {
+            "seconds": 0.152,
+            "path": "t0.152.png",
+            "sha256": "06f3ffeddd9ad97fd22c0c0b0e25ae0da80e2cbe91b741ed7910b8a7c78027af"
+          },
+          {
+            "seconds": 1.52,
+            "path": "t1.520.png",
+            "sha256": "bf91ffae94b22422e7091f375bac4b10103c6159ac0df82a9a5a621f56a7e9f6"
+          },
+          {
+            "seconds": 3.04,
+            "path": "t3.040.png",
+            "sha256": "ca242ee41445a385cdc81c25e151d49cfcb7c39fd403d9340b58a7d2cd302829"
+          },
+          {
+            "seconds": 4.56,
+            "path": "t4.560.png",
+            "sha256": "4d379f537d86b443556fe0a9cfdc7e729ca42028124e1ae140a1011e34b31662"
+          },
+          {
+            "seconds": 6.08,
+            "path": "t6.080.png",
+            "sha256": "9e1df57340826cd01bc4017fd28035e8da161c44dbd69b5b2093e3b5c8e69b35"
+          },
+          {
+            "seconds": 7.4479999999999995,
+            "path": "t7.448.png",
+            "sha256": "2d97215ad03a6a3f36ae343df9f803317a619073dfe67d6d83d8e1c372d16643"
+          }
+        ]
+      },
+      {
+        "cohort": "candidate",
+        "kind": "go2-rack",
+        "contact_sheet_sha256": "199db9af5bb5938db172864da226a3e32bc5f448cd1529f2090af39c4e5a6cb1",
+        "samples": [
+          {
+            "seconds": 0.15466666,
+            "path": "t0.155.png",
+            "sha256": "ce7f9932c57d4a2c068a1b551f545fea12470d0bbc764bd8b56e7b658bd9525c"
+          },
+          {
+            "seconds": 1.5466666,
+            "path": "t1.547.png",
+            "sha256": "e45740ff027b805b10bb0c564aa48b61a4a74dabc5d59903caf667d477692e74"
+          },
+          {
+            "seconds": 3.0933332,
+            "path": "t3.093.png",
+            "sha256": "99bee6a56e01afe97ce9afc5e165c67da263a3f3f5ba7e2e2bdf4a134c38e194"
+          },
+          {
+            "seconds": 4.6399998,
+            "path": "t4.640.png",
+            "sha256": "adf224d011620992ae6fb0a9aad6802512a5ae4efb76a69df34952bb59e68328"
+          },
+          {
+            "seconds": 6.1866664,
+            "path": "t6.187.png",
+            "sha256": "ff0c15e4658fa43326023a49d26f9ca1f46dfb2e2d8af68ee800bb2408521628"
+          },
+          {
+            "seconds": 7.57866634,
+            "path": "t7.579.png",
+            "sha256": "ea39c843698e8db119882870f0e5f5a9ac781a78df5436082c2ff965f8164189"
+          }
+        ]
+      },
+      {
+        "cohort": "candidate",
+        "kind": "go2-dock",
+        "contact_sheet_sha256": "0fd418145e152b48e5f05e4df072d937e10ff72c89b31ce00c6a5b2a9aa5b436",
+        "samples": [
+          {
+            "seconds": 0.14333334,
+            "path": "t0.143.png",
+            "sha256": "8c00340c1c91c02bc180d41900b22fa702110655cbdcbe9817a099356baf12ba"
+          },
+          {
+            "seconds": 1.4333334000000002,
+            "path": "t1.433.png",
+            "sha256": "93b61a22991b3454e826e02f1910bb2da8bf1accc4f7ed30031c60c2054b2670"
+          },
+          {
+            "seconds": 2.8666668000000004,
+            "path": "t2.867.png",
+            "sha256": "2787c63c9e444b80d09dc42c9e4f02b9578da26863a8f4732349f91613c8567f"
+          },
+          {
+            "seconds": 4.3000002,
+            "path": "t4.300.png",
+            "sha256": "becec44c3cd47241a0b0231cfba88dbc6201973ebf35591fb7155fe6c2deb1b1"
+          },
+          {
+            "seconds": 5.733333600000001,
+            "path": "t5.733.png",
+            "sha256": "d1baae19653529beeeaa176e099bdfa9bdba3aa8cc45cbe10a8b2e24c68ed45c"
+          },
+          {
+            "seconds": 7.0233336600000005,
+            "path": "t7.023.png",
+            "sha256": "0a6908770a5bc9729e956dc9f3f7bb532b24b1d51cf3bb12cb37a285deb76855"
+          }
+        ]
+      }
+    ],
+    "total_decoded_samples": 36,
+    "default_stills_root_viewed": [
+      {
+        "path": "screen-candidate-light-v1/malo/dpr2-studio-normal.png",
+        "sha256": "38e2b59a5f0abe6d13179b836596a900e98d5ed5d30b04405f2e70ad024f8210"
+      },
+      {
+        "path": "screen-candidate-light-v1/go2/dpr2-studio-normal.png",
+        "sha256": "1b2fb667d1937a5cea75aed71a8c3586425a6289b0c5835637d10aec7af51817"
+      },
+      {
+        "path": "screen-candidate-light-v1/panda/dpr1-daylight-normal.png",
+        "sha256": "882b0077ebd63c6abfe27e98a5848dafd11a9d6b93a34e212b50df4b5f5de045"
+      }
+    ],
+    "observations": "Root inspected six decoded frames from each complete timestamped workflow: broad original worlds, native selection bar, camera orbit/zoom and return, no apparent corruption in these samples. These are camera workflow demonstrations; the scripted initial cameras are broad and do not demonstrate automatic part magnification or isolated material aesthetic improvements. Default original-world main canvas exact pairs are machine-checked separately; one full-window status-text bbox differs. No human efficiency, physical phone, motion success or every-frame visual certification."
+  },
+  "native_visual_review": {
+    "native_zoom_stills_root_viewed": [
+      {
+        "path": "native-zoom-current-v2/90.png",
+        "sha256": "897cba21817e16620205acf45e39846f556df382e70cc2fa5c02d72f5d78100d"
+      },
+      {
+        "path": "native-zoom-current-v2/110.png",
+        "sha256": "0522b925425af8343b2cb5dcef387ff3ee0e70fb8c8ccefd8880c81e757d2492"
+      }
+    ],
+    "scope": "Root observed these actual native zoom page stills: robot/scene/sensor panel and controls remain visible without apparent overflow. Not a fractional-DPR pixel reference or every-frame certification. Workflow decoded samples will be recorded separately."
+  },
+  "native_zoom": {
+    "passed": true,
+    "source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.16",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "9ea01c63d3a43d7081a5c2f8699ddc50e07bb7e0",
+      "git_dirty": true,
+      "active_source_sha256": "0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "server": {
+      "source": {
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "python": "3.12.16",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "git_commit": "9ea01c63d3a43d7081a5c2f8699ddc50e07bb7e0",
+        "git_dirty": true,
+        "active_source_sha256": "0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da",
+        "plugins": [],
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+      },
+      "port": 58125,
+      "original_world_sha256": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+      "helper_sha256": "3a0e4d3e2b2f47b030fbd0503958e82c6a89005f4a7ccf4efa9c23434773733b",
+      "scope": "Current package served unchanged to an owned tab in the existing native Chrome profile. Native macOS UI zoom actions and developer CDP observations recorded separately; no device metrics override. This server guards all model arrays and paused state.",
+      "model_arrays_exact": 480,
+      "state_names_paths_exact": true,
+      "server_stopped": true,
+      "original_world_unchanged": true,
+      "source_after": {
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "python": "3.12.16",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "git_commit": "9ea01c63d3a43d7081a5c2f8699ddc50e07bb7e0",
+        "git_dirty": true,
+        "active_source_sha256": "0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da",
+        "plugins": [],
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+      },
+      "passed": true
+    },
+    "stages": [
+      {
+        "buffer": [
+          3024,
+          1434
+        ],
+        "css": [
+          1512,
+          717
+        ],
+        "device": 2,
+        "errors": [],
+        "events": [],
+        "eye": [
+          2.7648439412807457,
+          -2.242164743814335,
+          2.0014133945740387
+        ],
+        "focused": true,
+        "gl": 0,
+        "projection": [
+          1.1448353996174,
+          0,
+          0,
+          0,
+          0,
+          2.414213562373095,
+          0,
+          0,
+          0.22222222222222224,
+          -0.03626220362622037,
+          -1.0001250078129882,
+          -1,
+          0,
+          0,
+          -0.019302114151762965,
+          0
+        ],
+        "ratio": 2,
+        "served_app_sha256": "20ff75a957af1ee75261f13956992589ea9aa7950b3691284fe6b2f71a5ed6b9",
+        "target": [
+          1.13307653468239,
+          -0.12086711523649042,
+          0.6959994692953649
+        ],
+        "time": 0,
+        "visible": "visible",
+        "label": "initial"
+      },
+      {
+        "buffer": [
+          3024,
+          1433
+        ],
+        "css": [
+          1890,
+          896
+        ],
+        "device": 1.600000023841858,
+        "errors": [],
+        "events": [
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 95976.5,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "media",
+            "matches": false,
+            "query": 2,
+            "time": 95976.59999999964,
+            "trusted": true
+          },
+          {
+            "device": 1.600000023841858,
+            "kind": "resize",
+            "time": 96225,
+            "trusted": true
+          }
+        ],
+        "eye": [
+          2.7648439412807457,
+          -2.242164743814335,
+          2.0014133945740387
+        ],
+        "focused": true,
+        "gl": 0,
+        "projection": [
+          1.1445160591990968,
+          0,
+          0,
+          0,
+          0,
+          2.414213562373095,
+          0,
+          0,
+          0.20952174272486776,
+          -0.028745378766741075,
+          -1.0001250078129882,
+          -1,
+          0,
+          0,
+          -0.019302114151762965,
+          0
+        ],
+        "ratio": 1.600000023841858,
+        "served_app_sha256": "20ff75a957af1ee75261f13956992589ea9aa7950b3691284fe6b2f71a5ed6b9",
+        "target": [
+          1.13307653468239,
+          -0.12086711523649042,
+          0.6959994692953649
+        ],
+        "time": 0,
+        "visible": "visible",
+        "label": "80"
+      },
+      {
+        "buffer": [
+          3023,
+          1432
+        ],
+        "css": [
+          1680,
+          796
+        ],
+        "device": 1.7999999523162842,
+        "errors": [],
+        "events": [
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 95976.5,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "media",
+            "matches": false,
+            "query": 2,
+            "time": 95976.59999999964,
+            "trusted": true
+          },
+          {
+            "device": 1.600000023841858,
+            "kind": "resize",
+            "time": 96225,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 115576.09999999964,
+            "trusted": true
+          }
+        ],
+        "eye": [
+          2.7648439412807457,
+          -2.242164743814335,
+          2.0014133945740387
+        ],
+        "focused": true,
+        "gl": 0,
+        "projection": [
+          1.1438773783624905,
+          0,
+          0,
+          0,
+          0,
+          2.414213562373095,
+          0,
+          0,
+          0.2357131958007812,
+          -0.03183444900129313,
+          -1.0001250078129882,
+          -1,
+          0,
+          0,
+          -0.019302114151762965,
+          0
+        ],
+        "ratio": 1.7999999523162842,
+        "served_app_sha256": "20ff75a957af1ee75261f13956992589ea9aa7950b3691284fe6b2f71a5ed6b9",
+        "target": [
+          1.13307653468239,
+          -0.12086711523649042,
+          0.6959994692953649
+        ],
+        "time": 0,
+        "visible": "visible",
+        "label": "90"
+      },
+      {
+        "buffer": [
+          3024,
+          1434
+        ],
+        "css": [
+          1512,
+          717
+        ],
+        "device": 2,
+        "errors": [],
+        "events": [
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 95976.5,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "media",
+            "matches": false,
+            "query": 2,
+            "time": 95976.59999999964,
+            "trusted": true
+          },
+          {
+            "device": 1.600000023841858,
+            "kind": "resize",
+            "time": 96225,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 115576.09999999964,
+            "trusted": true
+          },
+          {
+            "device": 2,
+            "kind": "resize",
+            "time": 128950,
+            "trusted": true
+          },
+          {
+            "device": 2,
+            "kind": "media",
+            "matches": true,
+            "query": 2,
+            "time": 128950,
+            "trusted": true
+          }
+        ],
+        "eye": [
+          2.7648439412807457,
+          -2.242164743814335,
+          2.0014133945740387
+        ],
+        "focused": true,
+        "gl": 0,
+        "projection": [
+          1.1448353996174,
+          0,
+          0,
+          0,
+          0,
+          2.414213562373095,
+          0,
+          0,
+          0.22222222222222224,
+          -0.03626220362622037,
+          -1.0001250078129882,
+          -1,
+          0,
+          0,
+          -0.019302114151762965,
+          0
+        ],
+        "ratio": 2,
+        "served_app_sha256": "20ff75a957af1ee75261f13956992589ea9aa7950b3691284fe6b2f71a5ed6b9",
+        "target": [
+          1.13307653468239,
+          -0.12086711523649042,
+          0.6959994692953649
+        ],
+        "time": 0,
+        "visible": "visible",
+        "label": "100"
+      },
+      {
+        "buffer": [
+          2748,
+          1304
+        ],
+        "css": [
+          1374,
+          652
+        ],
+        "device": 2.200000047683716,
+        "errors": [],
+        "events": [
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 95976.5,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "media",
+            "matches": false,
+            "query": 2,
+            "time": 95976.59999999964,
+            "trusted": true
+          },
+          {
+            "device": 1.600000023841858,
+            "kind": "resize",
+            "time": 96225,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 115576.09999999964,
+            "trusted": true
+          },
+          {
+            "device": 2,
+            "kind": "resize",
+            "time": 128950,
+            "trusted": true
+          },
+          {
+            "device": 2,
+            "kind": "media",
+            "matches": true,
+            "query": 2,
+            "time": 128950,
+            "trusted": true
+          },
+          {
+            "device": 2.200000047683716,
+            "kind": "resize",
+            "time": 132856.40000000037,
+            "trusted": true
+          },
+          {
+            "device": 2.200000047683716,
+            "kind": "media",
+            "matches": false,
+            "query": 2,
+            "time": 132856.40000000037,
+            "trusted": true
+          }
+        ],
+        "eye": [
+          2.7648439412807457,
+          -2.242164743814335,
+          2.0014133945740387
+        ],
+        "focused": true,
+        "gl": 0,
+        "projection": [
+          1.1456093469194015,
+          0,
+          0,
+          0,
+          0,
+          2.414213562373095,
+          0,
+          0,
+          0.2441403584709335,
+          -0.04015836247637238,
+          -1.0001250078129882,
+          -1,
+          0,
+          0,
+          -0.019302114151762965,
+          0
+        ],
+        "ratio": 2,
+        "served_app_sha256": "20ff75a957af1ee75261f13956992589ea9aa7950b3691284fe6b2f71a5ed6b9",
+        "target": [
+          1.13307653468239,
+          -0.12086711523649042,
+          0.6959994692953649
+        ],
+        "time": 0,
+        "visible": "visible",
+        "label": "110"
+      },
+      {
+        "buffer": [
+          3024,
+          1434
+        ],
+        "css": [
+          1512,
+          717
+        ],
+        "device": 2,
+        "errors": [],
+        "events": [
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 95976.5,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "media",
+            "matches": false,
+            "query": 2,
+            "time": 95976.59999999964,
+            "trusted": true
+          },
+          {
+            "device": 1.600000023841858,
+            "kind": "resize",
+            "time": 96225,
+            "trusted": true
+          },
+          {
+            "device": 1.7999999523162842,
+            "kind": "resize",
+            "time": 115576.09999999964,
+            "trusted": true
+          },
+          {
+            "device": 2,
+            "kind": "resize",
+            "time": 128950,
+            "trusted": true
+          },
+          {
+            "device": 2,
+            "kind": "media",
+            "matches": true,
+            "query": 2,
+            "time": 128950,
+            "trusted": true
+          },
+          {
+            "device": 2.200000047683716,
+            "kind": "resize",
+            "time": 132856.40000000037,
+            "trusted": true
+          },
+          {
+            "device": 2.200000047683716,
+            "kind": "media",
+            "matches": false,
+            "query": 2,
+            "time": 132856.40000000037,
+            "trusted": true
+          },
+          {
+            "device": 2,
+            "kind": "resize",
+            "time": 140497.90000000037,
+            "trusted": true
+          },
+          {
+            "device": 2,
+            "kind": "media",
+            "matches": true,
+            "query": 2,
+            "time": 140497.90000000037,
+            "trusted": true
+          }
+        ],
+        "eye": [
+          2.7648439412807457,
+          -2.242164743814335,
+          2.0014133945740387
+        ],
+        "focused": true,
+        "gl": 0,
+        "projection": [
+          1.1448353996174,
+          0,
+          0,
+          0,
+          0,
+          2.414213562373095,
+          0,
+          0,
+          0.22222222222222224,
+          -0.03626220362622037,
+          -1.0001250078129882,
+          -1,
+          0,
+          0,
+          -0.019302114151762965,
+          0
+        ],
+        "ratio": 2,
+        "served_app_sha256": "20ff75a957af1ee75261f13956992589ea9aa7950b3691284fe6b2f71a5ed6b9",
+        "target": [
+          1.13307653468239,
+          -0.12086711523649042,
+          0.6959994692953649
+        ],
+        "time": 0,
+        "visible": "visible",
+        "label": "return100"
+      }
+    ],
+    "owned_tab_closed": true,
+    "original_zoom_restored": true,
+    "scope": "Actual native macOS Chrome UI shortcuts in an owned foreground tab in the existing profile; CDP used only for developer instrumentation/observations, no device metrics or zoom emulation. Fixed world state, camera and returning projection preserved. Fractional-DPR framebuffer sizing/GL and trusted events only, not new fractional pixel reference, physical monitor switching or all-browser certification."
+  },
+  "package": {
+    "passed": true,
+    "product_files": 416,
+    "source_wheel_installed_exact": true,
+    "wheel_bytes": 3949773,
+    "wheel_sha256": "a68ac1f3a90a38152baa4e4d8c6b89fc5e0755833ffee1f64ad630c062d6ea5d",
+    "previous_wheel_bytes": 3948453,
+    "wheel_delta_bytes": 1320,
+    "original_WIP_preserved": 13,
+    "frozen_inputs": 768,
+    "dependency_inputs_exact": true
+  },
+  "budget": {
+    "scope": "Original install/viewer11 metrics only, one unchanged-threshold run; other budget groups not run. Standard server peak is dog baseline, warehouse diagnostic566.6MB not its threshold target. Host load around18 on18cores; not a quiet-machine guarantee.",
+    "machine": {
+      "system": "Darwin",
+      "release": "26.3.2",
+      "machine": "arm64",
+      "cpus": 18,
+      "python": "3.12.16",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "load": [
+        18.3,
+        14.5,
+        14.2
+      ]
+    },
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3857.2002,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.665,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.6
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.8924,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.601
+        },
+        "fps": {
+          "value": 60.087,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 3.2,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.2000000001862645,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1109,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 3.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 135.2,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 566.6
+        },
+        "idle_cpu_pct": {
+          "value": 4.4,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "statuses": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "imports.robotforge_cpu_ms": "not run",
+      "imports.cli_cpu_ms": "not run",
+      "imports.mcp_server_cpu_ms": "not run",
+      "imports.robotforge_heavy": "not run",
+      "imports.cli_heavy": "not run",
+      "imports.mcp_server_heavy": "not run",
+      "physics.dog_idle.steps_per_s": "not run",
+      "physics.dog_idle.controllers_share": "not run",
+      "physics.dog_walk.steps_per_s": "not run",
+      "physics.go2_idle.steps_per_s": "not run",
+      "physics.go2_idle.controllers_share": "not run",
+      "physics.go2_walk.steps_per_s": "not run",
+      "physics.go2_rl_idle.steps_per_s": "not run",
+      "physics.go2_rl_idle.controllers_share": "not run",
+      "physics.humanoid_idle.steps_per_s": "not run",
+      "physics.humanoid_idle.controllers_share": "not run",
+      "physics.arm_pick.steps_per_s": "not run",
+      "physics.warehouse_nav.steps_per_s": "not run",
+      "physics.objects_20.steps_per_s": "not run",
+      "physics.machine.steps_per_s": "not run",
+      "physics.dog_idle.peak_mb": "not run",
+      "physics.go2_walk.peak_mb": "not run",
+      "physics.warehouse_nav.peak_mb": "not run",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok",
+      "mcp.start_s": "not run",
+      "mcp.new_world_ms": "not run",
+      "mcp.add_robot_ms": "not run",
+      "mcp.move_ms": "not run",
+      "mcp.observe_ms": "not run",
+      "mcp.server_rss_mb": "not run",
+      "mcp.idle_cpu_pct": "not run"
+    }
+  },
+  "loading": {
+    "malo": {
+      "before": {
+        "browser_cache_cold": {
+          "ms": [
+            579,
+            559,
+            598.2000000001863,
+            547.8999999994412
+          ],
+          "mean_ms": 571.0249999999069,
+          "median_ms": 569.0,
+          "min_ms": 547.8999999994412,
+          "max_ms": 598.2000000001863,
+          "http_resource_counts": [
+            31,
+            31,
+            31,
+            31
+          ],
+          "encoded_http_resource_bytes": [
+            48403612,
+            48403612,
+            48403612,
+            48403612
+          ],
+          "sampled_chrome_tree_rss_kib": [
+            1817872,
+            1837840,
+            1811680,
+            1817472
+          ]
+        },
+        "warm_reload": {
+          "ms": [
+            271.40000000037253,
+            291.09999999962747,
+            305.1000000005588,
+            274.59999999962747
+          ],
+          "mean_ms": 285.55000000004657,
+          "median_ms": 282.84999999962747,
+          "min_ms": 271.40000000037253,
+          "max_ms": 305.1000000005588,
+          "http_resource_counts": [
+            31,
+            31,
+            31,
+            31
+          ],
+          "encoded_http_resource_bytes": [
+            48183973,
+            48183973,
+            48183973,
+            48183973
+          ],
+          "sampled_chrome_tree_rss_kib": [
+            1865488,
+            1885584,
+            1858128,
+            1870208
+          ]
+        }
+      },
+      "candidate": {
+        "browser_cache_cold": {
+          "ms": [
+            568.0999999996275,
+            544.0999999996275,
+            610.7999999998137,
+            537.5
+          ],
+          "mean_ms": 565.1249999997672,
+          "median_ms": 556.0999999996275,
+          "min_ms": 537.5,
+          "max_ms": 610.7999999998137,
+          "http_resource_counts": [
+            31,
+            31,
+            31,
+            31
+          ],
+          "encoded_http_resource_bytes": [
+            48408877,
+            48408877,
+            48408877,
+            48408877
+          ],
+          "sampled_chrome_tree_rss_kib": [
+            1837184,
+            1838784,
+            1837120,
+            1834736
+          ]
+        },
+        "warm_reload": {
+          "ms": [
+            270.5,
+            270.20000000018626,
+            306.5,
+            275.90000000037253
+          ],
+          "mean_ms": 280.7750000001397,
+          "median_ms": 273.20000000018626,
+          "min_ms": 270.20000000018626,
+          "max_ms": 306.5,
+          "http_resource_counts": [
+            31,
+            31,
+            31,
+            31
+          ],
+          "encoded_http_resource_bytes": [
+            48184420,
+            48184420,
+            48184420,
+            48184420
+          ],
+          "sampled_chrome_tree_rss_kib": [
+            1878112,
+            1864752,
+            1872800,
+            1876544
+          ]
+        }
+      },
+      "candidate_minus_before_mean_ms": {
+        "browser_cache_cold": -5.900000000139698,
+        "warm_reload": -4.774999999906868
+      },
+      "candidate_minus_before_median_ms": {
+        "browser_cache_cold": -12.900000000372529,
+        "warm_reload": -9.649999999441206
+      },
+      "http_cold_growth_bytes_upper_observed": 5265
+    },
+    "go2": {
+      "before": {
+        "browser_cache_cold": {
+          "ms": [
+            677.9000000003725,
+            709.2000000001863,
+            685.2999999998137,
+            704.9000000003725
+          ],
+          "mean_ms": 694.3250000001863,
+          "median_ms": 695.1000000000931,
+          "min_ms": 677.9000000003725,
+          "max_ms": 709.2000000001863,
+          "http_resource_counts": [
+            31,
+            31,
+            31,
+            31
+          ],
+          "encoded_http_resource_bytes": [
+            21671452,
+            21671452,
+            21671452,
+            21671452
+          ],
+          "sampled_chrome_tree_rss_kib": [
+            1750592,
+            1731392,
+            1738848,
+            1763120
+          ]
+        },
+        "warm_reload": {
+          "ms": [
+            425.90000000037253,
+            392.8999999994412,
+            434.30000000074506,
+            405.59999999962747
+          ],
+          "mean_ms": 414.67500000004657,
+          "median_ms": 415.75,
+          "min_ms": 392.8999999994412,
+          "max_ms": 434.30000000074506,
+          "http_resource_counts": [
+            31,
+            31,
+            31,
+            31
+          ],
+          "encoded_http_resource_bytes": [
+            21451813,
+            21451813,
+            21451813,
+            21451813
+          ],
+          "sampled_chrome_tree_rss_kib": [
+            1775920,
+            1774672,
+            1770432,
+            1797856
+          ]
+        }
+      },
+      "candidate": {
+        "browser_cache_cold": {
+          "ms": [
+            690.7999999998137,
+            678.2999999998137,
+            735.4000000003725,
+            689
+          ],
+          "mean_ms": 698.375,
+          "median_ms": 689.8999999999069,
+          "min_ms": 678.2999999998137,
+          "max_ms": 735.4000000003725,
+          "http_resource_counts": [
+            31,
+            31,
+            31,
+            31
+          ],
+          "encoded_http_resource_bytes": [
+            21676717,
+            21676717,
+            21676717,
+            21676717
+          ],
+          "sampled_chrome_tree_rss_kib": [
+            1747760,
+            1731760,
+            1737296,
+            1725328
+          ]
+        },
+        "warm_reload": {
+          "ms": [
+            385,
+            431,
+            416.29999999981374,
+            372.40000000037253
+          ],
+          "mean_ms": 401.17500000004657,
+          "median_ms": 400.64999999990687,
+          "min_ms": 372.40000000037253,
+          "max_ms": 431,
+          "http_resource_counts": [
+            31,
+            31,
+            31,
+            31
+          ],
+          "encoded_http_resource_bytes": [
+            21452260,
+            21452260,
+            21452260,
+            21452260
+          ],
+          "sampled_chrome_tree_rss_kib": [
+            1789408,
+            1777568,
+            1778208,
+            1805568
+          ]
+        }
+      },
+      "candidate_minus_before_mean_ms": {
+        "browser_cache_cold": 4.0499999998137355,
+        "warm_reload": -13.5
+      },
+      "candidate_minus_before_median_ms": {
+        "browser_cache_cold": -5.2000000001862645,
+        "warm_reload": -15.100000000093132
+      },
+      "http_cold_growth_bytes_upper_observed": 5265
+    }
+  },
+  "loading_scope": "All arms retained in predeclared ABBA+BAAB order. Four serial samples per source/world, already compiled paused servers and warm OS/model caches; no universal/causal speed claim. HTTP resources exclude WebSocket traffic. RSS is sampled Chrome process tree, not peak, steady-state or VRAM. Draw/RAF repeated frames are not independent trials.",
+  "loading_plan": {
+    "order": [
+      "before",
+      "candidate",
+      "candidate",
+      "before",
+      "candidate",
+      "before",
+      "before",
+      "candidate"
+    ],
+    "worlds": [
+      "malo",
+      "go2"
+    ],
+    "loads_per_arm": [
+      "browser-cache-cold navigate",
+      "actual warm reload"
+    ],
+    "cohort_samples_per_world": 4,
+    "theme": "explicit prefers-color-scheme light before navigation",
+    "ready": "matched main scene/renderedVersion; no busy or loading; two RAF then gl.finish",
+    "limitations": [
+      "already compiled paused server; models/OS caches warm",
+      "no remote download, whole-sensor compilation, CLI startup or human input latency claim",
+      "RSS sampled Chrome process tree; not peak, steady-state or VRAM",
+      "small serial sample cohort, no causal or universal speedup claim"
+    ],
+    "handler_measurement": "10 repeated real native surface taps per original world; pointerup receipt through zero-timeout handler and microtask-observed inspection bar hide; separately timed ray intersection; excludes CDP delivery, physical touch latency and next GPU presentation; report p95<=50ms only for this sample."
+  },
+  "default_control_costs": {
+    "before": {
+      "malo": {
+        "dpr2-studio-normal": {
+          "draw_median_ms": 0.10000000055879354,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "programs": 18,
+          "draw_work": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          }
+        },
+        "dpr2-daylight-normal": {
+          "draw_median_ms": 0.10000000055879354,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "programs": 18,
+          "draw_work": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          }
+        }
+      },
+      "go2": {
+        "dpr2-studio-normal": {
+          "draw_median_ms": 0.30000000074505806,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "programs": 11,
+          "draw_work": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          }
+        },
+        "dpr2-daylight-normal": {
+          "draw_median_ms": 0.39999999990686774,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "programs": 11,
+          "draw_work": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          }
+        }
+      },
+      "panda": {
+        "dpr2-studio-normal": {
+          "draw_median_ms": 0.20000000018626451,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "programs": 7,
+          "draw_work": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          }
+        },
+        "dpr2-daylight-normal": {
+          "draw_median_ms": 0.20000000018626451,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "programs": 7,
+          "draw_work": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          }
+        }
+      }
+    },
+    "candidate": {
+      "malo": {
+        "dpr2-studio-normal": {
+          "draw_median_ms": 0.20000000018626451,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "programs": 18,
+          "draw_work": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          }
+        },
+        "dpr2-daylight-normal": {
+          "draw_median_ms": 0.20000000018626451,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "programs": 18,
+          "draw_work": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          }
+        }
+      },
+      "go2": {
+        "dpr2-studio-normal": {
+          "draw_median_ms": 0.5,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "programs": 11,
+          "draw_work": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          }
+        },
+        "dpr2-daylight-normal": {
+          "draw_median_ms": 0.5,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "programs": 11,
+          "draw_work": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          }
+        }
+      },
+      "panda": {
+        "dpr2-studio-normal": {
+          "draw_median_ms": 0.20000000018626451,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "programs": 7,
+          "draw_work": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          }
+        },
+        "dpr2-daylight-normal": {
+          "draw_median_ms": 0.20000000018626451,
+          "raf_median_ms": 16.699999999999818,
+          "raf_median_fps": 59.88023952095874,
+          "memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "programs": 7,
+          "draw_work": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          }
+        }
+      }
+    }
+  },
+  "evidence": "../robotforge-evidence/2026-10-28-surface-inspection",
+  "evidence_index_sha256": "139ccd5862749a136d0ad46675be1192ad1c4ed35517b028e337521bc5379966",
+  "attempts": [
+    "inspection-v1 selected0; v2 unpaused harness timeout; v3 wrong rover target; v4 intended-vs-native event point tolerance; v5/v6 unnamed visible rack ownership; v7 narrow viewport camera; v8 preinspection layout-list included in wire window; v9 water intended-vs-actual ray; v10 three passed then Chrome DevTools startup failure/host interruption. All retained. Final v11 seven pass.",
+    "Keyboard reentry bar-state bug and camera axial near/far boundary corrected before freeze. Later two extended object-selection cases pass, also rerun in final browser317.",
+    "Native v1 failed camera settling before zoom actions. Cause unestablished. Final v2 explicitly foreground existing Chrome tab, native shortcuts and unchanged served app passes. Old locked/no-op/failed captures are not retrospectively passes.",
+    "Precommit WIP audit stopped on missing temporary list but dependent shell continued code push. Persistent original13 hashes immediately rechecked and exact; subsequent package/final audits pass. No false precommit-audit pass."
+  ],
+  "limits": [
+    "Camera workflow improvement, no shared shader/material aesthetic gain or action-success tuning. Direction and eye-to-hit radius retained, not exact off-axis projected-size invariance or automatic part magnification.",
+    "Observation point is a world-coordinate snapshot, not live body tracking. Water uses bounded still level, not wave crests.",
+    "Six decoded stills per movie do not certify every frame; native CDP mouse workflows are not a human discovery/timing study. Phone tests are touch emulation.",
+    "Native zoom covers buffer/GL/camera/state at80/90/100/110/100 in one macOS Chrome profile; not new fractional-DPR pixel references, physical monitor switching, Windows or all browsers.",
+    "Six network opt-in manipulation tests and one pxr collection skipped; optional type/security tools unavailable, not passes. No full default/all slow test claim. No paid Actions/release/deployment."
+  ],
+  "acceptance_review": {
+    "verdict": "APPROVE",
+    "reviewer": "inspection_review (gpt-6.1-sol, readonly)",
+    "runtime_sha256": "0c9e9243b7463a3dbc75a8b7279606d1b3baabe5a2ef939e09ae250c489e52da",
+    "scope": "Final documentation and raw XML/receipts/package bridge/index/measurements/nativev2 reviewed. Verified989distinct,768 frozen final inputs,416 product files, historicalv11 test-only bridge, index/hash and scoped conclusions. No tests/Chrome run or files changed by reviewer. No blockers.",
+    "evidence_index_sha256": "139ccd5862749a136d0ad46675be1192ad1c4ed35517b028e337521bc5379966",
+    "evidence_file": "acceptance-review.json",
+    "sha256": "ff76c4f6db35ba65e28b37516af8201204efccd4451d319135eaa0ff8f361e76"
+  }
+}
