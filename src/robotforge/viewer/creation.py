@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 if TYPE_CHECKING:
     from robotforge.design.store import WorldStore
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 STARTERS = ("rover", "quadruped", "arm", "humanoid")
 Coordinate = Annotated[float, Field(ge=-100, le=100, allow_inf_nan=False)]
+Heading = Annotated[float, Field(ge=-3600, le=3600, allow_inf_nan=False, strict=True)]
 
 
 class Placement(BaseModel):
@@ -34,7 +35,7 @@ class ObjectPlacement(BaseModel):
     preset: Literal["ball", "block", "pin", "barrier", "table"]
     size: Literal["small", "normal", "large"] = "normal"
     material: Literal["plastic", "wood", "steel"] | None = None
-    yaw: Literal[0, 90, 180, 270] = 0
+    yaw: Heading = 0
     pos: list[Coordinate] = Field(min_length=2, max_length=3)
     version: int = Field(ge=1)
     generation: int | None = Field(default=None, ge=0)
@@ -44,13 +45,6 @@ class ObjectPlacement(BaseModel):
         if self.preset == "table" and self.material is not None:
             raise ValueError("table material cannot be changed")
         return self
-
-    @field_validator("yaw", mode="before")
-    @classmethod
-    def integer_turn(cls, value: object) -> object:
-        if type(value) is not int:
-            raise ValueError("yaw must be an integer quarter turn")
-        return value
 
 
 class UndoAddition(BaseModel):

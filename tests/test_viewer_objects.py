@@ -41,8 +41,8 @@ def test_all_server_owned_presets_scale_and_support_heights(pg, preset, size):  
     assert np.all(np.isfinite(pg.session.data.qpos))
 
 
-@pytest.mark.parametrize("yaw", [0, 90, 180, 270])
-def test_quarter_turns_and_ground_following(pg, yaw):  # noqa: F811
+@pytest.mark.parametrize("yaw", [0, 15, -15, 13.5, 90.0, 180, 270, 345, -3600, 3600])
+def test_finite_headings_and_ground_following(pg, yaw):  # noqa: F811
     add(pg, "barrier", yaw=yaw)
     assert pg.store.load().objects[0].pos == [0, 0]
     geom = mujoco.mj_name2id(pg.session.model, mujoco.mjtObj.mjOBJ_GEOM, "barrier")
@@ -58,10 +58,15 @@ def test_quarter_turns_and_ground_following(pg, yaw):  # noqa: F811
         {"preset": "ramp"},
         {"size": "giant"},
         {"size": 2},
-        {"yaw": 45},
+        {"yaw": float("nan")},
+        {"yaw": float("inf")},
+        {"yaw": -float("inf")},
+        {"yaw": "15"},
+        {"yaw": None},
+        {"yaw": 3601},
+        {"yaw": -3601},
         {"yaw": True},
         {"yaw": False},
-        {"yaw": 90.0},
         {"mass": 100},
         {"fixed": False},
         {"shape": "mesh"},
@@ -105,6 +110,16 @@ def test_tabletop_touch_and_block_stacking_are_allowed(pg):  # noqa: F811
     add(pg, "block", [0, 0, 0.68])
     add(pg, "ball", [0.25, 0, 0.5])
     assert len(pg.store.load().objects) == 4
+
+
+def test_fine_rotated_prop_footprint_cannot_bypass_occupancy(pg):  # noqa: F811
+    pg.add_object("blocker", shape="box", size=[0.12, 0.12, 0.3], pos=[0.28, 0.24], fixed=True)
+    before, model, data = pg.store.file.read_bytes(), pg.session.model, pg.session.data
+    with pytest.raises(PlaygroundError, match="occupied"):
+        add(pg, "barrier", yaw=45)
+    assert pg.store.file.read_bytes() == before and pg.session.model is model and pg.session.data is data
+    add(pg, "barrier", yaw=0)
+    assert pg.current_world().objects[-1].yaw == 0
 
 
 @pytest.mark.parametrize("preset", ["ball", "block", "pin", "barrier"])

@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 import mujoco
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from robotforge.design import layouts, menagerie, terrain
 from robotforge.design.world import World, compile_world
 from robotforge.playground import PlaygroundError, _unused
 from robotforge.sim.session import fresh_data
-from robotforge.viewer.creation import Coordinate, UndoAddition, _parse
+from robotforge.viewer.creation import Coordinate, Heading, UndoAddition, _parse
 from robotforge.viewer.layout_state import BuiltinLayoutState, check_supported_restore
 from robotforge.viewer.layouts import Guard
 from robotforge.viewer.object_edit import _bounds, _guard, _owners
@@ -31,14 +31,7 @@ GAP = 0.01  # Keep separate terrain features and occupants clear of each other.
 class Placement(Guard):
     preset: Literal["ramp", "stairs"]
     pos: list[Coordinate] = Field(min_length=2, max_length=3)
-    yaw: Literal[0, 90, 180, 270] = 0
-
-    @field_validator("yaw", mode="before")
-    @classmethod
-    def integer_turn(cls, value: object) -> object:
-        if type(value) is not int:
-            raise ValueError("yaw must be an integer quarter turn")
-        return value
+    yaw: Heading = 0
 
 
 @dataclass(frozen=True)

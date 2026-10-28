@@ -50,7 +50,7 @@ async def journey(tab, server):
     assert await tab.eval("""(()=>{const r=document.getElementById('placement-bar').getBoundingClientRect(),
       dock=document.querySelector('.dock').getBoundingClientRect();
       return r.left>=0&&r.right<=innerWidth&&r.top>0&&r.bottom<=dock.top;})()""")
-    assert (await tab.eval("document.getElementById('place-rotate').textContent")).endswith("15°")
+    assert (await tab.eval("document.getElementById('placement-heading').textContent")).endswith("15°")
     await click(tab, "#place-repeat")
     await click(tab, "#place-rotate")
     for i, point in enumerate([[0.5, -0.9, 0], [0.5, 1, 0]], 2):
@@ -147,7 +147,7 @@ def test_authored_full_turns_copy_the_same_heading_within_request_bounds(viewer)
         await tab.eval("window.__robotforge.lookAt([4,-6,5],[0,0,0])")
         await choose(tab, "source")
         await click(tab, "#object-copy")
-        assert (await tab.eval("document.getElementById('place-rotate').textContent")).endswith("40°")
+        assert (await tab.eval("document.getElementById('placement-heading').textContent")).endswith("40°")
         await place(tab, [2, 0, 0])
         assert [o.yaw for o in server.pg.store.load().objects] == [4000, 40]
         assert not tab.errors

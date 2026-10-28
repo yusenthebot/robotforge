@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from robotforge.design import terrain
 from robotforge.playground import PlaygroundError
@@ -25,6 +26,13 @@ Block = terrain.Ramp | terrain.Stairs
 class Reposition(Selection):
     pos: list[Coordinate] = Field(min_length=2, max_length=3)
     turns: Literal[0, 1, 2, 3] = 0
+    yaw_delta: float = Field(default=0, ge=-360, le=360, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def one_rotation(self) -> Reposition:
+        if {"turns", "yaw_delta"} <= self.model_fields_set:
+            raise ValueError("provide either turns or yaw_delta, not both")
+        return self
 
     @field_validator("turns", mode="before")
     @classmethod
@@ -108,8 +116,12 @@ def handle(pg: Playground, message: dict) -> dict:
                 before = world.terrain[index]
                 if len(request.pos) == 3 and abs(request.pos[2]) > 0.001:
                     raise PlaygroundError("place local terrain on the ground, not on another surface")
+                # Keep authored full turns/fractions; the UI submits a relative change, never its display angle.
+                delta = (
+                    math.fmod(request.yaw_delta, 360) if "yaw_delta" in request.model_fields_set else 90 * request.turns
+                )
                 after = terrain.parse(
-                    {**before.model_dump(), "pos": request.pos[:2], "yaw": before.yaw + 90 * request.turns}
+                    {**before.model_dump(), "pos": request.pos[:2], "yaw": before.yaw + delta if delta else before.yaw}
                 )
                 if before == after:
                     return {

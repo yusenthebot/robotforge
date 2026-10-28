@@ -65,8 +65,13 @@ def unchanged(pg, old):  # noqa: F811
         {"pos": [True, 0]},
         {"pos": ["0", 0]},
         {"yaw": True},
-        {"yaw": 90.0},
-        {"yaw": 45},
+        {"yaw": "15"},
+        {"yaw": None},
+        {"yaw": float("nan")},
+        {"yaw": float("inf")},
+        {"yaw": -float("inf")},
+        {"yaw": -3601},
+        {"yaw": 3601},
         {"generation": True},
         {"generation": -1},
         {"world_sha256": "bad"},
@@ -87,8 +92,18 @@ def test_above_ground_click_is_not_silently_flattened(pg):  # noqa: F811
     unchanged(pg, before)
 
 
+def test_fine_rotated_terrain_checks_its_expanded_clearance(pg):  # noqa: F811
+    pg.add_object("blocker", shape="box", size=[0.1, 0.1, 0.2], pos=[3, 1], fixed=True)
+    before = snapshot(pg)
+    with pytest.raises(PlaygroundError, match="occupied"):
+        place(pg, yaw=15)
+    unchanged(pg, before)
+    place(pg, yaw=0)
+    assert pg.current_world().terrain[-1].yaw == 0
+
+
 @pytest.mark.parametrize("preset,count", [("ramp", 3), ("stairs", 7)])
-@pytest.mark.parametrize("yaw", [0, 90, 180, 270])
+@pytest.mark.parametrize("yaw", [0, 15, -15, 13.5, 90.0, 180, 270, 345])
 def test_catalog_preview_boxes_match_actual_compiled_terrain(pg, preset, count, yaw):  # noqa: F811
     pg.set_floor("wood")
     boxes = next(e["boxes"] for e in viewer_catalog()["terrain_presets"] if e["name"] == preset)

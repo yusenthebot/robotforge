@@ -50,7 +50,7 @@ export function createPlacementGesture() {
 
 export function initCreation({ start, submit, cancel, change, coordinateChange = () => {} }) {
   const $ = (id) => document.getElementById(id);
-  let item = null, point = null, sending = false, size = "normal", yaw = 0, turns = 0, session = 0;
+  let item = null, point = null, sending = false, size = "normal", yaw = 0, yawDelta = 0, session = 0;
   const repeat = $("place-repeat");
   const material = $("place-material");
   const spacing = $("place-spacing");
@@ -69,7 +69,7 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
   const scales = { small: 0.75, normal: 1, large: 1.5 };
   const send = () => {
     if (point && !sending && item) submit({ ...item, scale: size, yaw,
-      ...(item.kind === "terrain-edit" ? { turns } : {}),
+      ...(item.kind === "terrain-edit" ? { yaw_delta: yawDelta } : {}),
       ...(item.kind === "object" && item.name !== "table" && material.value ? { material: material.value } : {}) }, point);
   };
   const setOpen = (open) => {
@@ -85,23 +85,32 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     for (const b of sizeButtons) b.setAttribute("aria-pressed", String(b.dataset.size === size));
   }
   for (const b of sizeButtons) b.addEventListener("click", () => { setSize(b.dataset.size); change(); });
-  $("place-rotate").addEventListener("click", () => {
-    if (item?.kind === "terrain-edit") { turns = (turns + 1) % 4; yaw = item.yaw + 90 * turns; }
-    else yaw = (yaw + 90) % 360;
-    $("place-rotate").textContent = t("rotate_place", { angle: yaw }); change();
-  });
+  const normalize = (angle) => ((angle % 360) + 360) % 360;
+  function showHeading() {
+    const angle = Number(normalize(yaw).toFixed(4)) % 360;
+    $("placement-heading").textContent = t("placement_heading", { angle });
+  }
+  function rotateBy(degrees) {
+    if (!item || sending) return;
+    if (item.kind === "terrain-edit") { yawDelta = (yawDelta + degrees) % 360; yaw = item.yaw + yawDelta; }
+    else yaw = normalize(yaw + degrees);
+    showHeading(); change();
+  }
+  for (const [id, degrees] of [["place-rotate-minus", -15], ["place-rotate", 90], ["place-rotate-plus", 15]]) {
+    $(id).addEventListener("click", () => rotateBy(degrees));
+  }
   function begin(entry, kind, title) {
     item = { ...entry, kind }; point = null; sending = false; size = "normal";
     spacing.value = "free"; coordinates(null);
     // Authored worlds may contain many full turns; copy the same heading within the request's angle bounds.
-    turns = 0;
+    yawDelta = 0;
     yaw = kind === "edit" || kind === "terrain-edit" ? entry.yaw : kind === "copy" || kind === "start" ? entry.yaw % 360 : 0; session++;
     repeat.checked = false; syncRepeat();
     material.value = "";
     $("prop-material-control").hidden = kind !== "object" || entry.name === "table";
     $("placement-hint").textContent = t(kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
-    $("place-rotate").textContent = t("rotate_place", { angle: yaw });
+    showHeading();
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
     for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
     $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain" || kind === "terrain-edit";
@@ -168,7 +177,7 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
       $("place-here").disabled = !point || value;
       $("place-cancel").disabled = value;
       for (const b of sizeButtons) b.disabled = value;
-      $("place-rotate").disabled = value;
+      for (const id of ["place-rotate-minus", "place-rotate", "place-rotate-plus"]) $(id).disabled = value;
       repeat.disabled = value;
       material.disabled = value;
       spacing.disabled = value;
