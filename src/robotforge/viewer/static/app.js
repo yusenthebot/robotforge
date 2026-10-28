@@ -35,7 +35,6 @@ const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel
   change: changePlacementOptions, coordinateChange: changePlacementOptions });
 const creationGesture = createPlacementGesture();
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.shadowMap.enabled = true;
@@ -98,15 +97,35 @@ function updateViewShift() {
 // Keep the last real shape instead, and frame the camera once the page can be seen.
 let fitWhenSized = false;
 const hasSize = () => window.innerWidth > 0 && window.innerHeight > 0;
+const renderSize = new THREE.Vector2();
+let ratioMedia = null, watchedRatio = null;
+
+function deviceRatio() {
+  const ratio = window.devicePixelRatio;
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
 
 function resize() {
+  const rawRatio = deviceRatio();
+  if (rawRatio !== watchedRatio) {
+    ratioMedia?.removeEventListener("change", resize);
+    ratioMedia = window.matchMedia(`(resolution: ${rawRatio}dppx)`);
+    ratioMedia.addEventListener("change", resize);
+    watchedRatio = rawRatio;
+  }
   if (!hasSize()) return;
   const w = window.innerWidth;
   const h = window.innerHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  applyViewShift();
+  const ratio = Math.min(rawRatio, 2);
+  renderer.getSize(renderSize);
+  const sizeChanged = renderSize.x !== w || renderSize.y !== h;
+  if (sizeChanged || renderer.getPixelRatio() !== ratio) renderer.setDrawingBufferSize(w, h, ratio);
+  // Display density does not change CSS coordinates, camera framing or placement anchors.
+  if (sizeChanged || camera.aspect !== w / h) {
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    applyViewShift();
+  }
   if (fitWhenSized && sceneDesc) {
     fitWhenSized = false;
     frameCamera();
