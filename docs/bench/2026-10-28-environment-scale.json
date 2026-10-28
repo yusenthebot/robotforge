@@ -1768,5 +1768,12 @@
     "Mechanism-negative old-source failure, two lifecycle fixture initialization failures and diagnostic selector failure retained rather than relabeled.",
     "Physical phones, other operating systems and GPU drivers unverified."
   ],
-  "goal": "Broad shared visual quality/lightweight/creative-play goal remains active; no individual action-success tuning."
+  "goal": "Broad shared visual quality/lightweight/creative-play goal remains active; no individual action-success tuning.",
+  "coverage_correction_2026_10_28": {
+    "claim": "The original DPR1/2 labels did not describe two actual renderer ratios.",
+    "observed": "All recorded screen cohort views.dpr values are2, including labels beginning dpr1. Counts are observed captures with repeated DPR2 conditions, not distinct resolution settings.",
+    "source": "../robotforge-evidence/2026-10-28-responsive-dpr/legacy-dpr-audit.json",
+    "raw_evidence_preserved": true,
+    "does_not_retroactively_validate_dpr1": true
+  }
 }

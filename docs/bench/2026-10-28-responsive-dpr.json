@@ -1,0 +1,2118 @@
+{
+  "feature": "Refresh capped drawing-buffer resolution on actual display events",
+  "base": "1f3d6eff5ac216f6e21609a040d7799d84a29f06",
+  "source_sha256": "88dfa18d0afff74c525b4bf261944f5021bd2273bcfd3cbb9b07bf3519099d90",
+  "frozen_inputs": 760,
+  "tests": {
+    "browser-full": {
+      "passed": 290,
+      "skipped": 1,
+      "skip_names": [
+        [
+          "",
+          "tests.test_zenobench_mujoco"
+        ]
+      ]
+    },
+    "gpu": {
+      "passed": 9,
+      "skipped": 0,
+      "skip_names": []
+    },
+    "backend-related": {
+      "passed": 579,
+      "skipped": 0,
+      "skip_names": []
+    }
+  },
+  "distinct_pytest_passes": 878,
+  "framework": {
+    "cases": 7,
+    "python": "3.12.13",
+    "status": "pass"
+  },
+  "package": {
+    "wheel_bytes": 3941294,
+    "wheel_sha256": "bccb22bb9497948c65a54bb387f5f51bb9d1ee883afa6b7f5e2222c922d616aa",
+    "production_files": 413,
+    "source_wheel_installed_exact": true,
+    "preserved_original_files": 13,
+    "original_hashes_exact": true,
+    "added_and_new_lines_scanned": 152,
+    "new_files_included": [
+      "tests/test_viewer_resolution_browser.py"
+    ],
+    "secret_pattern_hits": {
+      "private_key": 0,
+      "known_token": 0,
+      "literal_secret_assignment": 0
+    },
+    "added_product_debug_statements": 0,
+    "scope": "Lightweight added-line review, not a bandit or pip-audit substitute."
+  },
+  "package_delta": {
+    "wheel_bytes": 239,
+    "baseline_wheel_bytes": 3941055,
+    "baseline_wheel_sha256": "6fd4d1b583b6a00bfff696759a2bdc5a9bf3a988473e17e2a17ba884da2025e5",
+    "static_raw_bytes": 778,
+    "changed_product_files": [
+      "robotforge/viewer/static/app.js"
+    ],
+    "basis": "Base wheel is the retained verified PR46 artifact; no fresh base wheel build or timing comparison implied."
+  },
+  "budget": {
+    "statuses": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "metrics": {
+      "install": {
+        "wheel_kb": {
+          "value": 3848.9199,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.6372,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.5
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5299,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.335
+        },
+        "fps": {
+          "value": 60.1169,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 1.9,
+          "unit": "ms",
+          "better": "lower",
+          "median": 1.9000000357627869,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.237,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 3.0,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.0,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 559.2
+        },
+        "idle_cpu_pct": {
+          "value": 4.4,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    }
+  },
+  "images": {
+    "scope": "Retained JSON/control comparison only. Both cohorts share final unchanged Python server; only served app.js differs. Pure3-to-1 no-event diagnostic is excluded from accepted paths. Resource request path multisets and draw calls/triangles/points/lines compared; asynchronous arrival order and renderer frame counter are retained, not required identical.",
+    "cases": {
+      "malo": {
+        "fixed_controls": {
+          "initial-1": true,
+          "fresh-2": true,
+          "high-initial-3": true,
+          "fresh-1": true
+        },
+        "model_state_fields_per_session": 485,
+        "same_model_world_hash": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+        "dynamic": {
+          "dynamic-0-2": {
+            "device": 2,
+            "before_ratio": 1,
+            "candidate_ratio": 2,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              2560,
+              1600
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2579.300000011921
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2579.300000011921
+              }
+            ]
+          },
+          "dynamic-1-1.25": {
+            "device": 1.25,
+            "before_ratio": 1,
+            "candidate_ratio": 1.25,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              1600,
+              1000
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2579.300000011921
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2579.300000011921
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 5013.800000011921
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 5013.800000011921
+              }
+            ]
+          },
+          "dynamic-2-3": {
+            "device": 3,
+            "before_ratio": 1,
+            "candidate_ratio": 2,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              2560,
+              1600
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2579.300000011921
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2579.300000011921
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 5013.800000011921
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 5013.800000011921
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": false,
+                "device": 3,
+                "time": 6845.5
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": true,
+                "device": 3,
+                "time": 6845.5
+              }
+            ]
+          },
+          "dynamic-3-1-css-resize": {
+            "device": 1,
+            "before_ratio": 1,
+            "candidate_ratio": 1,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              1280,
+              800
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2579.300000011921
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2579.300000011921
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 5013.800000011921
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 5013.800000011921
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": false,
+                "device": 3,
+                "time": 6845.5
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": true,
+                "device": 3,
+                "time": 6845.5
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 9979.699999988079
+              },
+              {
+                "type": "media",
+                "query": 1,
+                "matches": true,
+                "device": 1,
+                "time": 9984
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": false,
+                "device": 1,
+                "time": 9984
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 10330.199999988079
+              }
+            ]
+          },
+          "high-drop-1-css-resize": {
+            "device": 1,
+            "before_ratio": 2,
+            "candidate_ratio": 1,
+            "before_buffer": [
+              2560,
+              1600
+            ],
+            "candidate_buffer": [
+              1280,
+              800
+            ],
+            "events": [
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 2280.199999988079
+              },
+              {
+                "type": "media",
+                "query": 1,
+                "matches": true,
+                "device": 1,
+                "time": 2285.400000035763
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": false,
+                "device": 1,
+                "time": 2285.400000035763
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 2631.600000023842
+              }
+            ]
+          }
+        },
+        "resources": {
+          "initial-1": {
+            "before_count": 30,
+            "candidate_count": 30,
+            "before_encoded": 48395291,
+            "candidate_encoded": 48396069
+          },
+          "fresh-2": {
+            "before_count": 30,
+            "candidate_count": 30,
+            "before_encoded": 48395291,
+            "candidate_encoded": 48396069
+          },
+          "high-initial-3": {
+            "before_count": 30,
+            "candidate_count": 30,
+            "before_encoded": 48395291,
+            "candidate_encoded": 48396069
+          },
+          "fresh-1": {
+            "before_count": 30,
+            "candidate_count": 30,
+            "before_encoded": 48395291,
+            "candidate_encoded": 48396069
+          }
+        },
+        "static_memory_program_draw_exact": true,
+        "fresh_canvas_exact_pairs": {
+          "dynamic-0-2": "fresh-2",
+          "dynamic-2-3": "high-initial-3",
+          "dynamic-3-1-css-resize": "fresh-1",
+          "high-drop-1-css-resize": "fresh-1"
+        },
+        "fractional1_25_scope": "Buffer size/capped ratio/media event/camera verified; no fresh1.25 pixel reference captured.",
+        "camera": {
+          "projection_target_lighting_fit_exact": true,
+          "max_eye_difference": 2.4780177909633494e-13,
+          "eye_absolute_tolerance": 1e-10
+        }
+      },
+      "go2": {
+        "fixed_controls": {
+          "initial-1": true,
+          "fresh-2": true,
+          "high-initial-3": true,
+          "fresh-1": true
+        },
+        "model_state_fields_per_session": 485,
+        "same_model_world_hash": "a4c86e31af6c2eaf8922aabb6cefcb9545d315619d2eb931955a04323748c036",
+        "dynamic": {
+          "dynamic-0-2": {
+            "device": 2,
+            "before_ratio": 1,
+            "candidate_ratio": 2,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              2560,
+              1600
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2514.399999976158
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2514.399999976158
+              }
+            ]
+          },
+          "dynamic-1-1.25": {
+            "device": 1.25,
+            "before_ratio": 1,
+            "candidate_ratio": 1.25,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              1600,
+              1000
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2514.399999976158
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2514.399999976158
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 4598.600000023842
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 4598.600000023842
+              }
+            ]
+          },
+          "dynamic-2-3": {
+            "device": 3,
+            "before_ratio": 1,
+            "candidate_ratio": 2,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              2560,
+              1600
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2514.399999976158
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2514.399999976158
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 4598.600000023842
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 4598.600000023842
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": false,
+                "device": 3,
+                "time": 6281.800000011921
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": true,
+                "device": 3,
+                "time": 6281.800000011921
+              }
+            ]
+          },
+          "dynamic-3-1-css-resize": {
+            "device": 1,
+            "before_ratio": 1,
+            "candidate_ratio": 1,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              1280,
+              800
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2514.399999976158
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2514.399999976158
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 4598.600000023842
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 4598.600000023842
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": false,
+                "device": 3,
+                "time": 6281.800000011921
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": true,
+                "device": 3,
+                "time": 6281.800000011921
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 8898.600000023842
+              },
+              {
+                "type": "media",
+                "query": 1,
+                "matches": true,
+                "device": 1,
+                "time": 8903
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": false,
+                "device": 1,
+                "time": 8903
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 9181.800000011921
+              }
+            ]
+          },
+          "high-drop-1-css-resize": {
+            "device": 1,
+            "before_ratio": 2,
+            "candidate_ratio": 1,
+            "before_buffer": [
+              2560,
+              1600
+            ],
+            "candidate_buffer": [
+              1280,
+              800
+            ],
+            "events": [
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 2064.599999964237
+              },
+              {
+                "type": "media",
+                "query": 1,
+                "matches": true,
+                "device": 1,
+                "time": 2069.199999988079
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": false,
+                "device": 1,
+                "time": 2069.199999988079
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 2346.800000011921
+              }
+            ]
+          }
+        },
+        "resources": {
+          "initial-1": {
+            "before_count": 30,
+            "candidate_count": 30,
+            "before_encoded": 21663131,
+            "candidate_encoded": 21663909
+          },
+          "fresh-2": {
+            "before_count": 30,
+            "candidate_count": 30,
+            "before_encoded": 21663131,
+            "candidate_encoded": 21663909
+          },
+          "high-initial-3": {
+            "before_count": 30,
+            "candidate_count": 30,
+            "before_encoded": 21663131,
+            "candidate_encoded": 21663909
+          },
+          "fresh-1": {
+            "before_count": 30,
+            "candidate_count": 30,
+            "before_encoded": 21663131,
+            "candidate_encoded": 21663909
+          }
+        },
+        "static_memory_program_draw_exact": true,
+        "fresh_canvas_exact_pairs": {
+          "dynamic-0-2": "fresh-2",
+          "dynamic-2-3": "high-initial-3",
+          "dynamic-3-1-css-resize": "fresh-1",
+          "high-drop-1-css-resize": "fresh-1"
+        },
+        "fractional1_25_scope": "Buffer size/capped ratio/media event/camera verified; no fresh1.25 pixel reference captured.",
+        "camera": {
+          "projection_target_lighting_fit_exact": true,
+          "max_eye_difference": 0,
+          "eye_absolute_tolerance": 1e-10
+        }
+      },
+      "panda": {
+        "fixed_controls": {
+          "initial-1": true,
+          "fresh-2": true,
+          "high-initial-3": true,
+          "fresh-1": true
+        },
+        "model_state_fields_per_session": 485,
+        "same_model_world_hash": "7c97e3f0438578e625fae0a23003ba1b5908d332b25927f10f7545d9fb084fd5",
+        "dynamic": {
+          "dynamic-0-2": {
+            "device": 2,
+            "before_ratio": 1,
+            "candidate_ratio": 2,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              2560,
+              1600
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2581.199999988079
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2581.199999988079
+              }
+            ]
+          },
+          "dynamic-1-1.25": {
+            "device": 1.25,
+            "before_ratio": 1,
+            "candidate_ratio": 1.25,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              1600,
+              1000
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2581.199999988079
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2581.199999988079
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 5081
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 5081
+              }
+            ]
+          },
+          "dynamic-2-3": {
+            "device": 3,
+            "before_ratio": 1,
+            "candidate_ratio": 2,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              2560,
+              1600
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2581.199999988079
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2581.199999988079
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 5081
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 5081
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": false,
+                "device": 3,
+                "time": 6914.399999976158
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": true,
+                "device": 3,
+                "time": 6914.399999976158
+              }
+            ]
+          },
+          "dynamic-3-1-css-resize": {
+            "device": 1,
+            "before_ratio": 1,
+            "candidate_ratio": 1,
+            "before_buffer": [
+              1280,
+              800
+            ],
+            "candidate_buffer": [
+              1280,
+              800
+            ],
+            "events": [
+              {
+                "type": "media",
+                "query": 1,
+                "matches": false,
+                "device": 2,
+                "time": 2581.199999988079
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": true,
+                "device": 2,
+                "time": 2581.199999988079
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": true,
+                "device": 1.25,
+                "time": 5081
+              },
+              {
+                "type": "media",
+                "query": 2,
+                "matches": false,
+                "device": 1.25,
+                "time": 5081
+              },
+              {
+                "type": "media",
+                "query": 1.25,
+                "matches": false,
+                "device": 3,
+                "time": 6914.399999976158
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": true,
+                "device": 3,
+                "time": 6914.399999976158
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 10630.899999976158
+              },
+              {
+                "type": "media",
+                "query": 1,
+                "matches": true,
+                "device": 1,
+                "time": 10635.199999988079
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": false,
+                "device": 1,
+                "time": 10635.199999988079
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 10964.199999988079
+              }
+            ]
+          },
+          "high-drop-1-css-resize": {
+            "device": 1,
+            "before_ratio": 2,
+            "candidate_ratio": 1,
+            "before_buffer": [
+              2560,
+              1600
+            ],
+            "candidate_buffer": [
+              1280,
+              800
+            ],
+            "events": [
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 2579.599999964237
+              },
+              {
+                "type": "media",
+                "query": 1,
+                "matches": true,
+                "device": 1,
+                "time": 2584.699999988079
+              },
+              {
+                "type": "media",
+                "query": 3,
+                "matches": false,
+                "device": 1,
+                "time": 2584.699999988079
+              },
+              {
+                "type": "resize",
+                "device": 1,
+                "time": 2931.199999988079
+              }
+            ]
+          }
+        },
+        "resources": {
+          "initial-1": {
+            "before_count": 31,
+            "candidate_count": 31,
+            "before_encoded": 11475128,
+            "candidate_encoded": 11475906
+          },
+          "fresh-2": {
+            "before_count": 31,
+            "candidate_count": 31,
+            "before_encoded": 11475128,
+            "candidate_encoded": 11475906
+          },
+          "high-initial-3": {
+            "before_count": 31,
+            "candidate_count": 31,
+            "before_encoded": 11475128,
+            "candidate_encoded": 11475906
+          },
+          "fresh-1": {
+            "before_count": 31,
+            "candidate_count": 31,
+            "before_encoded": 11475128,
+            "candidate_encoded": 11475906
+          }
+        },
+        "static_memory_program_draw_exact": true,
+        "fresh_canvas_exact_pairs": {
+          "dynamic-0-2": "fresh-2",
+          "dynamic-2-3": "high-initial-3",
+          "dynamic-3-1-css-resize": "fresh-1",
+          "high-drop-1-css-resize": "fresh-1"
+        },
+        "fractional1_25_scope": "Buffer size/capped ratio/media event/camera verified; no fresh1.25 pixel reference captured.",
+        "camera": {
+          "projection_target_lighting_fit_exact": true,
+          "max_eye_difference": 0,
+          "eye_absolute_tolerance": 1e-10
+        }
+      }
+    },
+    "static_changed_files": [
+      "app.js"
+    ],
+    "fixed_pixel_exact_pairs": 12,
+    "screenshots": 54,
+    "passed": true
+  },
+  "cross_cohort_models": {
+    "passed": true,
+    "cases": {
+      "malo": {
+        "fields": 485,
+        "different_path_metadata_only": [
+          "mesh_pathadr",
+          "paths"
+        ],
+        "resolved_absolute_mesh_entries": 32,
+        "identical_relative_mesh_labels": [],
+        "relative_label_scope": "Same labels and all compiled mesh arrays exact; relative source files were not separately resolved/hashed.",
+        "remaining_arrays_and_state_exact": true,
+        "dereferenced_mesh_labels_or_absolute_bytes_exact": true
+      },
+      "go2": {
+        "fields": 485,
+        "different_path_metadata_only": [],
+        "resolved_absolute_mesh_entries": 0,
+        "identical_relative_mesh_labels": [
+          "base_0.obj",
+          "base_1.obj",
+          "base_2.obj",
+          "base_3.obj",
+          "base_4.obj",
+          "hip_0.obj",
+          "hip_1.obj",
+          "thigh_0.obj",
+          "thigh_1.obj",
+          "thigh_mirror_0.obj",
+          "thigh_mirror_1.obj",
+          "calf_0.obj",
+          "calf_1.obj",
+          "calf_mirror_0.obj",
+          "calf_mirror_1.obj",
+          "foot.obj"
+        ],
+        "relative_label_scope": "Same labels and all compiled mesh arrays exact; relative source files were not separately resolved/hashed.",
+        "remaining_arrays_and_state_exact": true,
+        "dereferenced_mesh_labels_or_absolute_bytes_exact": true
+      },
+      "panda": {
+        "fields": 485,
+        "different_path_metadata_only": [],
+        "resolved_absolute_mesh_entries": 0,
+        "identical_relative_mesh_labels": [
+          "link0.stl",
+          "link1.stl",
+          "link2.stl",
+          "link3.stl",
+          "link4.stl",
+          "link5_collision_0.obj",
+          "link5_collision_1.obj",
+          "link5_collision_2.obj",
+          "link6.stl",
+          "link7.stl",
+          "hand.stl",
+          "link0_0.obj",
+          "link0_1.obj",
+          "link0_2.obj",
+          "link0_3.obj",
+          "link0_4.obj",
+          "link0_5.obj",
+          "link0_7.obj",
+          "link0_8.obj",
+          "link0_9.obj",
+          "link0_10.obj",
+          "link0_11.obj",
+          "link1.obj",
+          "link2.obj",
+          "link3_0.obj",
+          "link3_1.obj",
+          "link3_2.obj",
+          "link3_3.obj",
+          "link4_0.obj",
+          "link4_1.obj",
+          "link4_2.obj",
+          "link4_3.obj",
+          "link5_0.obj",
+          "link5_1.obj",
+          "link5_2.obj",
+          "link6_0.obj",
+          "link6_1.obj",
+          "link6_2.obj",
+          "link6_3.obj",
+          "link6_4.obj",
+          "link6_5.obj",
+          "link6_6.obj",
+          "link6_7.obj",
+          "link6_8.obj",
+          "link6_9.obj",
+          "link6_10.obj",
+          "link6_11.obj",
+          "link6_12.obj",
+          "link6_13.obj",
+          "link6_14.obj",
+          "link6_15.obj",
+          "link6_16.obj",
+          "link7_0.obj",
+          "link7_1.obj",
+          "link7_2.obj",
+          "link7_3.obj",
+          "link7_4.obj",
+          "link7_5.obj",
+          "link7_6.obj",
+          "link7_7.obj",
+          "hand_0.obj",
+          "hand_1.obj",
+          "hand_2.obj",
+          "hand_3.obj",
+          "hand_4.obj",
+          "finger_0.obj",
+          "finger_1.obj"
+        ],
+        "relative_label_scope": "Same labels and all compiled mesh arrays exact; relative source files were not separately resolved/hashed.",
+        "remaining_arrays_and_state_exact": true,
+        "dereferenced_mesh_labels_or_absolute_bytes_exact": true
+      }
+    },
+    "asset_paths": 33,
+    "scope": "All captured model arrays plus names/paths and qpos/qvel/ctrl compared; only path metadata may differ, with mesh bytes equal. No broader arbitrary live-state or physical robot claim."
+  },
+  "test_source_bridge": {
+    "scope": "Old test text reconstructed from the known pos-assertion change and cryptographically verified against the already-recorded pre-coordinate screen receipt; not claimed as originally captured text. This test module is not imported by screen.py.",
+    "file": "tests/test_viewer_resolution_browser.py",
+    "old_verified_sha256": "5b55b4ca61a533095ce8608427834e9c2173ab5a5277c48645a5cfbbf528ea18",
+    "final_sha256": "033cbfd374372d7b872a438243116b71abf6f9aff76cb66827fe8328b6ca7bdc",
+    "reconstructed_file": "pre-coordinate-test.py",
+    "difference": "Single yaw-only assertion replaced with same placed object yaw and pos assertions."
+  },
+  "preview_isolation": {
+    "recorded_utc": "2026-10-28T01:09:49.143269+00:00",
+    "observation": "CUA existing task preview on8737 showed smoke-world title and Lost the connection after the source/installed smoke pair. Original preview server had been stopped, but client retried the shared port.",
+    "action": "Existing owned tab navigated toabout:blank and fresh AX confirmed blank. Other two task IAB tabs are browser connection-error pages. No regular user Chrome tabs touched.",
+    "scope": "Cannot claim initial smoke pair had only its intended observer. Retain original passing records; final selected source/installed pair rerun after blank. Existing original11budget pass retained; no official budget rerun or claim of fully idle/isolated machine."
+  },
+  "movies": {
+    "before-malo": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-responsive-dpr/screen-before-v4/malo/workflow.mp4",
+      "video_sha256": "46b706a0810873ea47dfa0128b5bf6d58720e02eb7cd84f368354a07d3c0ccf1",
+      "video_bytes": 1296348,
+      "duration_seconds": 17.166667,
+      "raw_frame_count": 736,
+      "decoded_frame_count": 515,
+      "maximum_arrival_inversion_seconds": 0
+    },
+    "before-go2": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-responsive-dpr/screen-before-v4/go2/workflow.mp4",
+      "video_sha256": "c8c2ad7caa4c3618c17d78dba41df6846f91c36d1d4d67a1c1e4b2310aa90743",
+      "video_bytes": 1161240,
+      "duration_seconds": 15.6,
+      "raw_frame_count": 735,
+      "decoded_frame_count": 468,
+      "maximum_arrival_inversion_seconds": 0
+    },
+    "before-panda": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-responsive-dpr/screen-before-v4/panda/workflow.mp4",
+      "video_sha256": "239bed1ac84ee4d9530be9e2ffbb694d95594fcc99dedf1ff431c11507010520",
+      "video_bytes": 1535826,
+      "duration_seconds": 17.9,
+      "raw_frame_count": 727,
+      "decoded_frame_count": 537,
+      "maximum_arrival_inversion_seconds": 0
+    },
+    "candidate-malo": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-responsive-dpr/screen-candidate-v4/malo/workflow.mp4",
+      "video_sha256": "96028b297b85abf566c0c9d212e1b8149525c61e89342bcd4ef55d16675ce60c",
+      "video_bytes": 1324527,
+      "duration_seconds": 17.6,
+      "raw_frame_count": 729,
+      "decoded_frame_count": 528,
+      "maximum_arrival_inversion_seconds": 0
+    },
+    "candidate-go2": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-responsive-dpr/screen-candidate-v4/go2/workflow.mp4",
+      "video_sha256": "ee6c4571f924fa52601b7415d03a1264eed034a4d35497da8beb7563298bfb5f",
+      "video_bytes": 1269726,
+      "duration_seconds": 15.9,
+      "raw_frame_count": 734,
+      "decoded_frame_count": 477,
+      "maximum_arrival_inversion_seconds": 0
+    },
+    "candidate-panda": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-responsive-dpr/screen-candidate-v4/panda/workflow.mp4",
+      "video_sha256": "e873f9bdf5300c6aa6280eb7e314247b1d79cc5b2e5ad1d4aee7fd494eab178a",
+      "video_bytes": 1510956,
+      "duration_seconds": 18.6,
+      "raw_frame_count": 728,
+      "decoded_frame_count": 558,
+      "maximum_arrival_inversion_seconds": 0
+    }
+  },
+  "loading": {
+    "summary": {
+      "malo": {
+        "before": {
+          "browser_cold": {
+            "ready_ms": [
+              368.5,
+              302.30000001192093
+            ],
+            "mean_ready_ms": 335.40000000596046,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              48395291,
+              48395291
+            ],
+            "chrome_tree_rss_kib": [
+              1824272,
+              1826448
+            ],
+            "memory": [
+              {
+                "geometries": 50,
+                "textures": 8
+              },
+              {
+                "geometries": 45,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              18,
+              7
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              175.9000000357628,
+              170.39999997615814
+            ],
+            "mean_ready_ms": 173.15000000596046,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              48180811,
+              48180811
+            ],
+            "chrome_tree_rss_kib": [
+              1842544,
+              1849984
+            ],
+            "memory": [
+              {
+                "geometries": 50,
+                "textures": 8
+              },
+              {
+                "geometries": 45,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              18,
+              7
+            ]
+          }
+        },
+        "candidate": {
+          "browser_cold": {
+            "ready_ms": [
+              337.7999999523163,
+              343
+            ],
+            "mean_ready_ms": 340.39999997615814,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              48396069,
+              48396069
+            ],
+            "chrome_tree_rss_kib": [
+              1828992,
+              1829392
+            ],
+            "memory": [
+              {
+                "geometries": 50,
+                "textures": 8
+              },
+              {
+                "geometries": 50,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              18,
+              18
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              164.9000000357628,
+              166.9000000357628
+            ],
+            "mean_ready_ms": 165.9000000357628,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              48180811,
+              48180811
+            ],
+            "chrome_tree_rss_kib": [
+              1852224,
+              1849376
+            ],
+            "memory": [
+              {
+                "geometries": 45,
+                "textures": 5
+              },
+              {
+                "geometries": 45,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              7,
+              7
+            ]
+          }
+        }
+      },
+      "go2": {
+        "before": {
+          "browser_cold": {
+            "ready_ms": [
+              383.60000002384186,
+              350.10000002384186
+            ],
+            "mean_ready_ms": 366.85000002384186,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              21663131,
+              21663131
+            ],
+            "chrome_tree_rss_kib": [
+              1727040,
+              1732384
+            ],
+            "memory": [
+              {
+                "geometries": 137,
+                "textures": 6
+              },
+              {
+                "geometries": 137,
+                "textures": 6
+              }
+            ],
+            "programs": [
+              11,
+              11
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              247.60000002384186,
+              238.60000002384186
+            ],
+            "mean_ready_ms": 243.10000002384186,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              21448651,
+              21448651
+            ],
+            "chrome_tree_rss_kib": [
+              1765840,
+              1802720
+            ],
+            "memory": [
+              {
+                "geometries": 135,
+                "textures": 5
+              },
+              {
+                "geometries": 135,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              9,
+              9
+            ]
+          }
+        },
+        "candidate": {
+          "browser_cold": {
+            "ready_ms": [
+              377.2999999523163,
+              353.39999997615814
+            ],
+            "mean_ready_ms": 365.3499999642372,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              21663909,
+              21663909
+            ],
+            "chrome_tree_rss_kib": [
+              1732352,
+              1744800
+            ],
+            "memory": [
+              {
+                "geometries": 137,
+                "textures": 6
+              },
+              {
+                "geometries": 137,
+                "textures": 6
+              }
+            ],
+            "programs": [
+              11,
+              11
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              222.5,
+              240.80000001192093
+            ],
+            "mean_ready_ms": 231.65000000596046,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              20332512,
+              21448651
+            ],
+            "chrome_tree_rss_kib": [
+              1804912,
+              1752080
+            ],
+            "memory": [
+              {
+                "geometries": 135,
+                "textures": 5
+              },
+              {
+                "geometries": 135,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              9,
+              9
+            ]
+          }
+        }
+      }
+    },
+    "scope": "ABBA with fresh Chrome profile per arm, first browser-cache-cold navigation then actual reload. Local model/OS disk caches warm; server already compiled and physics paused. Ready means scene rendered, no busy/loading plus2RAF and gl.finish, not human input latency or fresh remote model download. RSS is one Chrome process-tree snapshot, not VRAM or peak.",
+    "limits": "Ready measures main scene plus2RAF/gl.finish, not every asynchronous sensor-preview shader. Transient loading memory/program counts vary and are not steady-state resource controls."
+  },
+  "receipts": {
+    "build-final": {
+      "seconds": 0.14470233296742663,
+      "sha256": "79a7c856ddd212d4b4df1b91bda6c6b098f6f924c4fddedf6912fb447cb4d953"
+    },
+    "lint-final": {
+      "seconds": 0.06129645899636671,
+      "sha256": "7503f96b63426ff7d307addf7149ea89f56d0909724ab4e1a5429636efa4de17"
+    },
+    "format-final": {
+      "seconds": 0.05922729196026921,
+      "sha256": "68dffd276120dffeaf3ca2e29ff305539aa7b9e65735c7ebb9c10fe4894ebbc7"
+    },
+    "baseline-contract": {
+      "seconds": 8.625996457994916,
+      "sha256": "fb2f86f6a9e8f56a4a2f2d80c0ca04940615f62a441ddfbeb3f3547a43444530"
+    },
+    "browser-full": {
+      "seconds": 1292.4804557500174,
+      "sha256": "265f9f14d738e123c1d98b9f5439248bbf0c0d1a9d61a91c86b0550b5f32cf29"
+    },
+    "gpu": {
+      "seconds": 38.80728912499035,
+      "sha256": "049aff6b4f7ab8c42ffd9fd69b18a0dea778263e3ab98d2c806f2eb606a2ed01"
+    },
+    "backend-related": {
+      "seconds": 50.28112245898228,
+      "sha256": "acd01bd293589bd32ad8f25fb46514ddc917074e91753503675cf4ec2e4881ab"
+    },
+    "smoke-source-isolated": {
+      "seconds": 3.558444041002076,
+      "sha256": "46190b0a482f70b8d6e85239c1f9888340f1361cc5372694045cbd8b75a5dd95"
+    },
+    "wheel-install": {
+      "seconds": 0.38029654195997864,
+      "sha256": "3d24f1d40aa97f7af6bc4ff202a34c74dcfcd083846ee1ba14796685e2fa793c"
+    },
+    "smoke-installed-isolated": {
+      "seconds": 3.8373822089633904,
+      "sha256": "245f8a74740e44894e68282f2dd021a9e1c0dec6405b3d4f48222aa54f1f3a64"
+    },
+    "framework": {
+      "seconds": 1.8874171250499785,
+      "sha256": "944001a4467818533488f088630a08e402a4368eb6b29b1f82acbe7cf73ec820"
+    },
+    "budget": {
+      "seconds": 25.30948079098016,
+      "sha256": "1fff3f1ba5f25d26c90d84d8b0df069b771ce13c93aae1e2d8f7eb14e454a31e"
+    },
+    "audit": {
+      "seconds": 0.3350804590154439,
+      "sha256": "f1bf354892df45edef30a10a2136ae916d7612742847aca82cb07b3d7a37de6e"
+    },
+    "loading": {
+      "seconds": 21.25962237501517,
+      "sha256": "b3da941160778bed509acb5dd86a1fce1bc76d6f28495c714ddfd30d9694815a"
+    },
+    "screen-candidate-v4": {
+      "seconds": 67.34305037499871,
+      "sha256": "cd7a525cacd24aee4d0ad8151e0e039801e19bb9a8a82b022088581b5c08821a"
+    },
+    "controls-v2": {
+      "seconds": 0.673967958020512,
+      "sha256": "8708e097ac9f08b31dc10600f8400a28d1b96518794785725ef47d50635403fd"
+    },
+    "package-bridge": {
+      "seconds": 0.15557524998439476,
+      "sha256": "bb944999bbd5842a08fcc780b0501865e15804eaf60641ed81db720e2e257c64"
+    },
+    "encode-before-malo": {
+      "seconds": 3.743253000022378,
+      "sha256": "cabb3740c8f52359ee04ea15a01515c1a20662d3925af7b5ab3258d9d96cc1ae"
+    },
+    "encode-before-go2": {
+      "seconds": 3.002672332979273,
+      "sha256": "5f99394b8b7f6d6021fa870bb94bf4660550b6f6881a0226a7d74ca1d6b521b6"
+    },
+    "encode-before-panda": {
+      "seconds": 4.019485540979076,
+      "sha256": "c78d146ed38c16cc21ff036eaeaa1af4d39961d0797b2fe7c1d6bb8ffd380baa"
+    },
+    "encode-candidate-malo": {
+      "seconds": 3.8633958749705926,
+      "sha256": "027f718cb320f945a5a877c5fc7b008e2ff2266c738411df43bb7e1051070f53"
+    },
+    "encode-candidate-go2": {
+      "seconds": 3.1439234169665724,
+      "sha256": "bc1d4e3f7348ea8790c5fa224bc25d69a5974bc7501e3fd4380f747b5c19037e"
+    },
+    "encode-candidate-panda": {
+      "seconds": 4.118154207943007,
+      "sha256": "883fce5cd17546d14adaaaa0d626e67e73f95eaeac6edfb26c80e4e80770c773"
+    },
+    "screen-before-v4": {
+      "seconds": 66.5713343329844,
+      "sha256": "fe5691733116b5775d4ccf8cfd47c9c7634bbb694df4128cad582ab38ece4dce",
+      "input_difference": "Only unused new regression position assertion differs from final freeze; captured product and screen.py identical."
+    }
+  },
+  "legacy_dpr_audit": {
+    "scope": "Only */screen-*/report.json with recorded views.dpr; no inference about uninspected media or prior sources. Immutable raw evidence preserved.",
+    "reports": [
+      {
+        "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/screen-before/report.json",
+        "mislabeled_samples": [
+          {
+            "world": "malo",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          }
+        ]
+      },
+      {
+        "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/screen-candidate/report.json",
+        "mislabeled_samples": [
+          {
+            "world": "malo",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          }
+        ]
+      },
+      {
+        "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/screen-before/report.json",
+        "mislabeled_samples": [
+          {
+            "world": "malo",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "alloy",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "alloy",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "alloy",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "alloy",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "lab",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "lab",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "lab",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "lab",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          }
+        ]
+      },
+      {
+        "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/screen-candidate/report.json",
+        "mislabeled_samples": [
+          {
+            "world": "malo",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "malo",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "go2",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "panda",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "alloy",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "alloy",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "alloy",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "alloy",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "lab",
+            "label": "dpr1-studio-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "lab",
+            "label": "dpr1-studio-detail",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "lab",
+            "label": "dpr1-daylight-normal",
+            "observed_renderer_dpr": 2
+          },
+          {
+            "world": "lab",
+            "label": "dpr1-daylight-detail",
+            "observed_renderer_dpr": 2
+          }
+        ]
+      }
+    ]
+  },
+  "notification_limitation": {
+    "pure_CDP_3_to_1": "No new media event received by product or fixed sentinels after two screenshots and layout read; renderer stays2 until actual CSS resize. This path remains unpassed.",
+    "native_zoom": "Not executed; native CUA reported locked Mac. Initial headed setup/cleanup only, not a zoom validation.",
+    "accepted_paths": "Actual1-to-2,2-to-1.25,1.25-to-3 resolution events;3-to-1 with real CSS resize; fresh1/2/capped3;300x150; repeated identical metric override without extra buffer reset; current full browser/GPU compatibility."
+  },
+  "rejected_shadow_screen": "../2026-10-28-shadow-recovery/decision.json: two-world gate failed, no production shadow candidate.",
+  "limitations": [
+    "Actual Chrome/Metal integration with CDP metric changes, not physical monitor/human timing validation.",
+    "DPR1-to-2 correctly increases backing pixels4x; no free-quality or zero-memory-cost claim. DPR2-to-1 resize reduces backing pixels75percent; GL storage/peakVRAM not measured.",
+    "Static default-DPR controls preserve existing material look. No new shader/material map/pass or dependency.",
+    "Complete non-slow browser plus asset/sensorGPU and related backend suites, not full default/slow suite. Missing optional type/security tools are not passes.",
+    "ABBA two samples per cohort/world; local model/OS disk caches warm, server already compiled. RSS snapshots are not peak or VRAM; no universal speedup claim.",
+    "Six full workflow movies include explicit fresh-control reload/loading screens. Thirty-six decoded stills cannot certify every frame.",
+    "All initial helper/assertion failures retained; failed pure3-to-1 diagnostic never promoted to success.",
+    "No individual action-success tuning."
+  ],
+  "goal": "Shared material quality, lightweight loading and creative play remains active.",
+  "evidence": {
+    "directory": "../robotforge-evidence/2026-10-28-responsive-dpr",
+    "closure": {
+      "passed": true,
+      "indexed_files": 10912,
+      "index_sha256": "2f3d02de8a7379177c52b2adff3c8f148c50d176cc15092ffcb5aa83e5767027",
+      "frozen_inputs": 760,
+      "absolute_asset_paths": 33,
+      "preserved_original_files": 13,
+      "package_artifacts": 2,
+      "failures": []
+    },
+    "shadow_screen_closure": {
+      "passed": true,
+      "indexed_files": 105,
+      "index_sha256": "b30d1ddf24d8c809c457bdcd2470704412b042c6620b39a15b2a3cf35ed05dc2",
+      "historical_inputs_match_git_base": true,
+      "base": "1f3d6eff5ac216f6e21609a040d7799d84a29f06",
+      "historical_frozen_inputs": 759,
+      "scope": "Historical source inputs verified against Git base, not asserted equal to current changed DPR code. Rejected diagnostic only; no runtime candidate."
+    }
+  }
+}
