@@ -113,7 +113,7 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     showHeading();
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
     for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
-    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain" || kind === "terrain-edit";
+    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain-edit";
     $("placement-title").textContent = t(kind === "terrain-edit" ? "move_named_terrain" : kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
@@ -149,11 +149,11 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     duplicate: (entry) => begin(entry, "copy", entry.name),
     session: () => session,
     spacing: () => spacing.value,
-    repeating: () => (item?.kind === "object" || item?.kind === "copy") && repeat.checked,
+    repeating: () => (item?.kind === "object" || item?.kind === "copy" || item?.kind === "terrain") && repeat.checked,
     next(guard = {}) {
       item = { ...item, ...guard };
       point = null; coordinates(null); $("place-here").disabled = true;
-      $("placement-hint").textContent = t("place_next_hint");
+      $("placement-hint").textContent = t(item.kind === "terrain" ? "terrain_next_hint" : "place_next_hint");
     },
     preview: () => item?.kind === "terrain" || item?.kind === "terrain-edit" ? { boxes: item.boxes, yaw }
       : item && item.kind !== "robot" && item.kind !== "start" && item.kind !== "model" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,

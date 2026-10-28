@@ -1,0 +1,569 @@
+{
+  "base": "9423e6b3a68b2a12e4cb7ba85c43f646b2d71e1c",
+  "runtime_source_sha256": "bd83fe3b4eee1e7ec8059194cdd4767ad54c8ee8c194b4147db8748108502b61",
+  "frozen_inputs": 761,
+  "selection": {
+    "terrain-final-v2": {
+      "passed": 15,
+      "skipped": 0,
+      "cases": 15
+    },
+    "browser-related": {
+      "passed": 88,
+      "skipped": 0,
+      "cases": 88
+    },
+    "backend-related": {
+      "passed": 579,
+      "skipped": 0,
+      "cases": 579
+    },
+    "gpu": {
+      "passed": 9,
+      "skipped": 0,
+      "cases": 9
+    }
+  },
+  "distinct_pytest_passed": 691,
+  "canonical_framework": "7 unchanged fixed cases pass",
+  "scope": "scoped selected regression; no full default/slow/all-browser suite claim",
+  "package": {
+    "passed": true,
+    "base_wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-responsive-dpr/dist-final/robotforge-0.0.1-py3-none-any.whl",
+    "base_wheel_sha256": "bccb22bb9497948c65a54bb387f5f51bb9d1ee883afa6b7f5e2222c922d616aa",
+    "wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-repeat-terrain/dist-final/robotforge-0.0.1-py3-none-any.whl",
+    "wheel_sha256": "8c11f9139d7f40772cff6f9a600bdcfab3450cc7e20cbf950fb355cfd46894f2",
+    "wheel_bytes": 3941555,
+    "delta_bytes": 261,
+    "product_files": 413,
+    "changed_product_files": [
+      "robotforge/viewer/static/app.js",
+      "robotforge/viewer/static/creation.js",
+      "robotforge/viewer/static/i18n.js"
+    ],
+    "all_backend_assets_dependencies_unchanged": true,
+    "source_wheel_exact": true,
+    "installed_check": "413 installed/source/wheel product files exact",
+    "source_wheel_installed_exact": true
+  },
+  "budget": {
+    "passed": 11,
+    "total": 11,
+    "thresholds_unchanged": true,
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3849.1748,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.6382,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.5
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.8366,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.54
+        },
+        "fps": {
+          "value": 60.1129,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.9,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.899999976158142,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.2269,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 3.6,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.599999964237213,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.3,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 561.5
+        },
+        "idle_cpu_pct": {
+          "value": 4.2,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    }
+  },
+  "visual_controls": {
+    "actual_static_pngs": 48,
+    "exact_before_after_canvases": 24,
+    "worlds": [
+      "malo",
+      "go2",
+      "panda"
+    ],
+    "fields_per_model": 485,
+    "actual_DPR": [
+      1,
+      2
+    ],
+    "camera_coordinate_tolerance": 1e-10,
+    "compiled_paths": "Only changed absolute mesh paths are resolved/hash compared; identical relative labels are not independently resolved source files; compiled model geometry/tex arrays remain exact.",
+    "no_shader_aesthetic_gain_claim": true
+  },
+  "native_workflows": {
+    "malo": {
+      "preset_entries_before": 3,
+      "preset_entries_candidate": 1,
+      "same_final_saved_world": true,
+      "successful_additions_each": 3,
+      "occupied_retries_each": 1,
+      "guard_checks_each": 4,
+      "latest_only_undo_layout_restore_reload_exact": true,
+      "candidate_touch_gestures_without_submission": null,
+      "not_measured": "human completion time, locomotion/action success"
+    },
+    "go2": {
+      "preset_entries_before": 3,
+      "preset_entries_candidate": 1,
+      "same_final_saved_world": true,
+      "successful_additions_each": 3,
+      "occupied_retries_each": 1,
+      "guard_checks_each": 4,
+      "latest_only_undo_layout_restore_reload_exact": true,
+      "candidate_touch_gestures_without_submission": true,
+      "not_measured": "human completion time, locomotion/action success"
+    }
+  },
+  "movies": [
+    {
+      "cohort": "before",
+      "kind": "malo",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-repeat-terrain/before-malo-v1/workflow.mp4",
+      "sha256": "6f78fe4dc7e8c8bc1d19997f42cf621cda6b741784e229c3e4fa33237790eb44",
+      "duration_seconds": 27.366667,
+      "raw_frames": 1023,
+      "root_viewed_decoded_samples": 6
+    },
+    {
+      "cohort": "candidate",
+      "kind": "malo",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-repeat-terrain/candidate-malo-v1/workflow.mp4",
+      "sha256": "54af8c53c0ba9a6d3a040df6716e5ab1264eaa8dab58cfd6825dc60bbdfecc98",
+      "duration_seconds": 22.333333,
+      "raw_frames": 797,
+      "root_viewed_decoded_samples": 6
+    },
+    {
+      "cohort": "before",
+      "kind": "go2",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-repeat-terrain/before-go2-v1/workflow.mp4",
+      "sha256": "e8ab7b9d2e6f87c48522fff5e29ffa3a74b197d56e5ff74d972e5bd5d7174767",
+      "duration_seconds": 18.1,
+      "raw_frames": 818,
+      "root_viewed_decoded_samples": 6
+    },
+    {
+      "cohort": "candidate",
+      "kind": "go2",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-repeat-terrain/candidate-go2-v1/workflow.mp4",
+      "sha256": "e694e35a1a1287c510863d9bc5f7981c25c51883c92d0f64607a233dfe3123c7",
+      "duration_seconds": 16.966667,
+      "raw_frames": 751,
+      "root_viewed_decoded_samples": 6
+    }
+  ],
+  "loading": {
+    "initial_ABBA": {
+      "malo": {
+        "before": {
+          "browser_cold": {
+            "samples_ms": [
+              619.4000000357628,
+              541.3000000119209
+            ],
+            "mean_ms": 580.3500000238419
+          },
+          "warm_reload": {
+            "samples_ms": [
+              277.30000001192093,
+              261.80000001192093
+            ],
+            "mean_ms": 269.55000001192093
+          },
+          "resources": [
+            {
+              "count": 30,
+              "cold_encoded_bytes": 48396069,
+              "warm_encoded_bytes": 48180811
+            },
+            {
+              "count": 30,
+              "cold_encoded_bytes": 48396069,
+              "warm_encoded_bytes": 48180811
+            }
+          ]
+        },
+        "candidate": {
+          "browser_cold": {
+            "samples_ms": [
+              502.19999998807907,
+              865.5999999642372
+            ],
+            "mean_ms": 683.8999999761581
+          },
+          "warm_reload": {
+            "samples_ms": [
+              268.39999997615814,
+              379.19999998807907
+            ],
+            "mean_ms": 323.7999999821186
+          },
+          "resources": [
+            {
+              "count": 30,
+              "cold_encoded_bytes": 48397206,
+              "warm_encoded_bytes": 48181140
+            },
+            {
+              "count": 30,
+              "cold_encoded_bytes": 48397206,
+              "warm_encoded_bytes": 48181140
+            }
+          ]
+        }
+      },
+      "go2": {
+        "before": {
+          "browser_cold": {
+            "samples_ms": [
+              676.8000000119209,
+              567.6000000238419
+            ],
+            "mean_ms": 622.2000000178814
+          },
+          "warm_reload": {
+            "samples_ms": [
+              325.69999998807907,
+              347
+            ],
+            "mean_ms": 336.34999999403954
+          },
+          "resources": [
+            {
+              "count": 30,
+              "cold_encoded_bytes": 21663909,
+              "warm_encoded_bytes": 21448651
+            },
+            {
+              "count": 30,
+              "cold_encoded_bytes": 21663909,
+              "warm_encoded_bytes": 21448651
+            }
+          ]
+        },
+        "candidate": {
+          "browser_cold": {
+            "samples_ms": [
+              648.5,
+              944.3000000119209
+            ],
+            "mean_ms": 796.4000000059605
+          },
+          "warm_reload": {
+            "samples_ms": [
+              341.19999998807907,
+              479.69999998807907
+            ],
+            "mean_ms": 410.44999998807907
+          },
+          "resources": [
+            {
+              "count": 30,
+              "cold_encoded_bytes": 21665046,
+              "warm_encoded_bytes": 21448980
+            },
+            {
+              "count": 30,
+              "cold_encoded_bytes": 21665046,
+              "warm_encoded_bytes": 21448980
+            }
+          ]
+        }
+      }
+    },
+    "supplement_BAAB": {
+      "malo": {
+        "before": {
+          "browser_cold": {
+            "samples_ms": [
+              469,
+              498.39999997615814
+            ],
+            "mean_ms": 483.69999998807907
+          },
+          "warm_reload": {
+            "samples_ms": [
+              256.69999998807907,
+              264.80000001192093
+            ],
+            "mean_ms": 260.75
+          },
+          "resources": [
+            {
+              "count": 30,
+              "cold_encoded_bytes": 48396069,
+              "warm_encoded_bytes": 48173349
+            },
+            {
+              "count": 30,
+              "cold_encoded_bytes": 48396069,
+              "warm_encoded_bytes": 48180811
+            }
+          ]
+        },
+        "candidate": {
+          "browser_cold": {
+            "samples_ms": [
+              515,
+              466.69999998807907
+            ],
+            "mean_ms": 490.84999999403954
+          },
+          "warm_reload": {
+            "samples_ms": [
+              256.39999997615814,
+              275
+            ],
+            "mean_ms": 265.69999998807907
+          },
+          "resources": [
+            {
+              "count": 30,
+              "cold_encoded_bytes": 48397206,
+              "warm_encoded_bytes": 48181140
+            },
+            {
+              "count": 30,
+              "cold_encoded_bytes": 48397206,
+              "warm_encoded_bytes": 48181140
+            }
+          ]
+        }
+      },
+      "go2": {
+        "before": {
+          "browser_cold": {
+            "samples_ms": [
+              624.8000000119209,
+              666.1999999880791
+            ],
+            "mean_ms": 645.5
+          },
+          "warm_reload": {
+            "samples_ms": [
+              329.30000001192093,
+              342
+            ],
+            "mean_ms": 335.65000000596046
+          },
+          "resources": [
+            {
+              "count": 30,
+              "cold_encoded_bytes": 21663909,
+              "warm_encoded_bytes": 21448651
+            },
+            {
+              "count": 30,
+              "cold_encoded_bytes": 21663909,
+              "warm_encoded_bytes": 21448651
+            }
+          ]
+        },
+        "candidate": {
+          "browser_cold": {
+            "samples_ms": [
+              641.2999999523163,
+              585.6000000238419
+            ],
+            "mean_ms": 613.4499999880791
+          },
+          "warm_reload": {
+            "samples_ms": [
+              329.0999999642372,
+              324.80000001192093
+            ],
+            "mean_ms": 326.94999998807907
+          },
+          "resources": [
+            {
+              "count": 30,
+              "cold_encoded_bytes": 21665046,
+              "warm_encoded_bytes": 21448980
+            },
+            {
+              "count": 30,
+              "cold_encoded_bytes": 21665046,
+              "warm_encoded_bytes": 21448980
+            }
+          ]
+        }
+      }
+    }
+  },
+  "loading_limits": "All initial/supplement samples retained. Fresh profiles, already compiled servers, warm local model/OS caches; main rendered readiness plus2RAF/gl.finish, not all sensor compilation, human latency, server cold start or download. RSS is sample tree, not VRAM/peak. Small sample/order variance does not establish causality or universal speedup.",
+  "cost_resources": "No added assets, dependency, texture, pass or request; cold HTTP encoded resources+1137B/warm+329B in initial ABBA; wheel+261B. Every terrain addition still recompiles and returns all bodies to saved starts paused.",
+  "failures_retained": [
+    "initial6case3fail test await.count and mistaken receipt deletion expectation; fixed tests then15finalpass",
+    "Ruff123character assertion split with identical Python AST, final15selection repeated",
+    "bare system-Python provenance import lacked pydantic; used frozen project uv environment; initial verifier parent changed to project interpreter before smoke",
+    "initial candidate ABBA slower means retained, supplementary reversed order separately recorded"
+  ],
+  "optional_tools": {
+    "available": {
+      "mypy": false,
+      "pyright": false,
+      "bandit": false,
+      "pip_audit": false
+    },
+    "scope": "Unavailable is not pass; no optional tools installed."
+  },
+  "next": "Screen negotiated current-version cached mesh transport compression for actual47MBMalo/20MBGo2 payloads before any implementation; preserve mesh bytes/interfaces and test event-loop/CPU/memory costs. No manipulation success tuning.",
+  "broad_goal": "active",
+  "evidence_directory": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-repeat-terrain",
+  "decision": {
+    "accepted": true,
+    "scope": "opt-in repeated protected native terrain placement; shared appearance retained",
+    "basis": "two actual same-final-world workflows3preset entries->1, state/metadata boundaries, scoped691pytest+7canonical and original11budget pass",
+    "no_speed_claim": "initialABBA slower and reversedBAAB mixed, all samples retained; no proof of universal latency or memory improvement"
+  }
+}
