@@ -80,6 +80,11 @@ Triangle budgets keep this light: a joint housing gets a detail level by its siz
 A material is a surface the viewer draws.
 MuJoCo's own material carries what its renderer reads (specular, roughness, metallic); the viewer is three.js and also gets a clear coat, sheen, glow and a procedural texture, in the scene description's `surfaces` table.
 A plugin's new material therefore reaches the browser without a change to the viewer.
+`Material.env` is a finite, non-negative multiplier of the active scene's environment lighting, including its diffuse and specular contributions.
+Zero removes that surface's environment contribution while retaining direct lights; one preserves the scene intensity.
+Authored non-default values work with procedural grain, weave and clearcoat, and retain the active lighting through RGB sensor passes and context restoration.
+This is an authoring-time surface setting: rebuild the scene after changing the definition; a default-one Three material does not install a hook for later direct `envMapIntensity` mutation.
+Explicit Three `envMap` assignments retain Three's own material-intensity semantics.
 
 | Material | Surface | Texture |
 |---|---|---|

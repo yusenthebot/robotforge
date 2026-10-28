@@ -48,17 +48,28 @@ export function createPlacementGesture() {
   };
 }
 
-export function initCreation({ start, submit, cancel, change }) {
+export function initCreation({ start, submit, cancel, change, coordinateChange = () => {} }) {
   const $ = (id) => document.getElementById(id);
-  let item = null, point = null, sending = false, size = "normal", yaw = 0, turns = 0, session = 0;
+  let item = null, point = null, sending = false, size = "normal", yaw = 0, yawDelta = 0, session = 0;
   const repeat = $("place-repeat");
   const material = $("place-material");
+  const spacing = $("place-spacing");
+  spacing.addEventListener("change", coordinateChange);
+  function coordinates(value, status = null) {
+    const readout = $("placement-position"), note = $("placement-coordinate-status");
+    const text = value ? t("placement_position", { x: value[0].toFixed(4), y: value[1].toFixed(4), z: value[2].toFixed(4) })
+      : t("placement_position_empty");
+    if (readout.textContent !== text) readout.textContent = text;
+    const message = status ? t(status) : "";
+    if (note.textContent !== message) note.textContent = message;
+    note.hidden = !message;
+  }
   const syncRepeat = () => { $("place-cancel").textContent = t(repeat.checked ? "done_placing" : "cancel_place"); };
   repeat.addEventListener("change", syncRepeat);
   const scales = { small: 0.75, normal: 1, large: 1.5 };
   const send = () => {
     if (point && !sending && item) submit({ ...item, scale: size, yaw,
-      ...(item.kind === "terrain-edit" ? { turns } : {}),
+      ...(item.kind === "terrain-edit" ? { yaw_delta: yawDelta } : {}),
       ...(item.kind === "object" && item.name !== "table" && material.value ? { material: material.value } : {}) }, point);
   };
   const setOpen = (open) => {
@@ -74,25 +85,35 @@ export function initCreation({ start, submit, cancel, change }) {
     for (const b of sizeButtons) b.setAttribute("aria-pressed", String(b.dataset.size === size));
   }
   for (const b of sizeButtons) b.addEventListener("click", () => { setSize(b.dataset.size); change(); });
-  $("place-rotate").addEventListener("click", () => {
-    if (item?.kind === "terrain-edit") { turns = (turns + 1) % 4; yaw = item.yaw + 90 * turns; }
-    else yaw = (yaw + 90) % 360;
-    $("place-rotate").textContent = t("rotate_place", { angle: yaw }); change();
-  });
+  const normalize = (angle) => ((angle % 360) + 360) % 360;
+  function showHeading() {
+    const angle = Number(normalize(yaw).toFixed(4)) % 360;
+    $("placement-heading").textContent = t("placement_heading", { angle });
+  }
+  function rotateBy(degrees) {
+    if (!item || sending) return;
+    if (item.kind === "terrain-edit") { yawDelta = (yawDelta + degrees) % 360; yaw = item.yaw + yawDelta; }
+    else yaw = normalize(yaw + degrees);
+    showHeading(); change();
+  }
+  for (const [id, degrees] of [["place-rotate-minus", -15], ["place-rotate", 90], ["place-rotate-plus", 15]]) {
+    $(id).addEventListener("click", () => rotateBy(degrees));
+  }
   function begin(entry, kind, title) {
     item = { ...entry, kind }; point = null; sending = false; size = "normal";
+    spacing.value = "free"; coordinates(null);
     // Authored worlds may contain many full turns; copy the same heading within the request's angle bounds.
-    turns = 0;
+    yawDelta = 0;
     yaw = kind === "edit" || kind === "terrain-edit" ? entry.yaw : kind === "copy" || kind === "start" ? entry.yaw % 360 : 0; session++;
     repeat.checked = false; syncRepeat();
     material.value = "";
     $("prop-material-control").hidden = kind !== "object" || entry.name === "table";
     $("placement-hint").textContent = t(kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
-    $("place-rotate").textContent = t("rotate_place", { angle: yaw });
+    showHeading();
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
     for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
-    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain" || kind === "terrain-edit";
+    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain-edit";
     $("placement-title").textContent = t(kind === "terrain-edit" ? "move_named_terrain" : kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
@@ -127,11 +148,12 @@ export function initCreation({ start, submit, cancel, change }) {
     placingTerrain: () => item?.kind === "terrain" || item?.kind === "terrain-edit",
     duplicate: (entry) => begin(entry, "copy", entry.name),
     session: () => session,
-    repeating: () => (item?.kind === "object" || item?.kind === "copy") && repeat.checked,
+    spacing: () => spacing.value,
+    repeating: () => (item?.kind === "object" || item?.kind === "copy" || item?.kind === "terrain") && repeat.checked,
     next(guard = {}) {
       item = { ...item, ...guard };
-      point = null; $("place-here").disabled = true;
-      $("placement-hint").textContent = t("place_next_hint");
+      point = null; coordinates(null); $("place-here").disabled = true;
+      $("placement-hint").textContent = t(item.kind === "terrain" ? "terrain_next_hint" : "place_next_hint");
     },
     preview: () => item?.kind === "terrain" || item?.kind === "terrain-edit" ? { boxes: item.boxes, yaw }
       : item && item.kind !== "robot" && item.kind !== "start" && item.kind !== "model" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
@@ -149,15 +171,16 @@ export function initCreation({ start, submit, cancel, change }) {
       $("build-add-robot").dataset.off = editable ? "0" : "1";
       $("build-add-robot").disabled = busy || !editable;
     },
-    point(value) { point = value; $("place-here").disabled = !value || sending; },
+    point(value, status = null) { point = value; coordinates(value, status); $("place-here").disabled = !value || sending; },
     busy(value) {
       sending = value;
       $("place-here").disabled = !point || value;
       $("place-cancel").disabled = value;
       for (const b of sizeButtons) b.disabled = value;
-      $("place-rotate").disabled = value;
+      for (const id of ["place-rotate-minus", "place-rotate", "place-rotate-plus"]) $(id).disabled = value;
       repeat.disabled = value;
       material.disabled = value;
+      spacing.disabled = value;
       $("placement-bar").setAttribute("aria-busy", String(value));
     },
     progress(stage, fraction) {
@@ -168,6 +191,7 @@ export function initCreation({ start, submit, cancel, change }) {
     clear() {
       session++; item = point = null;
       sending = false;
+      coordinates(null);
       $("placement-bar").hidden = true;
       $("place-cancel").disabled = false;
     },

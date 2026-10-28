@@ -50,6 +50,17 @@
     </div>
   </header>
 
+  <section class="view-panel" id="view-panel" aria-labelledby="view-heading" hidden>
+    <h2 class="section-title" id="view-heading" data-i18n="view_direction">View direction</h2>
+    <p class="note" data-i18n="view_direction_note">World axes, around your current aim. Perspective stays on.</p>
+    <div class="view-choices" role="group" aria-labelledby="view-heading">
+      <button class="pill" type="button" data-camera-view="top" aria-pressed="false" data-i18n="view_top">Top</button>
+      <button class="pill" type="button" data-camera-view="front" aria-pressed="false" data-i18n="view_front">Front · −Y</button>
+      <button class="pill" type="button" data-camera-view="side" aria-pressed="false" data-i18n="view_side">Side · +X</button>
+    </div>
+    <button class="pill" id="view-back" type="button" disabled data-i18n="view_back">Return to original view</button>
+  </section>
+
   <div class="learn-panel" id="learn-panel" hidden>
     <h2 class="learn-heading" data-i18n="learn_title">Learn robotics by doing</h2>
     <p class="note" data-i18n="learn_lead">Each lesson sets up a small experiment. You change something, watch what the robot does, and the lesson explains why.</p>
@@ -194,6 +205,13 @@
       <h2 class="section-title"><span data-i18n="robots">Robots</span></h2>
       <div class="robot-list" id="robot-list"></div>
       <button class="pill" id="robot-start" type="button" hidden data-i18n="robot_start">Set start / heading</button>
+      <button class="pill" id="robot-surface" type="button" hidden aria-expanded="false" aria-controls="robot-surface-controls" data-i18n="robot_surface">Part surface</button>
+      <div id="robot-surface-controls" hidden>
+        <p class="note" data-i18n="robot_surface_lead">Style one highlighted part, including all its visible surfaces. Base colours and physics stay the same. Applies at the current pose, resets motion and pauses.</p>
+        <label class="prop-material-control"><span data-i18n="robot_surface_body">Part</span><select id="robot-surface-body"></select></label>
+        <label class="prop-material-control"><span data-i18n="prop_surface">Surface</span><select id="robot-surface-material"><option value="" data-i18n="surface_original">Original</option><option value="plastic" data-i18n="material_plastic">Plastic</option><option value="wood" data-i18n="material_wood">Wood</option><option value="steel" data-i18n="material_steel">Steel</option></select></label>
+        <button class="pill" id="robot-surface-apply" type="button" data-i18n="surface_apply">Apply and reset</button>
+      </div>
     </section>
     <section id="sensor-section" hidden>
       <h2 class="section-title"><span data-i18n="sensors">Sensors</span><span class="count" id="sensor-count"></span></h2>
@@ -263,11 +281,25 @@
     <div class="placement-options" id="object-placement-controls" hidden>
       <span class="prop-size-control" id="prop-size-label" data-i18n="prop_size">Size</span>
       <div class="size-choices prop-size-control" role="group" aria-labelledby="prop-size-label"><button class="pill" type="button" data-size="small" aria-pressed="false" data-i18n="prop_small">Small</button><button class="pill" type="button" data-size="normal" aria-pressed="true" data-i18n="prop_normal">Normal</button><button class="pill" type="button" data-size="large" aria-pressed="false" data-i18n="prop_large">Large</button></div>
-      <button class="pill" id="place-rotate" type="button">Rotate · 0°</button>
+      <div class="placement-heading" role="group" aria-labelledby="placement-heading">
+        <output id="placement-heading" aria-live="off"></output>
+        <button class="pill" id="place-rotate-minus" type="button" data-i18n-label="rotate_minus_15" aria-label="Rotate −15 degrees">−15°</button>
+        <button class="pill" id="place-rotate" type="button" data-i18n-label="rotate_plus_90" aria-label="Rotate +90 degrees">+90°</button>
+        <button class="pill" id="place-rotate-plus" type="button" data-i18n-label="rotate_plus_15" aria-label="Rotate +15 degrees">+15°</button>
+      </div>
       <label class="prop-material-control" id="prop-material-control" hidden><span data-i18n="prop_material">Material</span>
         <select id="place-material"><option value="" data-i18n="material_default">Default</option><option value="plastic" data-i18n="material_plastic">Plastic</option><option value="wood" data-i18n="material_wood">Wood</option><option value="steel" data-i18n="material_steel">Steel</option></select>
       </label>
       <label class="check repeat-placement"><input type="checkbox" id="place-repeat"><span data-i18n="keep_placing">Keep placing</span></label>
+    </div>
+    <div class="placement-coordinates">
+      <label class="prop-material-control"><span data-i18n="placement_snap">Snap</span>
+        <select id="place-spacing"><option value="free" data-i18n="placement_free">Free placement</option><option value="0.1">0.10 m</option><option value="0.25">0.25 m</option></select>
+      </label>
+      <div class="placement-coordinate-readout">
+        <output id="placement-position" aria-live="off" data-i18n="placement_position_empty">Choose a surface to see its position.</output>
+        <p class="note" id="placement-coordinate-status" aria-live="polite" hidden></p>
+      </div>
     </div>
     <button class="pill" id="place-here" type="button" data-i18n="place_here">Place here</button>
     <button class="pill" id="place-cancel" type="button" data-i18n="cancel_place">Cancel</button>
@@ -343,6 +375,10 @@
     <button class="tool" id="btn-frame" type="button" data-i18n-label="fit_tip">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
       <span data-i18n="fit">Fit view</span>
+    </button>
+    <button class="tool" id="view-toggle" type="button" aria-expanded="false" aria-controls="view-panel" data-i18n-label="view_direction">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/></svg>
+      <span data-i18n="views">Views</span>
     </button>
     <button class="tool rec" id="btn-record" type="button" data-i18n-label="record_tip" aria-pressed="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="rec-dot" cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="9"/></svg>

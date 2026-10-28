@@ -11,6 +11,7 @@ from test_viewer_creation_browser import click
 from test_viewer_layout import pytestmark, viewer  # noqa: F401
 from test_viewer_object_edit_browser import choose
 from test_viewer_startup_browser import READY
+from viewer_camera import settle_camera
 
 
 def world(pg):
@@ -53,6 +54,10 @@ async def apply_surface(tab, value):
     await tab.until(
         READY + " && !window.__robotforge.busy().busy && !document.getElementById('object-surface-controls').hidden"
     )
+    # Reselection publishes its controls before the highlight's first GPU upload.
+    # Compare resources in the same settled view, after the selected scene has actually drawn.
+    await settle_camera(tab)
+    await tab.run("await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame)")
 
 
 INSPECT = """(()=>{const rf=window.__robotforge,entry=rf.scene.object_edit.objects.find(e=>e.name==='block'),rows=[];

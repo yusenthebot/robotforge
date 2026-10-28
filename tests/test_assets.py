@@ -327,6 +327,19 @@ def test_a_bad_material_says_what_is_wrong():
         assets.Material("Not Ok")
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf"), -0.1])
+def test_environment_multiplier_rejects_non_finite_and_negative_values(value):
+    with pytest.raises(ValueError, match="env must be finite and non-negative"):
+        assets.Material("probe", env=value)
+
+
+@pytest.mark.parametrize("value", [0.0, 1.0, 1.45, 10.0])
+def test_environment_multiplier_keeps_valid_authored_values(value):
+    material = assets.Material("probe", env=value)
+    assert material.env == value
+    assert material.surface().get("env", 1.0) == value
+
+
 def test_the_scene_description_carries_the_surfaces_of_the_materials_a_model_uses():
     asset = assets.generate("joint_actuator", style="lab")
     spec = mujoco.MjSpec()

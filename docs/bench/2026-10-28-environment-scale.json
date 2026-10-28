@@ -1,0 +1,1779 @@
+{
+  "feature": "authored environment contribution fidelity",
+  "date": "2026-10-28",
+  "base": "b90152b0b752f00980f2411e1bd657ff89683dcb",
+  "source_sha256": "ebfe39681fcccd8eb9ea5adfb78177e50979a1473a683f65def97ec2bc9adb1a",
+  "frozen_inputs": 758,
+  "tests": {
+    "browser-related": {
+      "passed": 62,
+      "skipped": 0
+    },
+    "gpu-assets": {
+      "passed": 4,
+      "skipped": 0
+    },
+    "gpu-sensors": {
+      "passed": 5,
+      "skipped": 0
+    },
+    "backend-related": {
+      "passed": 325,
+      "skipped": 0
+    }
+  },
+  "distinct_pytest_passes": 396,
+  "framework": {
+    "cases": 7,
+    "python": "3.12.13",
+    "status": "pass"
+  },
+  "package": {
+    "wheel_bytes": 3940690,
+    "wheel_sha256": "53b620f0deb4a8404a8ec045f1669219df19f5e3f0c9e12319889ab5e1495348",
+    "production_files": 413,
+    "source_wheel_installed_exact": true,
+    "preserved_original_files": 13,
+    "original_hashes_exact": true,
+    "added_and_new_lines_scanned": 205,
+    "new_files_included": [
+      "tests/test_viewer_environment_browser.py"
+    ],
+    "secret_pattern_hits": {
+      "private_key": 0,
+      "known_token": 0,
+      "literal_secret_assignment": 0
+    },
+    "added_product_debug_statements": 0,
+    "scope": "Lightweight added-line review, not a bandit or pip-audit substitute."
+  },
+  "package_delta": {
+    "wheel_bytes": 465,
+    "changed_files": [
+      "robotforge/assets/materials.py",
+      "robotforge/viewer/static/look.js"
+    ],
+    "look_raw_bytes": 1323
+  },
+  "budget": {
+    "statuses": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "metrics": {
+      "install": {
+        "wheel_kb": {
+          "value": 3848.3301,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.6348,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.5
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5226,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.315
+        },
+        "fps": {
+          "value": 60.3132,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 1.8,
+          "unit": "ms",
+          "better": "lower",
+          "median": 1.7999999523162842,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1309,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 4.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 4.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.9,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 563.5
+        },
+        "idle_cpu_pct": {
+          "value": 4.2,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "scope": "One original unchanged install/viewer run; other categories not run."
+  },
+  "images": {
+    "screenshots": 80,
+    "ordinary_and_detail": true,
+    "negative_original_canvas_exact": 24,
+    "positive_derived_views_changed": 16
+  },
+  "world_controls": {
+    "malo": {
+      "derivation": null,
+      "model_state_fields": 485,
+      "allowed_isolated_path_fields": [
+        "mesh_pathadr",
+        "paths"
+      ],
+      "resolved_identical_meshes": [
+        [
+          "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/screen-before/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+          "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/screen-candidate/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+          "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+        ]
+      ],
+      "views": {
+        "dpr1-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48392985,
+          "encoded_candidate": 48180082
+        },
+        "dpr1-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48392985,
+          "encoded_candidate": 48180082
+        },
+        "dpr1-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48392985,
+          "encoded_candidate": 48180082
+        },
+        "dpr1-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48392985,
+          "encoded_candidate": 48180082
+        },
+        "dpr2-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48392985,
+          "encoded_candidate": 48180082
+        },
+        "dpr2-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48392985,
+          "encoded_candidate": 48180082
+        },
+        "dpr2-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48392985,
+          "encoded_candidate": 48180082
+        },
+        "dpr2-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48392985,
+          "encoded_candidate": 48180082
+        }
+      }
+    },
+    "go2": {
+      "derivation": null,
+      "model_state_fields": 485,
+      "allowed_isolated_path_fields": [],
+      "resolved_identical_meshes": [],
+      "views": {
+        "dpr1-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21446599,
+          "encoded_candidate": 21662148
+        },
+        "dpr1-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 93,
+            "triangles": 144188,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21446599,
+          "encoded_candidate": 21662148
+        },
+        "dpr1-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21446599,
+          "encoded_candidate": 21662148
+        },
+        "dpr1-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 93,
+            "triangles": 144188,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21446599,
+          "encoded_candidate": 21662148
+        },
+        "dpr2-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21446599,
+          "encoded_candidate": 21662148
+        },
+        "dpr2-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 93,
+            "triangles": 144188,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21446599,
+          "encoded_candidate": 21662148
+        },
+        "dpr2-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21446599,
+          "encoded_candidate": 21662148
+        },
+        "dpr2-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 93,
+            "triangles": 144188,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21446599,
+          "encoded_candidate": 21662148
+        }
+      }
+    },
+    "panda": {
+      "derivation": null,
+      "model_state_fields": 485,
+      "allowed_isolated_path_fields": [],
+      "resolved_identical_meshes": [],
+      "views": {
+        "dpr1-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11258596,
+          "encoded_candidate": 11259919
+        },
+        "dpr1-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 58,
+            "triangles": 137631,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11258596,
+          "encoded_candidate": 11259919
+        },
+        "dpr1-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11258596,
+          "encoded_candidate": 11259919
+        },
+        "dpr1-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 58,
+            "triangles": 137631,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11258596,
+          "encoded_candidate": 11259919
+        },
+        "dpr2-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11258596,
+          "encoded_candidate": 11259919
+        },
+        "dpr2-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 58,
+            "triangles": 137631,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11258596,
+          "encoded_candidate": 11259919
+        },
+        "dpr2-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11258596,
+          "encoded_candidate": 11259919
+        },
+        "dpr2-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 58,
+            "triangles": 137631,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11258596,
+          "encoded_candidate": 11259919
+        }
+      }
+    },
+    "alloy": {
+      "derivation": {
+        "name": "alloy",
+        "template": "arm",
+        "params": {
+          "material": "aluminum",
+          "reach": 1.0
+        },
+        "pos": [
+          2.5,
+          -0.8,
+          0
+        ]
+      },
+      "model_state_fields": 485,
+      "allowed_isolated_path_fields": [
+        "mesh_pathadr",
+        "paths"
+      ],
+      "resolved_identical_meshes": [
+        [
+          "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/screen-before/alloy/home/cache/import/meshes/base_link-df294dff02.stl",
+          "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/screen-candidate/alloy/home/cache/import/meshes/base_link-df294dff02.stl",
+          "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+        ]
+      ],
+      "views": {
+        "dpr1-studio-normal": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 100,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 106,
+            "triangles": 721644,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 22,
+          "programs_candidate": 24,
+          "resource_count": 30,
+          "encoded_before": 50385991,
+          "encoded_candidate": 50601540
+        },
+        "dpr1-studio-detail": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 100,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 100,
+            "triangles": 666876,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 22,
+          "programs_candidate": 24,
+          "resource_count": 30,
+          "encoded_before": 50385991,
+          "encoded_candidate": 50601540
+        },
+        "dpr1-daylight-normal": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 100,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 106,
+            "triangles": 721644,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 22,
+          "programs_candidate": 24,
+          "resource_count": 30,
+          "encoded_before": 50385991,
+          "encoded_candidate": 50601540
+        },
+        "dpr1-daylight-detail": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 100,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 100,
+            "triangles": 666876,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 22,
+          "programs_candidate": 24,
+          "resource_count": 30,
+          "encoded_before": 50385991,
+          "encoded_candidate": 50601540
+        },
+        "dpr2-studio-normal": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 100,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 106,
+            "triangles": 721644,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 22,
+          "programs_candidate": 24,
+          "resource_count": 30,
+          "encoded_before": 50385991,
+          "encoded_candidate": 50601540,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.19999998807907104,
+                "p95": 0.30000001192092896,
+                "samples": 30
+              },
+              "raf_fps": 59.99999999999999,
+              "raf_ms_p95": 16.799999999999272,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.19999998807907104,
+                "p95": 0.30000001192092896,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000751,
+              "raf_ms_p95": 16.800000000000182,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-studio-detail": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 100,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 100,
+            "triangles": 666876,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 22,
+          "programs_candidate": 24,
+          "resource_count": 30,
+          "encoded_before": 50385991,
+          "encoded_candidate": 50601540
+        },
+        "dpr2-daylight-normal": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 100,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 106,
+            "triangles": 721644,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 22,
+          "programs_candidate": 24,
+          "resource_count": 30,
+          "encoded_before": 50385991,
+          "encoded_candidate": 50601540,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.19999998807907104,
+                "p95": 0.30000001192092896,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000745,
+              "raf_ms_p95": 16.799999999999272,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.19999998807907104,
+                "p95": 0.30000001192092896,
+                "samples": 30
+              },
+              "raf_fps": 60.00600060005997,
+              "raf_ms_p95": 16.700000000000728,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-daylight-detail": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 100,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 100,
+            "triangles": 666876,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 22,
+          "programs_candidate": 24,
+          "resource_count": 30,
+          "encoded_before": 50385991,
+          "encoded_candidate": 50601540
+        }
+      }
+    },
+    "lab": {
+      "derivation": {
+        "name": "lab",
+        "template": "arm",
+        "params": {
+          "style": "lab",
+          "reach": 0.8
+        },
+        "pos": [
+          -1.3,
+          -0.7,
+          0
+        ]
+      },
+      "model_state_fields": 485,
+      "allowed_isolated_path_fields": [],
+      "resolved_identical_meshes": [],
+      "views": {
+        "dpr1-studio-normal": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 107,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 110,
+            "triangles": 171940,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 9,
+          "programs_candidate": 9,
+          "resource_count": 31,
+          "encoded_before": 13697956,
+          "encoded_candidate": 13699279
+        },
+        "dpr1-studio-detail": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 107,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 64,
+            "triangles": 70015,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 9,
+          "programs_candidate": 9,
+          "resource_count": 31,
+          "encoded_before": 13697956,
+          "encoded_candidate": 13699279
+        },
+        "dpr1-daylight-normal": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 107,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 110,
+            "triangles": 171940,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 9,
+          "programs_candidate": 9,
+          "resource_count": 31,
+          "encoded_before": 13697956,
+          "encoded_candidate": 13699279
+        },
+        "dpr1-daylight-detail": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 107,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 64,
+            "triangles": 70015,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 9,
+          "programs_candidate": 9,
+          "resource_count": 31,
+          "encoded_before": 13697956,
+          "encoded_candidate": 13699279
+        },
+        "dpr2-studio-normal": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 107,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 110,
+            "triangles": 171940,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 9,
+          "programs_candidate": 9,
+          "resource_count": 31,
+          "encoded_before": 13697956,
+          "encoded_candidate": 13699279,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.19999998807907104,
+                "p95": 0.3999999761581421,
+                "samples": 30
+              },
+              "raf_fps": 60.003000150007495,
+              "raf_ms_p95": 16.700000000000728,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.29999998211860657,
+                "p95": 0.40000003576278687,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000748,
+              "raf_ms_p95": 16.700000000000728,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-studio-detail": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 107,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 64,
+            "triangles": 70015,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 9,
+          "programs_candidate": 9,
+          "resource_count": 31,
+          "encoded_before": 13697956,
+          "encoded_candidate": 13699279
+        },
+        "dpr2-daylight-normal": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 107,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 110,
+            "triangles": 171940,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 9,
+          "programs_candidate": 9,
+          "resource_count": 31,
+          "encoded_before": 13697956,
+          "encoded_candidate": 13699279,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.20000001788139343,
+                "p95": 0.30000001192092896,
+                "samples": 30
+              },
+              "raf_fps": 59.99999999999997,
+              "raf_ms_p95": 16.800000000000182,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.19999998807907104,
+                "p95": 0.3550000250339505,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000751,
+              "raf_ms_p95": 16.800000000000182,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-daylight-detail": {
+          "canvas_identical": false,
+          "same_memory": {
+            "geometries": 107,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 64,
+            "triangles": 70015,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 9,
+          "programs_candidate": 9,
+          "resource_count": 31,
+          "encoded_before": 13697956,
+          "encoded_candidate": 13699279
+        }
+      }
+    }
+  },
+  "movies": {
+    "movie-before-alloy-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/movie-before-alloy-studio/workflow.mp4",
+      "video_sha256": "8a31e16463a8249cd98caf149decb6308ee5f8d24ecdac70ae65f4d640abfbdf",
+      "video_bytes": 1055712,
+      "duration_seconds": 8.366667,
+      "raw_frame_count": 409,
+      "decoded_frame_count": 251,
+      "maximum_arrival_inversion_seconds": 0,
+      "matches_corresponding_fixed_world_arrays": {
+        "fields": 485,
+        "allowed_isolated_path_fields": [
+          "mesh_pathadr",
+          "paths"
+        ]
+      }
+    },
+    "movie-before-alloy-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/movie-before-alloy-daylight/workflow.mp4",
+      "video_sha256": "64456854cc4eec94bbf1bb007bc374d6e4adb15c2619a28b1cb47d4746c0323a",
+      "video_bytes": 985519,
+      "duration_seconds": 8.4,
+      "raw_frame_count": 408,
+      "decoded_frame_count": 252,
+      "maximum_arrival_inversion_seconds": 0,
+      "matches_corresponding_fixed_world_arrays": {
+        "fields": 485,
+        "allowed_isolated_path_fields": [
+          "mesh_pathadr",
+          "paths"
+        ]
+      }
+    },
+    "movie-before-lab-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/movie-before-lab-studio/workflow.mp4",
+      "video_sha256": "2846e413ce63641690231b30a5a76f464dffe94406efc3bbb8af159b18455096",
+      "video_bytes": 1317554,
+      "duration_seconds": 8.6,
+      "raw_frame_count": 408,
+      "decoded_frame_count": 258,
+      "maximum_arrival_inversion_seconds": 0,
+      "matches_corresponding_fixed_world_arrays": {
+        "fields": 485,
+        "allowed_isolated_path_fields": []
+      }
+    },
+    "movie-before-lab-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/movie-before-lab-daylight/workflow.mp4",
+      "video_sha256": "18d1cce3c3480b30dbb2c2957c5c98d93b720b0163b99b773563782aa57f4435",
+      "video_bytes": 1241683,
+      "duration_seconds": 8.566667,
+      "raw_frame_count": 405,
+      "decoded_frame_count": 257,
+      "maximum_arrival_inversion_seconds": 0,
+      "matches_corresponding_fixed_world_arrays": {
+        "fields": 485,
+        "allowed_isolated_path_fields": []
+      }
+    },
+    "movie-candidate-alloy-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/movie-candidate-alloy-studio/workflow.mp4",
+      "video_sha256": "d186ceff8ac1b72f1b480791c506219b5266a19fb42ba2b707706ec64bbeff73",
+      "video_bytes": 1046155,
+      "duration_seconds": 8.4,
+      "raw_frame_count": 409,
+      "decoded_frame_count": 252,
+      "maximum_arrival_inversion_seconds": 0,
+      "matches_corresponding_fixed_world_arrays": {
+        "fields": 485,
+        "allowed_isolated_path_fields": [
+          "mesh_pathadr",
+          "paths"
+        ]
+      }
+    },
+    "movie-candidate-alloy-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/movie-candidate-alloy-daylight/workflow.mp4",
+      "video_sha256": "e25a3b668c5594054ac7592d3146cf8c00a7495b62d0b0b614085f26e4c911af",
+      "video_bytes": 992839,
+      "duration_seconds": 8.366667,
+      "raw_frame_count": 405,
+      "decoded_frame_count": 251,
+      "maximum_arrival_inversion_seconds": 0,
+      "matches_corresponding_fixed_world_arrays": {
+        "fields": 485,
+        "allowed_isolated_path_fields": [
+          "mesh_pathadr",
+          "paths"
+        ]
+      }
+    },
+    "movie-candidate-lab-studio": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/movie-candidate-lab-studio/workflow.mp4",
+      "video_sha256": "798a9e82f3f10cef7d9776350240492a0a08d25ef520cdad093fccb22880628d",
+      "video_bytes": 1321969,
+      "duration_seconds": 8.633333,
+      "raw_frame_count": 407,
+      "decoded_frame_count": 259,
+      "maximum_arrival_inversion_seconds": 0,
+      "matches_corresponding_fixed_world_arrays": {
+        "fields": 485,
+        "allowed_isolated_path_fields": []
+      }
+    },
+    "movie-candidate-lab-daylight": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-painted-fixtures/movie-candidate-lab-daylight/workflow.mp4",
+      "video_sha256": "135ba0cf85d493deab4f94f7477419dbfea254af1e016a85ed4f07ad44e5c8a7",
+      "video_bytes": 1240685,
+      "duration_seconds": 8.6,
+      "raw_frame_count": 406,
+      "decoded_frame_count": 258,
+      "maximum_arrival_inversion_seconds": 0,
+      "matches_corresponding_fixed_world_arrays": {
+        "fields": 485,
+        "allowed_isolated_path_fields": []
+      }
+    }
+  },
+  "loading": {
+    "summary": {
+      "alloy": {
+        "before": {
+          "browser_cold": {
+            "ready_ms": [
+              388.5999999642372,
+              375.5999999642372
+            ],
+            "mean_ready_ms": 382.0999999642372,
+            "resource_counts": [
+              31,
+              31
+            ],
+            "encoded_bytes": [
+              99872121,
+              99872121
+            ],
+            "transfer_bytes": [
+              99881421,
+              99881421
+            ],
+            "chrome_tree_rss_kib": [
+              1855104,
+              1882768
+            ],
+            "memory": [
+              {
+                "geometries": 100,
+                "textures": 8
+              },
+              {
+                "geometries": 100,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              22,
+              22
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              184.39999997615814,
+              223
+            ],
+            "mean_ready_ms": 203.69999998807907,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              50600217,
+              50600217
+            ],
+            "transfer_bytes": [
+              49280904,
+              49280904
+            ],
+            "chrome_tree_rss_kib": [
+              1931920,
+              1985296
+            ],
+            "memory": [
+              {
+                "geometries": 95,
+                "textures": 5
+              },
+              {
+                "geometries": 100,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              9,
+              22
+            ]
+          }
+        },
+        "candidate": {
+          "browser_cold": {
+            "ready_ms": [
+              402.39999997615814,
+              416.80000001192093
+            ],
+            "mean_ready_ms": 409.59999999403954,
+            "resource_counts": [
+              31,
+              31
+            ],
+            "encoded_bytes": [
+              99873444,
+              99873444
+            ],
+            "transfer_bytes": [
+              99882744,
+              99882744
+            ],
+            "chrome_tree_rss_kib": [
+              1907312,
+              1851280
+            ],
+            "memory": [
+              {
+                "geometries": 100,
+                "textures": 8
+              },
+              {
+                "geometries": 100,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              24,
+              24
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              190.10000002384186,
+              244.20000004768372
+            ],
+            "mean_ready_ms": 217.1500000357628,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              50387314,
+              50601540
+            ],
+            "transfer_bytes": [
+              49280904,
+              49280904
+            ],
+            "chrome_tree_rss_kib": [
+              1874512,
+              1938336
+            ],
+            "memory": [
+              {
+                "geometries": 95,
+                "textures": 5
+              },
+              {
+                "geometries": 100,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              10,
+              24
+            ]
+          }
+        }
+      },
+      "lab": {
+        "before": {
+          "browser_cold": {
+            "ready_ms": [
+              287.10000002384186,
+              283.5
+            ],
+            "mean_ready_ms": 285.30000001192093,
+            "resource_counts": [
+              32,
+              32
+            ],
+            "encoded_bytes": [
+              26379558,
+              26379558
+            ],
+            "transfer_bytes": [
+              26389158,
+              26389158
+            ],
+            "chrome_tree_rss_kib": [
+              1721760,
+              1719520
+            ],
+            "memory": [
+              {
+                "geometries": 107,
+                "textures": 5
+              },
+              {
+                "geometries": 107,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              9,
+              9
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              178.60000002384186,
+              180.0999999642372
+            ],
+            "mean_ready_ms": 179.34999999403954,
+            "resource_counts": [
+              31,
+              31
+            ],
+            "encoded_bytes": [
+              13697956,
+              13697956
+            ],
+            "transfer_bytes": [
+              12476676,
+              12476676
+            ],
+            "chrome_tree_rss_kib": [
+              1724112,
+              1719408
+            ],
+            "memory": [
+              {
+                "geometries": 107,
+                "textures": 5
+              },
+              {
+                "geometries": 107,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              9,
+              9
+            ]
+          }
+        },
+        "candidate": {
+          "browser_cold": {
+            "ready_ms": [
+              291.5999999642372,
+              274.69999998807907
+            ],
+            "mean_ready_ms": 283.14999997615814,
+            "resource_counts": [
+              32,
+              32
+            ],
+            "encoded_bytes": [
+              26380881,
+              26380881
+            ],
+            "transfer_bytes": [
+              26390481,
+              26390481
+            ],
+            "chrome_tree_rss_kib": [
+              1716192,
+              1713680
+            ],
+            "memory": [
+              {
+                "geometries": 107,
+                "textures": 5
+              },
+              {
+                "geometries": 107,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              9,
+              9
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              176.69999998807907,
+              177.29999995231628
+            ],
+            "mean_ready_ms": 176.99999997019768,
+            "resource_counts": [
+              31,
+              31
+            ],
+            "encoded_bytes": [
+              13699279,
+              13699279
+            ],
+            "transfer_bytes": [
+              12476676,
+              12476676
+            ],
+            "chrome_tree_rss_kib": [
+              1717968,
+              1731600
+            ],
+            "memory": [
+              {
+                "geometries": 107,
+                "textures": 5
+              },
+              {
+                "geometries": 107,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              9,
+              9
+            ]
+          }
+        }
+      }
+    },
+    "scope": "ABBA with fresh Chrome profile per arm, first browser-cache-cold navigation then actual reload. Local model/OS disk caches warm; server already compiled and physics paused. Ready means scene rendered, no busy/loading plus2RAF and gl.finish, not human input latency or fresh remote model download. RSS is one Chrome process-tree snapshot, not VRAM or peak."
+  },
+  "visual_review": {
+    "reviewer": "root",
+    "method": "Viewed four complete fixed before/after comparison contacts and all eight decoded movie contacts in image tool;16fixed DPR2 ordinary/detail panels and48decoded movie samples. Full movies strictly decoded independently, not visually watched frame by frame.",
+    "fixed_comparison_contacts_reviewed": [
+      "final-contacts/alloy-studio.jpg",
+      "final-contacts/alloy-daylight.jpg",
+      "final-contacts/lab-studio.jpg",
+      "final-contacts/lab-daylight.jpg"
+    ],
+    "decoded_contacts_reviewed": [
+      "movie-before-alloy-studio/decoded-contact.jpg",
+      "movie-before-alloy-daylight/decoded-contact.jpg",
+      "movie-before-lab-studio/decoded-contact.jpg",
+      "movie-before-lab-daylight/decoded-contact.jpg",
+      "movie-candidate-alloy-studio/decoded-contact.jpg",
+      "movie-candidate-alloy-daylight/decoded-contact.jpg",
+      "movie-candidate-lab-studio/decoded-contact.jpg",
+      "movie-candidate-lab-daylight/decoded-contact.jpg"
+    ],
+    "decoded_samples_reviewed": 48,
+    "sha256": {
+      "final-contacts/alloy-studio.jpg": "26200d143c1380320074bf71f6a1494a954091dc3116859cce700231f4e32e7b",
+      "final-contacts/alloy-daylight.jpg": "c19487bf0ec20a72b4624bc625d3af2991a827826846986f2f0c0b3bebe41a6f",
+      "final-contacts/lab-studio.jpg": "26629e6320ba2682906eca7bc32be4a87def0d34af182e8f61213a2ca1808790",
+      "final-contacts/lab-daylight.jpg": "a03bf7f0b1aa61cafa2ac98a9a042f5e4e2e0de0a1d27f023c2dd51eb63116c8",
+      "movie-before-alloy-studio/decoded-contact.jpg": "3db4355f2b82c5a21e8a37c51970d557ca6f212e551967e69469d634895745b9",
+      "movie-before-alloy-daylight/decoded-contact.jpg": "eb8705b80229522c0a50619cb2d7741fbf9d62e1c40b06c8989b01074af5b05b",
+      "movie-before-lab-studio/decoded-contact.jpg": "f52a51533607aa189156272562f1ff9153adfe416855d88e4f7dad47ce50f3f8",
+      "movie-before-lab-daylight/decoded-contact.jpg": "651a57503b5097550ad329017d548c8c7e7ca6c333ae412346c70f63d503356b",
+      "movie-candidate-alloy-studio/decoded-contact.jpg": "039fea6b4f2faaa886bc8ecd38742a55cbe010ed035dcbb921c5ebc56d4e873e",
+      "movie-candidate-alloy-daylight/decoded-contact.jpg": "b102839143086cc25f39d8832209f1f0401d21737c03b7a721006c7a855717ac",
+      "movie-candidate-lab-studio/decoded-contact.jpg": "ebdc2a50123a71e856e971f4abfb2610f89cef91ab49dd88b5bd5503291cbd8b",
+      "movie-candidate-lab-daylight/decoded-contact.jpg": "1f686353f91c81665816b3f4a0fef727b7b1d643ab66555a656e1d378a22f050"
+    },
+    "finding": "Actual added generated aluminium and lab arms retain spatial relief and original colours, with a modest authored reflection-response change. Ordinary-distance difference is subtle; independent explicit-map GPU reference establishes fidelity. No established broad furniture paint improvement or claim that brighter universally looks better. Original Malo/Panda robots, furniture and floor are retained as context; imported raw models are not the gain claim.",
+    "acceptance": "Accept scoped author-environment fidelity fix with measured shader variants and costs; broad goal remains active.",
+    "limits": "Paused scripted camera arc, one declared detail cut. Same planned trajectory is not frame-by-frame synchronization; six movie samples per clip do not establish temporal or action success."
+  },
+  "receipts": {
+    "build-upstream": {
+      "sha256": "c3b7af21f54aa69b03fb6c6257baf269bbab2ce285688b4ecee809694d7bbe22",
+      "seconds": 0.1431371249491349
+    },
+    "build-final": {
+      "sha256": "8f7f960b4851ba29b28faf8309ce5ad37e9c2906f1fa0ee6f01a924f86bccb26",
+      "seconds": 0.1400807499885559
+    },
+    "lint": {
+      "sha256": "59a4666844da20a50b1a495b6cfdb47c91295c764235523f67de0d82ecdfcc36",
+      "seconds": 0.06685966701479629
+    },
+    "format": {
+      "sha256": "e02ec461dea8fe34019aa0182603df2849ad193c6d0e38c8a5f673f50b0361fa",
+      "seconds": 0.06581808399641886
+    },
+    "browser-related": {
+      "sha256": "e4d4b1ac45d804e53ceb9b91cb64c8fc28c15e04b951e996bcfd976dd0f7f85a",
+      "seconds": 132.11158595897723
+    },
+    "gpu-assets": {
+      "sha256": "1a28e22a7a347c21dd608241683a66e1c214212df1fe80d8cae5fc65a2acc1a8",
+      "seconds": 16.483200041984674
+    },
+    "gpu-sensors": {
+      "sha256": "2f334206d360e59abe6d871bb19486f831ae80b0056d7d2641bc6719eabb2e28",
+      "seconds": 22.344671500031836
+    },
+    "backend-related": {
+      "sha256": "b9df30a545c733b182c7d6a678b8e4e7c76dc9fcccccdf785dabff9ae042047c",
+      "seconds": 13.214621332997922
+    },
+    "smoke-source": {
+      "sha256": "bded75b8cddc7ebd6eecbf7ad4b42ebbeca35af892956bead7d77d0b19aa9dba",
+      "seconds": 3.841217625013087
+    },
+    "wheel-install": {
+      "sha256": "e6639dc9aeb4a28b38112fbe180c8cc56fb75de66a9a3f8a2a98bd87e4d37fe3",
+      "seconds": 0.3843479999923147
+    },
+    "smoke-installed": {
+      "sha256": "bf9cf227ae1ad4315b70132565944f513b8a3ee30e69e209a59a8df5946e8ca2",
+      "seconds": 23.618432041956112
+    },
+    "framework": {
+      "sha256": "5264cfcb36e480043dc43b2410956eb728c750b604b3e1ff8d81503e78564d86",
+      "seconds": 1.9170681250398047
+    },
+    "budget": {
+      "sha256": "87d1664c79f228cb29c7dbe20e901101f19f0d643d0f0aae4df059e8e12107a0",
+      "seconds": 25.863162167021073
+    },
+    "audit": {
+      "sha256": "12dc83561dac1580721729718d5a483b4f0a2784aaee40f085bf3bc81e1d0d5b",
+      "seconds": 0.30775687500135973
+    },
+    "screen-before": {
+      "sha256": "a8208a568161130f9b3f6f62d74c420bc0a0031ef642e8777d501571c6136810",
+      "seconds": 49.0194477919722
+    },
+    "screen-candidate": {
+      "sha256": "d6ef2627e2ddb83de7088a8b45640df303d71650fe7b95feb405d442d342e392",
+      "seconds": 49.329861207981594
+    },
+    "screen-compare-v2": {
+      "sha256": "e65617a21c3eb493d043b1448827634361076e30dabf279154238ccfb7fc6a2c",
+      "seconds": 1.5827619589981623
+    },
+    "loading": {
+      "sha256": "e92754b56d70c751b8dbcd670bd5dc75ffb29b6c54d7f8d58812b629ca87f1d0",
+      "seconds": 22.78347287501674
+    },
+    "record-before-alloy-studio": {
+      "sha256": "f5b2b0f459d0dfbebc4798f832f91678c7f109e40222868d363cc2f777fe6861",
+      "seconds": 15.652673209027853
+    },
+    "record-before-alloy-daylight": {
+      "sha256": "3e04866f0fab6cebf09d2dc7410a49573db153b5ac17cc5faba1225f5366fe50",
+      "seconds": 15.844747791998088
+    },
+    "record-before-lab-studio": {
+      "sha256": "9067bb3e6433478c97a572b0f595d5e2ad067b36e5204bab9a80485af104e162",
+      "seconds": 12.250258709012996
+    },
+    "record-before-lab-daylight": {
+      "sha256": "7eb29eaf4e35ac5d0c8a9089ad4efd8275793ec40238a061895ee70d92157d10",
+      "seconds": 12.241985083033796
+    },
+    "record-candidate-alloy-studio": {
+      "sha256": "c704a3fcf027e30176b807f51b808b9664325233256d24b2513a3d6b237c1ead",
+      "seconds": 15.545186416013166
+    },
+    "record-candidate-alloy-daylight": {
+      "sha256": "a0d9539bd6314960e777018c07fd92ffce38bb6ab20989badbd622aca243beb3",
+      "seconds": 15.610122916987166
+    },
+    "record-candidate-lab-studio": {
+      "sha256": "d67bb91cbc4b09787a1d0c99241edb727b4028f7c29046a2152b91d6605a7272",
+      "seconds": 12.161900208971929
+    },
+    "record-candidate-lab-daylight": {
+      "sha256": "314ab2c094447e4c7d2f59115651f3cb7c516d61e0d5126ac33cbfbacb57f0de",
+      "seconds": 12.483643457992002
+    },
+    "encode-before-alloy-studio": {
+      "sha256": "4da103d0a853e14cb69644d874b35715b6b06817b3bd3c437e65b0821da46c4f",
+      "seconds": 2.9378380000125617
+    },
+    "encode-before-alloy-daylight": {
+      "sha256": "237a2f6572f0f59d6b976aaf8c3161608107dded83850c78ea6ef440620b048a",
+      "seconds": 2.733888166025281
+    },
+    "encode-before-lab-studio": {
+      "sha256": "56405a4ed687fadf0e86aeb8ec5dbc5e7e4b2f163ec614ba6097fe85554b8436",
+      "seconds": 3.4110457919887267
+    },
+    "encode-before-lab-daylight": {
+      "sha256": "510f5410fe861cb5f0806d0fdd5b8a701b4d6220a89a5b529aa067e7737cc6f1",
+      "seconds": 3.321733166987542
+    },
+    "encode-candidate-alloy-studio": {
+      "sha256": "9c289617aef64cd34e33f1480bd244679244d7ac423a0d814e124c9235ca0172",
+      "seconds": 2.8484674170031212
+    },
+    "encode-candidate-alloy-daylight": {
+      "sha256": "2d07a86f7b157b41273ea00edd8d6daaa3fc5ba45bd189eebbba06c7337aa000",
+      "seconds": 2.7727015420095995
+    },
+    "encode-candidate-lab-studio": {
+      "sha256": "e224ccd2081f2cc94aebda9a87c098813c521968634c1210e791eced0bd10399",
+      "seconds": 3.4390900840517133
+    },
+    "encode-candidate-lab-daylight": {
+      "sha256": "a7fdd9c09dbb18d65d775c7cfcec2df84c471dd192669d718e33edbe1fd988f3",
+      "seconds": 3.3403552499949
+    }
+  },
+  "evidence": {
+    "directory": "../robotforge-evidence/2026-10-28-painted-fixtures",
+    "indexed_files": 3853,
+    "index_sha256": "b6d58ae1d24feeb837f2955fe8ce698cd4500e732ea5c8fb2dd6279b4d3d0811"
+  },
+  "source_bridge": "Both before/candidate screen/movie/loading cohorts use final ebfe server/Python source. Before serves exact b901 frozen static tree and candidate serves exact final static tree; Python finite-env validation does not alter valid definitions. Served look.js hashes checked.",
+  "mechanism": "Vendored Three r178 implicit scene maps override material.envMapIntensity; local composed IBL uniform restores scene intensity times authored multiplier. Default env1 has no added hook, explicit maps keep Three semantics. Covers environment diffuse/specular/clearcoat, not only specular.",
+  "initial_paint_diagnostic": "60 retained stills,12 groups; roughness.35 changes pixels but attempted env0 was overridden and has no effective intervention. No valid environment ablation or two-family roughness improvement established; no .45 paint candidate or roughness-default change. Initial shelf selector failure and corrected inventory retained.",
+  "limitations": [
+    "Authoring-time nondefault environment multiplier; default1 materials later mutated directly do not acquire the implicit-map hook. Rebuild after author definition changes.",
+    "Independent explicit-map GPU reference has <=1byte maximum rounding tolerance; actual original-world canvas hashes are exact at fixed cameras.",
+    "Actual positive images/movies are expressly derived Malo/Panda workspaces with added existing generated robots; imported raw model gains are not claimed.",
+    "Different multipliers preserve intended response; brighter is not universal aesthetic improvement. No furniture coating, wood, AO or sky redesign.",
+    "Scripted paused camera arcs and one declared detail cut, not native user actions or time-aligned footage; no frame truncation or action-success certification. Eight full decodes and48root samples are not every-frame dynamic inspection.",
+    "No new texture, request, geometry, pass or dependency. Shader uniform/variants still carry measured costs; no universal speed or memory-saving claim.",
+    "ABBA with2samples per cohort/kind: browser-cache-cold and real reload, warm local model/OS cache, compiled server. RSS snapshots are not peak or VRAM.",
+    "396scope-selected pytest cases plus7canonical; no full default/browser-suite rerun. mypy/pyright/bandit/pip-audit unavailable, not passes.",
+    "Mechanism-negative old-source failure, two lifecycle fixture initialization failures and diagnostic selector failure retained rather than relabeled.",
+    "Physical phones, other operating systems and GPU drivers unverified."
+  ],
+  "goal": "Broad shared visual quality/lightweight/creative-play goal remains active; no individual action-success tuning.",
+  "coverage_correction_2026_10_28": {
+    "claim": "The original DPR1/2 labels did not describe two actual renderer ratios.",
+    "observed": "All recorded screen cohort views.dpr values are2, including labels beginning dpr1. Counts are observed captures with repeated DPR2 conditions, not distinct resolution settings.",
+    "source": "../robotforge-evidence/2026-10-28-responsive-dpr/legacy-dpr-audit.json",
+    "raw_evidence_preserved": true,
+    "does_not_retroactively_validate_dpr1": true
+  }
+}

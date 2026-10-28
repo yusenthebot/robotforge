@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from robotforge.sim import carry, placement
 from robotforge.sim.session import fresh_data
-from robotforge.viewer.creation import Coordinate, _object_obstacles, _parse
+from robotforge.viewer.creation import Coordinate, Heading, _object_obstacles, _parse
 
 if TYPE_CHECKING:
     from robotforge.design.store import WorldStore
@@ -36,7 +36,7 @@ class Selection(BaseModel):
 
 class Reposition(Selection):
     pos: list[Coordinate] = Field(min_length=2, max_length=3)
-    yaw: float = Field(ge=-3600, le=3600, allow_inf_nan=False)
+    yaw: Heading
 
 
 class UndoEdit(BaseModel):
@@ -371,7 +371,7 @@ def undo(pg: Playground, message: dict) -> dict:
     request = _parse(UndoEdit, message, "undo object edit")
     with pg.session.execution.command("viewer_undo_object_edit"):
         receipt = pg._play_edit
-        if receipt is None or receipt.token != request.token:
+        if not isinstance(receipt, Edit) or receipt.token != request.token:
             raise PlaygroundError("that object edit is no longer available to undo")
         with pg.lessons._lock, pg.session.lock:
             _guard(pg, receipt.store, request.version, request.generation, receipt.world_sha256)

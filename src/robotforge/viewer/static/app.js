@@ -17,8 +17,11 @@ import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 import { canMove, moveAxes, moveSpeed } from "./padmap.js";
 import { createPlacementGesture, initCreation } from "./creation.js";
+import { placementCoordinates } from "./placement-coordinate.js";
 import { createPlacementPreview } from "./placement-preview.js";
 import { createScreenDrive } from "./screen-drive.js";
+import { cameraView, cameraArc, arcEye } from "./camera-views.js";
+import { initRobotSurface } from "./robot-surface.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -29,10 +32,10 @@ translatePage();
 
 const canvas = $("view");
 let screenDrive = null;
-const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel: cancelCreation, change: updateCreationPreview });
+const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel: cancelCreation,
+  change: changePlacementOptions, coordinateChange: changePlacementOptions });
 const creationGesture = createPlacementGesture();
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.shadowMap.enabled = true;
@@ -95,15 +98,35 @@ function updateViewShift() {
 // Keep the last real shape instead, and frame the camera once the page can be seen.
 let fitWhenSized = false;
 const hasSize = () => window.innerWidth > 0 && window.innerHeight > 0;
+const renderSize = new THREE.Vector2();
+let ratioMedia = null, watchedRatio = null;
+
+function deviceRatio() {
+  const ratio = window.devicePixelRatio;
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
 
 function resize() {
+  const rawRatio = deviceRatio();
+  if (rawRatio !== watchedRatio) {
+    ratioMedia?.removeEventListener("change", resize);
+    ratioMedia = window.matchMedia(`(resolution: ${rawRatio}dppx)`);
+    ratioMedia.addEventListener("change", resize);
+    watchedRatio = rawRatio;
+  }
   if (!hasSize()) return;
   const w = window.innerWidth;
   const h = window.innerHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  applyViewShift();
+  const ratio = Math.min(rawRatio, 2);
+  renderer.getSize(renderSize);
+  const sizeChanged = renderSize.x !== w || renderSize.y !== h;
+  if (sizeChanged || renderer.getPixelRatio() !== ratio) renderer.setDrawingBufferSize(w, h, ratio);
+  // Display density does not change CSS coordinates, camera framing or placement anchors.
+  if (sizeChanged || camera.aspect !== w / h) {
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    applyViewShift();
+  }
   if (fitWhenSized && sceneDesc) {
     fitWhenSized = false;
     frameCamera();
@@ -374,6 +397,7 @@ async function applyScene(desc) {
   renderScreenDrive();
   posedVersion = 0;
   renderedVersion = 0;
+  renderLayouts();
   renderRobotStart();
   $("loading").hidden = false;
   $("loading").querySelector(".spinner").hidden = false;
@@ -772,9 +796,11 @@ function sceneReadyToDraw() {
 // ---------------------------------------------------------------- camera moves
 
 let tween = null; // { fromEye, fromTarget, toEye, toTarget, t0 }
+let originalCameraView = null, currentCameraView = null;
+const viewButtons = [...$("view-panel").querySelectorAll("[data-camera-view]")];
 const TWEEN_MS = 450;
 
-function moveCamera(eye, target, animate) {
+function moveCamera(eye, target, animate, orbit = false) {
   follow = null;
   renderCameraControls();
   if (!animate || reduceMotion) {
@@ -785,16 +811,71 @@ function moveCamera(eye, target, animate) {
     return;
   }
   tween = { fromEye: camera.position.clone(), fromTarget: controls.target.clone(), toEye: eye, toTarget: target, t0: performance.now() };
+  if (orbit) tween.arc = cameraArc(tween.fromEye.toArray(), tween.fromTarget.toArray(), eye.toArray(), target.toArray());
 }
 
 function updateTween() {
   if (!tween) return;
   const k = Math.min(1, (performance.now() - tween.t0) / TWEEN_MS);
   const e = 1 - (1 - k) ** 3; // ease out
-  camera.position.lerpVectors(tween.fromEye, tween.toEye, e);
   controls.target.lerpVectors(tween.fromTarget, tween.toTarget, e);
+  if (tween.arc) camera.position.fromArray(arcEye(tween.arc, controls.target.toArray(), e));
+  else camera.position.lerpVectors(tween.fromEye, tween.toEye, e);
   if (k >= 1) tween = null;
 }
+
+function setViewPanel(open) {
+  setOpen("view-toggle", "view-panel", open);
+  if (open) {
+    stopDriving(); endDrag();
+    creationGesture.invalidate();
+    if (creator.active()) clearCreationPoint();
+    (viewButtons.find((button) => button.getAttribute("aria-pressed") === "true") || viewButtons[0]).focus();
+  }
+  shiftForDrawers();
+}
+
+function resetCameraViews() {
+  originalCameraView = currentCameraView = null;
+  setViewPanel(false);
+}
+
+function chooseCameraView(name) {
+  if ($("view-toggle").disabled || !hasSize()) return;
+  if (name === "back" && !originalCameraView) return;
+  // Drain residual orbit damping before saving a view or starting a deliberate arc.
+  const damping = controls.enableDamping;
+  controls.enableDamping = false; controls.update(); controls.enableDamping = damping;
+  const target = name === "back" ? originalCameraView.target.clone() : controls.target.clone();
+  const eye = name === "back" ? originalCameraView.eye.toArray() : cameraView(name, camera.position.toArray(), target.toArray());
+  if (!eye) return;
+  if (name !== "back" && !originalCameraView) originalCameraView = { eye: camera.position.clone(), target: controls.target.clone() };
+  freeDriveCamera(); endDrag();
+  creationGesture.invalidate();
+  if (creator.active()) clearCreationPoint();
+  creationClickUntil = performance.now() + (reduceMotion ? 60 : TWEEN_MS + 60);
+  currentCameraView = name === "back" ? null : name;
+  if (name === "back") originalCameraView = null;
+  setViewPanel(false);
+  moveCamera(new THREE.Vector3().fromArray(eye), target, true, true);
+  renderCameraControls();
+  canvas.focus();
+}
+
+$("view-toggle").addEventListener("click", () => setViewPanel($("view-panel").hidden));
+for (const button of viewButtons) {
+  button.addEventListener("click", () => chooseCameraView(button.dataset.cameraView));
+}
+$("view-back").addEventListener("click", () => chooseCameraView("back"));
+document.addEventListener("pointerdown", (event) => {
+  if ($("view-panel").hidden || $("view-panel").contains(event.target) || $("view-toggle").contains(event.target)) return;
+  setViewPanel(false);
+  // A tap that dismisses the view picker must not also place a prop or push a robot.
+  if (event.target === canvas) {
+    creationGesture.invalidate(); creationClickUntil = performance.now() + 350;
+    event.preventDefault(); event.stopPropagation();
+  }
+}, { capture: true });
 
 // ---------------------------------------------------------------- theme
 
@@ -968,13 +1049,14 @@ function pickBody(e) {
 canvas.addEventListener(
   "pointerdown",
   (e) => {
-    creationGesture.down(e, (creator.active() || selectingObjects) && !busy && performance.now() >= creationClickUntil
+    creationGesture.down(e, (creator.active() || selectingObjects) && !busy && !tween?.arc && performance.now() >= creationClickUntil
       ? { session: creator.session(), version: sceneDesc?.version, generation: stateGeneration } : null);
     if (creator.active() || selectingObjects) {
       if (creator.active()) clearCreationPoint();
       return; // OrbitControls owns camera motion; only a qualified release will place.
     }
     if (e.button !== 0) return;
+    if (tween?.arc) return;
     if (performance.now() < creationClickUntil) return;
     const hit = pickBody(e);
     if (!hit) return;
@@ -1037,7 +1119,7 @@ function finishCreationGesture(e) {
   // OrbitControls installs its release listener dynamically. Let it drain before a scene edit,
   // and recheck ownership in case the session changed during this pointer event.
   setTimeout(() => {
-    if (creationGesture.active() || creationGesture.epoch() !== epoch || !(creator.active() || selectingObjects) || busy || creator.session() !== context.session
+    if (!$("view-panel").hidden || creationGesture.active() || creationGesture.epoch() !== epoch || !(creator.active() || selectingObjects) || busy || creator.session() !== context.session
         || sceneDesc?.version !== context.version || stateGeneration !== context.generation
         || performance.now() < creationClickUntil) return;
     if (selectingObjects) pickObjectForEdit(point);
@@ -1182,6 +1264,8 @@ let worldName = "";
 const robotByName = (name) => robots.find((r) => r.name === name) ?? null;
 
 function onScene(desc) {
+  // Camera history belongs to this rendered model, never another map, layout or lesson.
+  resetCameraViews();
   if (!layoutMutating && layoutCatalog?.version !== desc.version) {
     layoutCatalog = null;
     layoutConfirmation = null;
@@ -1557,7 +1641,8 @@ function renderScreenDrive() {
   const robot = driveTarget();
   const wanted = screenDrivePreference === null ? coarsePointer.matches : screenDrivePreference === "1";
   $("show-screen-drive").checked = wanted;
-  const show = Boolean(wanted && robot && !lessonActive() && !loadingScene);
+  const editingPanel = narrow() && (!$("world-panel").hidden || !$("drawer").hidden);
+  const show = Boolean(wanted && robot && !editingPanel && !lessonActive() && !loadingScene);
   const ready = Boolean(ws?.readyState === WebSocket.OPEN && !paused && !busy && !document.hidden
     && renderedVersion === sceneDesc?.version && (stateVersion === null || stateVersion === sceneDesc.version));
   $("screen-drive-target").textContent = robot?.name ?? "";
@@ -1679,14 +1764,22 @@ function freeDriveCamera() {
   follow = null;
   tween = null;
   refitRig = null;
+  currentCameraView = null;
   if (!lessonActive()) driveCameraIntent = "free";
   renderScreenDrive();
 }
 
 function renderCameraControls() {
+  const disabled = !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version || busy || ws?.readyState !== WebSocket.OPEN;
+  $("view-toggle").disabled = disabled;
+  $("view-back").disabled = disabled || !originalCameraView;
+  for (const entry of viewButtons) {
+    entry.disabled = disabled;
+    entry.setAttribute("aria-pressed", String(currentCameraView === entry.dataset.cameraView));
+  }
   const button = $("camera-view"), robot = robotByName(selected);
   button.hidden = !robot || lessonActive() || creator.active() || selectingObjects;
-  button.disabled = !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version || busy || ws?.readyState !== WebSocket.OPEN;
+  button.disabled = disabled;
   const movable = canMove(robot), active = !!follow && movable;
   if (movable) button.setAttribute("aria-pressed", String(active));
   else button.removeAttribute("aria-pressed");
@@ -1709,6 +1802,7 @@ $("camera-view").addEventListener("click", () => {
 function startFollowBody(body, { keepTween = false } = {}) {
   if (body === null || !bodyNodes[body]) return;
   if (follow && follow.body === body) return;
+  currentCameraView = null;
   if (!keepTween) tween = null;
   const start = bodyNodes[body].position;
   follow = { body, last: start.clone(), z: start.z, t: performance.now() };
@@ -1799,6 +1893,7 @@ function setDrawer(open) {
   storageSet("robotforge.drawer", open ? "1" : "0");
   shiftForDrawers();
   updateEmpty();
+  renderScreenDrive();
 }
 
 function setWorldPanel(open) {
@@ -1811,6 +1906,7 @@ function setWorldPanel(open) {
   storageSet("robotforge.world", open ? "1" : "0");
   shiftForDrawers();
   updateEmpty();
+  renderScreenDrive();
 }
 
 // The part of the window no panel covers. Left panels and right columns bound it sideways; a panel spanning most
@@ -1831,7 +1927,7 @@ function freeRect() {
     if (r.width > W * 0.7) across(r);
     else left = Math.max(left, r.right);
   }
-  for (const id of ["drawer", "lesson-plots", "sensor-views"]) {
+  for (const id of ["drawer", "lesson-plots", "sensor-views", "view-panel"]) {
     const r = box($(id));
     if (!r) continue;
     if (r.width < W * 0.7 && r.left > left + 160) right = Math.min(right, r.left); // a column beside the view
@@ -1841,8 +1937,10 @@ function freeRect() {
   if (bar) top = Math.max(top, bar.bottom);
   const dock = box(document.querySelector(".dock"));
   if (dock) bottom = Math.min(bottom, dock.top);
-  const edit = box($("object-edit-bar"));
-  if (edit) bottom = Math.min(bottom, edit.top);
+  for (const id of ["object-edit-bar", "placement-bar"]) {
+    const edit = box($(id));
+    if (edit) bottom = Math.min(bottom, edit.top);
+  }
   return { left, right, top, bottom };
 }
 
@@ -1907,9 +2005,10 @@ function shiftForDrawers() {
   viewShiftTarget.y = roomy ? H / 2 - (r.top + r.bottom) / 2 : 0;
 }
 window.addEventListener("resize", shiftForDrawers);
+window.addEventListener("resize", renderScreenDrive);
 // Panels change size with what they show (a quiz answered, the record unfolded): follow them.
 const panelWatch = new ResizeObserver(() => shiftForDrawers());
-for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar"]) panelWatch.observe($(id));
+for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar", "placement-bar", "view-panel"]) panelWatch.observe($(id));
 
 function setHelp(open) {
   setOpen("help-toggle", "help", open);
@@ -1917,6 +2016,7 @@ function setHelp(open) {
     setOpen("drawer-toggle", "drawer", false);
     setOpen("world-toggle", "world-panel", false);
     shiftForDrawers();
+    renderScreenDrive();
   }
 }
 
@@ -2052,6 +2152,10 @@ $("show-shadows").addEventListener("change", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (!$("view-panel").hidden) {
+    if (e.key === "Escape") { setViewPanel(false); $("view-toggle").focus(); e.preventDefault(); }
+    return; // The picker owns keyboard focus; selecting a view cannot start driving.
+  }
   if (e.key === "Escape" && layoutConfirmation) {
     cancelLayoutConfirmation(); e.preventDefault(); return;
   }
@@ -2126,6 +2230,12 @@ let busy = false;
 
 async function runChoice(button, msg, { frame = false, done, progress } = {}) {
   if (busy) return;
+  const changingMap = msg.type === "world" && msg.action === "scene";
+  if (changingMap) {
+    // Its reply can precede the new scene/state. Never re-enable the old world's layout actions.
+    ++layoutRequest; layoutLoading = false;
+    layoutCatalog = layoutConfirmation = null;
+  }
   busy = true;
   wantFrame = frame;
   button.classList.add("busy");
@@ -2140,6 +2250,7 @@ async function runChoice(button, msg, { frame = false, done, progress } = {}) {
     busy = false;
     button.classList.remove("busy");
     setPanelBusy(false);
+    if (changingMap && !layoutLoading && !$("world-panel").hidden) refreshLayouts();
   }
 }
 
@@ -2169,11 +2280,13 @@ function setPanelBusy(on) {
 // ------------------------------------------------------------ pick a local robot, click to place
 
 let placementVersion = 0, placementGeneration = null, placementWorldSha = null, creationClickUntil = 0, creationSelection = null;
-let lastAddition = null, creationSurface = null;
+let lastAddition = null, creationSurface = null, creationAnchor = null;
+const supportRay = new THREE.Raycaster();
 let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null, lastRobotEdit = null, lastTerrainEdit = null;
 let surfaceReselect = null;
 let terrainHighlight = null, terrainListKey = null;
 const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
+creationMarker.name = "placement-point-marker";
 const headingShape = new THREE.Shape();
 headingShape.moveTo(0.19, 0); headingShape.lineTo(0.1, 0.045); headingShape.lineTo(0.1, -0.045); headingShape.closePath();
 const creationHeading = new THREE.Mesh(new THREE.ShapeGeometry(headingShape), creationMarker.material);
@@ -2208,7 +2321,10 @@ function beginCreation() {
   setDrawer(false); setWorldPanel(false); setHelp(false);
   controls.enabled = true;
   canvas.classList.add("placing"); canvas.focus();
-  creationPoint({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+  // The orbit aim stays visible as panels move the projection; the window centre does not.
+  camera.updateMatrixWorld();
+  const aim = controls.target.clone().project(camera);
+  creationPoint({ clientX: (aim.x + 1) * window.innerWidth / 2, clientY: (1 - aim.y) * window.innerHeight / 2 });
   updateEmpty();
   updateUndo();
   renderScreenDrive();
@@ -2221,20 +2337,61 @@ function cancelCreation(force = false) {
   if (force) creationSelection?.reject(new Error(t("create_scene_changed")));
   creationGesture.invalidate();
   creator.clear(); creationMarker.visible = false;
-  creationSurface = null; placementPreview.clear();
+  creationSurface = creationAnchor = null; placementPreview.clear();
+  shiftForDrawers();
   canvas.classList.remove("placing"); controls.enabled = true;
   updateEmpty();
   renderDrive();
   updateUndo();
 }
 
-function clearCreationPoint() {
-  creator.point(null); creationSurface = null; creationMarker.visible = false;
+function setCreationPoint(point, status = null) {
+  creator.point(point, status); creationSurface = point; creationMarker.visible = !!point;
+  if (point) creationMarker.position.set(point[0], point[1], point[2] + 0.008);
   updateCreationPreview();
 }
 
+function clearCreationPoint(status = null) {
+  creationAnchor = null; setCreationPoint(null, status);
+}
+
+function resolveCreationAnchor() {
+  const anchor = creationAnchor;
+  if (!anchor || anchor.session !== creator.session() || anchor.version !== sceneDesc?.version
+      || anchor.generation !== stateGeneration) return { point: null, status: null };
+  const point = placementCoordinates(anchor.point, creator.spacing());
+  if (!point) return { point: null, status: "placement_coordinate_invalid" };
+  anchor.object.updateWorldMatrix(true, false);
+  if (anchor.matrix.some((v, i) => v !== anchor.object.matrixWorld.elements[i])) {
+    creationAnchor = null;
+    return { point: null, status: "placement_support_changed" };
+  }
+  if (creator.spacing() === "free") return { point, status: null };
+  if (anchor.up < 0.9999 || anchor.dynamic || robotOfBody.has(anchor.body) || anchor.object.userData.flex) {
+    return { point: null, status: "placement_snap_surface" };
+  }
+  // Recheck the snapped XY at the same thin height band: never jump off a table to the floor,
+  // onto another stair height, or through a different visible surface.
+  supportRay.set(new THREE.Vector3(point[0], point[1], anchor.point[2] + 0.002), new THREE.Vector3(0, 0, -1));
+  supportRay.near = 0; supportRay.far = 0.004;
+  const excluded = creator.editing()?.geoms || [];
+  const hit = worldRoot && supportRay.intersectObjects(worldRoot.children, true).find((h) =>
+    h.object.visible && !excluded.includes(h.object.userData.geom));
+  const up = hit?.face?.normal.clone().transformDirection(hit.object.matrixWorld);
+  if (!hit || hit.object !== anchor.object || up?.z < 0.9999 || !up || Math.abs(hit.point.z - anchor.point[2]) > 0.001) {
+    return { point: null, status: "placement_snap_outside" };
+  }
+  return { point: placementCoordinates([point[0], point[1], hit.point.z], creator.spacing()), status: null };
+}
+
+function changePlacementOptions() {
+  creationGesture.invalidate();
+  const { point, status } = resolveCreationAnchor();
+  setCreationPoint(point, status);
+}
+
 function creationPoint(e) {
-  if (!sceneReadyToDraw() || renderedVersion !== sceneDesc.version) {
+  if (!$("view-panel").hidden || tween?.arc || !sceneReadyToDraw() || renderedVersion !== sceneDesc.version) {
     clearCreationPoint(); return;
   }
   setPointer(e);
@@ -2247,12 +2404,13 @@ function creationPoint(e) {
   const valid = hit && up?.z >= 0.7 && (creator.placingTerrain()
     ? sceneDesc.geoms.find((g) => g.id === hit.object.userData.geom)?.type === "plane" && Math.abs(hit.point.z) <= 0.001
     : propPlacement ? !robotOfBody.has(body) : !dynamicSurface);
-  const point = valid ? hit.point.toArray().map((v) => +v.toFixed(4)) : null;
-  creator.point(point);
-  creationSurface = point;
-  creationMarker.visible = !!point;
-  if (point) creationMarker.position.set(point[0], point[1], point[2] + 0.008);
-  updateCreationPreview();
+  if (!valid) { clearCreationPoint(); return; }
+  hit.object.updateWorldMatrix(true, false);
+  creationAnchor = { point: hit.point.toArray(), object: hit.object, body, dynamic: !!dynamicSurface,
+    up: up.z, matrix: hit.object.matrixWorld.elements.slice(), session: creator.session(),
+    version: sceneDesc.version, generation: stateGeneration };
+  const { point, status } = resolveCreationAnchor();
+  setCreationPoint(point, status);
 }
 
 function updateCreationPreview() {
@@ -2270,6 +2428,7 @@ function editableRobotStart() {
 
 function renderRobotStart() {
   renderEditableTerrains();
+  robotSurface.render();
   const button = $("robot-start");
   button.hidden = !editableRobotStart();
   button.disabled = busy || !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version
@@ -2282,6 +2441,61 @@ $("robot-start").addEventListener("click", () => {
     creator.repositionRobot({ ...entry, world_sha256: sceneDesc.robot_edit.world_sha256 });
   }
 });
+
+const robotSurface = initRobotSurface({
+  current: () => {
+    const info = sceneDesc?.robot_surface;
+    const entry = info && sceneDesc?.world && info.version === sceneDesc.version && !sceneDesc.lesson
+      ? info.robots.find((r) => r.name === selected) : null;
+    return entry ? { ...entry, version: info.version, world_sha256: info.world_sha256 } : null;
+  },
+  ready: () => !busy && !creator.active() && !selectingObjects && !creationGesture.active()
+    && sceneReadyToDraw() && renderedVersion === sceneDesc?.version && stateVersion === sceneDesc?.version
+    && Number.isInteger(stateGeneration),
+  apply: async (entry, body, surface, button) => {
+    stopDriving(); endDrag();
+    await runChoice(button, { type: "world", action: "set_robot_surface", name: entry.name, body,
+      surface_material: surface, version: entry.version, generation: stateGeneration,
+      world_sha256: entry.world_sha256 }, {
+      done: async (data) => {
+        if (data.unchanged) {
+          if (stateVersion !== data.version || stateGeneration !== data.generation) {
+            lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
+            throw new Error(t("create_scene_changed"));
+          }
+          toast(t("surface_unchanged")); return;
+        }
+        const receipt = data.undo_surface ? { ...data.undo_surface, kind: "robot_surface" } : null;
+        lastObjectEdit = receipt; lastAddition = lastRobotEdit = lastTerrainEdit = null;
+        try { await waitForCreation(data, true); }
+        catch (error) {
+          lastObjectEdit = stateVersion === data.version && stateGeneration === data.generation ? receipt : null;
+          updateUndo(); throw error;
+        }
+        updateUndo(); toast(t("surface_saved", { name: `${entry.name} / ${body}` }));
+      },
+    });
+  },
+});
+let robotSurfaceHighlight = null;
+function updateRobotSurfaceHighlight() {
+  const geoms = robotSurface.highlight();
+  if (!geoms.length || !worldRoot) {
+    if (robotSurfaceHighlight) {
+      scene3.remove(robotSurfaceHighlight); robotSurfaceHighlight.geometry.dispose();
+      robotSurfaceHighlight.material.dispose(); robotSurfaceHighlight = null;
+    }
+    return;
+  }
+  if (!robotSurfaceHighlight) {
+    robotSurfaceHighlight = new THREE.Box3Helper(new THREE.Box3(), theme.amber);
+    robotSurfaceHighlight.name = "robot-part-highlight"; robotSurfaceHighlight.material.depthTest = false;
+    scene3.add(robotSurfaceHighlight);
+  }
+  worldRoot.updateMatrixWorld(); robotSurfaceHighlight.box.makeEmpty();
+  worldRoot.traverse((o) => { if (o.isMesh && o.visible && geoms.includes(o.userData.geom)) robotSurfaceHighlight.box.expandByObject(o); });
+  robotSurfaceHighlight.visible = !robotSurfaceHighlight.box.isEmpty();
+}
 
 function editableTerrains() {
   const info = sceneDesc?.terrain_edit;
@@ -2472,10 +2686,12 @@ $("undo-edit").addEventListener("click", async () => {
   if (busy || (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit)) return;
   stopDriving(); endDrag();
   const robotStart = !!lastRobotEdit, terrainEdit = !!lastTerrainEdit;
-  await runChoice($("undo-edit"), { type: "world", action: terrainEdit ? "undo_terrain_edit" : robotStart ? "undo_robot_start" : "undo_object_edit", ...(lastTerrainEdit || lastRobotEdit || lastObjectEdit) }, {
+  const robotFinish = lastObjectEdit?.kind === "robot_surface";
+  const { kind: _kind, ...receipt } = lastTerrainEdit || lastRobotEdit || lastObjectEdit;
+  await runChoice($("undo-edit"), { type: "world", action: terrainEdit ? "undo_terrain_edit" : robotStart ? "undo_robot_start" : robotFinish ? "undo_robot_surface" : "undo_object_edit", ...receipt }, {
     done: async (data) => {
       await waitForCreation(data, true); lastObjectEdit = lastRobotEdit = lastTerrainEdit = null; updateUndo();
-      toast(t(terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed })); canvas.focus();
+      toast(t(terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : robotFinish ? "robot_surface_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed })); canvas.focus();
     },
   });
 });
@@ -2515,6 +2731,13 @@ function waitForCreation(data, rendered = false) {
 
 async function placeEntity(item, pos) {
   if (busy || creationGesture.active() || !item || !pos) return;
+  if (creator.spacing() !== "free") {
+    const resolved = resolveCreationAnchor();
+    if (!resolved.point || resolved.point.some((v, i) => v !== pos[i])) {
+      clearCreationPoint(resolved.status || "placement_support_changed"); return;
+    }
+  }
+  pos = pos.slice();
   if (creator.repeating() && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
   if ((item.kind === "terrain" || item.kind === "terrain-edit") && (!Number.isInteger(placementGeneration) || !placementWorldSha)) { toast(t("loading_scene")); return; }
   const placementSession = creator.session();
@@ -2525,7 +2748,7 @@ async function placeEntity(item, pos) {
     : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
-    : item.kind === "terrain-edit" ? { action: "edit_terrain", name: item.name, turns: item.turns, world_sha256: item.world_sha256 }
+    : item.kind === "terrain-edit" ? { action: "edit_terrain", name: item.name, yaw_delta: item.yaw_delta, world_sha256: item.world_sha256 }
     : item.kind === "terrain" ? { action: "add_terrain", preset: item.name, yaw: item.yaw, world_sha256: placementWorldSha }
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw,
         ...(item.material ? { material: item.material } : {}) };
@@ -2568,6 +2791,19 @@ async function placeEntity(item, pos) {
         throw error;
       }
       if (placementSession !== creator.session()) return;
+      if (item.kind === "terrain" && creator.repeating()) {
+        const info = sceneDesc?.terrain_edit;
+        const current = Number.isInteger(data.generation)
+          && stateVersion === data.version && stateGeneration === data.generation;
+        // Scene extras are collected separately: never carry a digest from another displayed world.
+        if (!current || loadingScene || sceneDesc?.version !== data.version || posedVersion !== data.version
+            || renderedVersion !== data.version || info?.version !== data.version
+            || !/^[0-9a-f]{64}$/.test(info?.world_sha256 ?? "")) {
+          lastAddition = current ? data.undo || null : null;
+          cancelCreation(true); throw new Error(t("create_scene_changed"));
+        }
+        placementWorldSha = info.world_sha256;
+      }
       lastAddition = data.undo || null;
       lastObjectEdit = data.undo_edit || null;
       lastRobotEdit = data.undo_robot_start || null;
@@ -2580,7 +2816,7 @@ async function placeEntity(item, pos) {
         creationGesture.invalidate();
         placementVersion = data.version; placementGeneration = data.generation ?? stateGeneration;
         creator.next(item.kind === "copy" ? { world_sha256: sceneDesc.object_edit.world_sha256 } : {});
-        creationSurface = null; creationMarker.visible = false; placementPreview.clear();
+        creationSurface = creationAnchor = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
       toast(t(item.kind === "terrain-edit" ? "terrain_edited" : item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain }));
       canvas.focus();
@@ -2594,7 +2830,7 @@ async function placeEntity(item, pos) {
 function updateUndo() {
   $("undo-add").hidden = !lastAddition || creator.active() || selectingObjects || !!sceneDesc?.lesson;
   $("undo-edit").hidden = (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit) || creator.active() || selectingObjects || !!sceneDesc?.lesson;
-  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : "undo_object_edit");
+  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : "undo_object_edit");
   $("undo-edit").disabled = busy;
   $("undo-add").disabled = busy;
   $("undo-add").title = lastAddition?.name || "";
@@ -2664,6 +2900,7 @@ let lastMap = null; // the map picked here; a world does not remember which pres
 function layoutReady() {
   return layoutCatalog?.available && layoutCatalog.version === sceneDesc?.version
     && layoutCatalog.generation === stateGeneration && !sceneDesc?.lesson && sceneReadyToDraw()
+    && renderedVersion === sceneDesc.version
     && ws?.readyState === WebSocket.OPEN;
 }
 
@@ -3085,6 +3322,7 @@ function loop() {
     refreshDragVisual();
     updateObjectHighlight();
     updateTerrainHighlight();
+    updateRobotSurfaceHighlight();
     lessonFrame();
     if (water) waterFrame(water, latestTime, camera, scene3);
     sensorsFrame();
@@ -3098,6 +3336,7 @@ function loop() {
   if (ready && renderedVersion !== sceneDesc.version && !renderer.getContext().isContextLost()) {
     renderedVersion = sceneDesc.version;
     $("loading").hidden = true;
+    renderLayouts();
     renderScreenDrive();
     renderRobotStart();
     updateEmpty();
@@ -3115,6 +3354,7 @@ function loop() {
 
 canvas.addEventListener("webglcontextlost", () => {
   renderedVersion = 0;
+  renderLayouts();
   renderRobotStart();
   $("loading").hidden = false;
   updateEmpty();

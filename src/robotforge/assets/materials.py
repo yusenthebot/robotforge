@@ -14,6 +14,7 @@ rubber (fine grain), knurl (diamond cross-hatch). A material naming another text
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 
@@ -39,6 +40,8 @@ class Material:
     summary: str = ""
 
     def __post_init__(self) -> None:
+        if not math.isfinite(self.env) or self.env < 0:
+            raise ValueError(f"material {self.name!r}: env must be finite and non-negative, got {self.env!r}")
         if not NAME_RE.match(self.name):
             raise ValueError(f"material name {self.name!r} must be lowercase letters, digits and _, at most 24")
         if self.texture not in TEXTURES:

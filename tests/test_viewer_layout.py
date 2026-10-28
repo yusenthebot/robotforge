@@ -574,7 +574,8 @@ RINGS = """(async () => {
         const me = row.indexOf(b);
         const prev = row[me - 1]?.getBoundingClientRect().right ?? -1e9;
         const next = row[me + 1]?.getBoundingClientRect().left ?? 1e9;
-        out.push({ label: b.textContent.trim() || b.id, shown: cs.outlineStyle !== "none",
+        out.push({ id: b.id || `speed:${b.dataset.speed}`, label: b.textContent.trim() || b.id,
+                   shown: cs.outlineStyle !== "none",
                    left: r.left - reach, prev, right: r.right + reach, next });
     }
     return out;
@@ -590,7 +591,17 @@ def test_the_docks_focus_rings_stay_off_their_neighbours(viewer, size):
         return await tab.eval(RINGS)
 
     rings = viewer(size, "en", scenario)
-    assert len(rings) == 8, rings  # play, reset, four speeds, fit, record
+    assert [ring["id"] for ring in rings] == [
+        "btn-play",
+        "btn-reset",
+        "speed:0.25",
+        "speed:0.5",
+        "speed:1",
+        "speed:2",
+        "btn-frame",
+        "view-toggle",
+        "btn-record",
+    ], rings
     for ring in rings:
         assert ring["shown"] and ring["prev"] <= ring["left"] + 0.01 and ring["right"] <= ring["next"] + 0.01, ring
 

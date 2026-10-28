@@ -16,7 +16,7 @@ import math
 import os
 import re
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import mujoco
 import numpy as np
@@ -151,6 +151,9 @@ class RobotEntry(_Strict):
     # A robot made from a sentence (add_robot(describe=...)): the plan its build came from (body, counts, factors,
     # seed and the sentences so far), so a later sentence changes it (update_robot(describe=...)). See generator/.
     generated: dict[str, Any] | None = Field(None, exclude_if=_unset)
+    body_surfaces: dict[
+        Annotated[str, Field(strict=True, min_length=1, max_length=160)], Literal["plastic", "wood", "steel"]
+    ] = Field(default_factory=dict, max_length=64, exclude_if=lambda value: not value)
 
     @field_validator("generated")
     @classmethod
@@ -197,6 +200,8 @@ class RobotEntry(_Strict):
 
     @model_validator(mode="after")
     def _one_source(self) -> RobotEntry:
+        if self.body_surfaces and self.mounts:
+            raise ValueError("body surfaces currently need an unmounted robot")
         if [self.template, self.file, self.library, self.build, self.catalogue].count(None) != 4:
             raise ValueError(f"robot {self.name!r}: give exactly one of 'template', 'library', 'file' or 'build'")
         if self.library is not None:
@@ -507,6 +512,10 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
     frames: list[tuple[str, mujoco.MjsFrame]] = []  # robots that rest on the ground (no explicit z)
     for entry in world.robots:
         built = _robot_spec(entry, base_dir)
+        if entry.body_surfaces:
+            from robotforge.design.body_surfaces import apply
+
+            apply(built.spec, entry.body_surfaces)
         if entry.sensors:  # any robot can carry them: placed on its own spec, before it is attached
             from robotforge.sensors.mount import mount
 

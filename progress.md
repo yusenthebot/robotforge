@@ -1,5 +1,61 @@
 # progress
 
+## Mesh transport pre-screen (2026-10-28)
+
+- 固定外部gzip level1/mtime0，分别加载真实Malo／Go2原世界，三次压缩逐字节解压核对；47,064,672→11,897,380B与20,332,512→6,058,843B，减少74.72%／70.20%。Malo CPU中位261.499ms超过事先250ms门槛，停止晋升，不调等级、不追加样本。
+- Go2 CPU中位149.878ms通过，但共同门槛未满足。未测试真实浏览器冷／编辑加载、异步worker或完整内存成本，不能推断这些一定退化。ru_maxrss受编译高水位影响，零增量不是零压缩成本。
+- 产品bd83fe3b和761输入保持；29现有server／native-texture测试、Ruff／format／离线wheel通过，413包文件及原13WIP保持。初pytest不存在文件退出4、无测试，日志与更正后结果分别保留。无新全量／框架／安装冒烟／预算／画面对照或视频声明。
+- 报告 docs/bench/2026-10-28-mesh-transport-screen.md/.json；证据 ../robotforge-evidence/2026-10-28-mesh-transport/。下一步先用真实参考核对Malo／Go2普通视距可见大部件的材质身份与生效映射，不因名字或截图差分凭空改共享参数。整体目标持续，小功能成功率未动。
+
+## Authored environment contribution fidelity (2026-10-28)
+
+Shared implicit environment now composes scene intensity with nondefault author multipliers, including diffuse/specular/clearcoat; grain/weave hooks, explicit maps, sensor lighting and context restoration retained.
+Default1 skips the hook; changing an initially default Three material later is outside this authoring-time contract, and invalid env fails fast.
+396targeted pytest,7canonical,source/fresh offline60-tool smoke,Ruff/format/JS parsing and original11/11budgets pass; no full-suite claim.
+80fixed stills retain24exact original-world canvas pairs; two positive workspaces explicitly add existing generated aluminium/lab arms, not raw-imported-model gains.
+Eight complete paused scripted-camera movies fully decode,48root samples inspected;485model/state fields preserved and paired mesh bytes checked.
+Wheel3940690B(+465B),413product files exact,original13WIP retained; no added requests/textures/passes/dependencies,alloy shader programs22→24.
+ABBA alloy browser-cold mean382.10→409.60ms,lab285.30→283.15ms; mixed costs and asynchronous RGB inventory limits retained.
+Paint roughness screen did not establish ordinary-distance gain; its env0 attempt was ineffective under Three's override, not a valid ablation.
+[Report](docs/bench/2026-10-28-environment-scale.md).
+Broad material/lightweight/creative-play goal active; individual action-success tuning deferred.
+
+## Shared camera inspection and composition (2026-10-28)
+
+Native Top/Front/Side/Back presets preserve current target, distance and perspective across existing creation/edit flows; world axes, temporary history and no automatic complete fit are explicit.
+Opening the menu invalidates held gestures and stale points; regression covers the actual old mouse-release accidental-add path.
+All273current non-slow browser nodes pass across serial same-product runs, with one optional USD collection skip;9GPU and384targeted backend yield666distinct pytest passes.
+Seven unchanged canonical cases, source/fresh offline60-tool smoke, Ruff/format/changed JS syntax and original11/11install/viewer budgets pass.
+Six final d454 native original-world workflow movies fully decode;36root samples plus3Top stills inspected, complete model/state control and exact Undo checked.
+Wheel3940225B(+2339B),413product files exact, original13WIP retained; one added1475BJS request, cold encoded resource+6453B.
+Mixed ABBA loading samples retained; no new shader gain, human-efficiency, complete regular-suite, every-frame or physical-phone claim.
+[Report](docs/bench/2026-10-28-camera-views.md).
+Broad shared visual/lightweight/creative-play goal active; individual action-success tuning deferred.
+
+## Shared concrete colour scale (2026-10-28)
+
+Ordinary Malo/Go2 ground views lose dominant broad grey clouds while retaining finer grain; concrete floors, existing dock and stairs share the colour path.
+One frozen candidate changes broad/fine colour weights0.06/0.02 to0.02/0.04, centred on actual fields and old decoded-linear mean; relief, roughness, UV, physics and APIs stay exact.
+Four attribution groups restore pixel-exactly;48original-world stills and12strict-decoded paused camera clips/72root samples cover two lights and explicit derived terrain, with original Panda static control.
+Finald2b2b40c has344targeted passes,7canonical under actual3.12.13,source/fresh offline60-tool smoke and one unchanged11/11install-viewer budget pass.
+Wheel3937886B(+354B),412source/wheel/installed product files exact, original13WIP hashes retained.
+ABBA browser-cache-cold Malo means309.4/342.4ms before/candidate; warm local disk and paused physics, no universal speedup or fresh-download claim.
+External still/movie source remainsba1d13 with frozen module binding to promoted source; no relabeled capture, full-suite, every-frame temporal or physical-phone certification.
+[Report](docs/bench/2026-10-28-concrete-scale.md).
+Broad visual/lightweight/creative-play goal remains active; individual action-success tuning deferred.
+
+## Shared precise placement and native regressions (2026-10-28)
+
+Optional 0.10/0.25m world-origin XY spacing shares preview, readout and submitted positions across eight placement entries; free placement remains default.
+Same fixed horizontal support is checked again before submission; existing full-footprint, stale-request and Undo contracts remain.
+The placement bar participates in view avoidance, short screens scroll, feedback has stable height, and narrow editing panels clear held screen-driving inputs.
+Same-product-source split browser coverage258pass/1optional USD module skip,456targeted backend pass/1optional skip,7canonical,source/fresh offline60-tool smoke and original11/11budgets pass.
+The first full native-target failures and final partial resource-snapshot failure remain recorded; settled-view sampling retains the original exact resource equality.
+Four actual Malo/Go2/Panda desktop/touch-emulated workflow pairs fully decode,48decoded samples inspected;12snapped coordinates exact after native creation and reload.
+Wheel3937532B(+2386B over integrated upstream),412source/wheel/installed product files exact; original13WIP hashes retained.
+[Report](docs/bench/2026-10-28-precise-placement.md).
+No shader aesthetic gain, human timing or full regular/slow suite claim; broad material/lightweight/play goal continues, individual action-success tuning deferred.
+
 ## Actual-world specular baseline (2026-10-28)
 
 No two actual material paths establish an attributable ordinary-distance specular defect; no compensation candidate or shader change.
@@ -1097,3 +1153,47 @@ wheel 3,872,361 B，398 个包内/安装文件一致，原十三项未提交工�
 原失败诊断与环境不兼容结果全部保留，十三项原工作目录改动保持；整体目标继续，小功能成功率未调整。详见 docs/bench/2026-10-27-prop-materials.md。
 
 PR32 创建时同步 main6b06e55 的四个独立 ZenoBench 模块及专属测试/文档；402 个其他产品文件、既有非 USD 测试、CLI/依赖不变。最终源码6d5f5a12重新冻结737输入，完成209针对性+14原生+七项canonical框架、源码/新安装包冒烟及一次该源码的11/11预算。USD模块仍跳过，不认证上游新抓取物理能力；此前4001/128和媒体保留在7cca阶段。最终wheel3912675 B/406文件一致，42包，标准冷首帧0.5514秒、60.31/60.20 FPS；所有中间产物与失败记录保留。
+
+
+## 2026-10-28 共享精细朝向与放置边界
+
+- 六类入口共用 −15/+90/+15，保留小数／累计角、旧 turns、事务与保守占用；修复旧触点在旋转后释放误提交，实际 Malo 原版+1／候选+0版本对照通过。
+- 冻结 f2141fde3df3 的759输入：286完整非慢速浏览器通过/1可选集合跳过，579后端、7canonical、源码/新离线安装60工具冒烟及原11/11预算通过；全常规/慢速GPU未重跑，缺失工具不计通过。
+- 48固定图/24逐像素原世界对照，485模型状态字段保持，六段原生前后录像完整解码/36样本检查；Malo实际驾驶约0.233m，Go2中文320px局部路线和Panda桌面布置保存重载通过。原失败的helper等待、UI遮挡和机器人射线命中保留，仅修正驱动目标，不改产品保护。
+- Wheel3941055B(+365)，413源码/wheel/安装文件一致，13原WIP保留，未新增请求/材质资源/依赖。ABBA Malo浏览器冷+0.85ms、Go2−1.15ms，无普遍提速或新着色收益声明。详见 docs/bench/2026-10-28-fine-heading.md/.json，整体目标持续。
+
+
+## 2026-10-28 显示密度同步与覆盖范围更正
+
+- 实际resolution／resize事件更新主画布倍率，保留DPR2上限，CSS放置坐标及密度单独变化时的投影；300×150初始aspect补齐，无每帧检测、新贴图／pass／依赖。
+- 最终88dfa18d冻结760输入：290完整非慢速浏览器通过/1可选集合跳过，9资产／传感器GPU、579后端，共878不同pytest；7canonical、隔离源码／新离线安装60工具冒烟及一次原11/11预算通过。
+- 三个原世界54图，12固定控制对照逐像素相同；媒体事件1→2、2→1.25、1.25→3正确，返回1另含真实CSSresize；1.25无fresh像素参考，eye记录1e-10容差，纯CDP3→1无通知失败不计通过，Mac锁屏未做原生缩放。
+- 六段完整时间戳录像技术解码通过，36解码样本由root查看；包含fresh页面重载，未认证逐帧、实体跨屏或驾驶。各会话485模型／状态字段保持；跨会话编译网格／状态相同，仅路径元数据允许差异；同标签的相对源文件不冒称单独解析。
+- wheel3941294B(+239)，413源码／wheel／安装产品文件一致，13原WIP保持；42运行包，冷首帧0.5299秒，60.12／60.24FPS，1.9／3.0ms绘制。ABBA Malo冷+5ms、Go2−1.5ms，加载是主画面就绪而非全部传感器预览编译，RSS非峰值／VRAM，无普遍提速或免费清晰度声明。
+- 旧四份raw报告64个名为DPR1样本实际renderer2，仅更正已核实的fine-heading／environment-scale两族覆盖，旧图与哈希不变。当前单纯3→1通知限制、helper等待／浮点／相对路径／离线顺序假设失败全部保留；发现预览自动连到冒烟8737后清空旧页并单独复验两套冒烟，不重复已通过预算。
+- 阴影恢复筛查因Malo返回自动恢复且冻结阈值不覆盖Go2而拒绝，未实现或合并候选。下一轮先盘点实际可见透明表面／投影是否有两个普通视距正例，再决定是否做局部外部诊断，不能先假定共享shader收益；材质与自由搭建整体目标持续，小功能成功率未动。
+- 详见 docs/bench/2026-10-28-responsive-dpr.md/.json；本地证据 ../robotforge-evidence/2026-10-28-responsive-dpr/，拒绝筛查 ../robotforge-evidence/2026-10-28-shadow-recovery/。
+
+## 2026-10-28 — Native image quality applicability screen
+
+- 共享透明阴影静态盘点不足两个普通视距真实正例；Upkie躯干仍未导入／渲染，未修改阴影。
+- 外部唯一BOX→LANCZOS缩图候选保留原预算、色彩、共享和前端；36张Chrome/Metal实际DPR1/2截图、18张root查看与1810控制检查完成。普通视距双独立资产收益未建立，X2／ANYmal gzip分别+12.15%／+22.24%，超过事前10%门槛，拒绝且不调参。
+- 产品88dfa18d及760输入未改；64定向原实现测试、Ruff和离线wheel通过，413产品文件与源码／上轮wheel一致，13原WIP保持。无候选完整预算、全套、安装或运动视频认证；初始pytest文件名和比较器时序假设失败、v1汇总缺陷及DPR1错误覆盖限制均归档。
+- 报告 docs/bench/2026-10-28-native-resampling-screen.md/.json；整体目标持续，下一步核实既有坡道／台阶重复放置的搭建成本，复用保护／Undo。小功能成功率未动。
+
+## 2026-10-28 — Repeated local terrain
+
+- 坡道／台阶可选连续放置，保留预设、朝向和吸附，匹配实际显示的版本／代次／摘要后才清空旧点并继续；缺失／混合摘要退出，同代次已提交末块保留Undo，陈旧结果不恢复凭据。每块仍独立编译、回保存起点并暂停；无新接口或成功率调整。
+- 两原Malo／Go2世界前后搭建相同3块、占用拒绝重试、撤销末块、布局保存／换图／恢复／刷新，最终保存世界相同，预设进入3→1次。4段完整时间戳录像解码通过，24个解码样本root查看；Go2含真实触摸拖动／双指操作，非实体手机或驾驶认证。
+- 三原世界48图、24逐像素相同对照，实际DPR1/2、两个灯光／视距；各会话485模型状态字段保持，跨会话仅隔离路径元数据单列，eye/target用1e-10容差。共享材质、资源、绘制及原接口保持，无新shader收益声明。
+- 最终bd83fe3b冻结761输入，15地形／88共享浏览器、579后端、9GPU共691不同pytest通过；7canonical、源码／全新离线安装60工具冒烟、原11/11预算通过。Wheel3941555B(+261)，413产品文件一致，13原WIP保持，42运行包，163.6382MB安装，冷0.8366秒、60.11／60.23FPS、2.9／3.6ms绘制。
+- 初ABBA原工作区冷+103.55／+174.20ms，反序BAAB补充+7.15／−32.05ms；全部保留，合并4样本均值仍为+55.35／+71.08ms，不推断因果或普遍提速。HTTP冷+1137B／暖+329B、请求数30未增，无新资产、依赖、贴图或pass。未跑完整default／slow／all-browser；可选类型／安全工具不可用已披露。
+- 初始测试await优先级／reset凭据假设、Ruff行长与系统Python环境问题均保留；最终测试及独立代码／Python审查通过。报告 docs/bench/2026-10-28-repeat-terrain.md/.json；证据 ../robotforge-evidence/2026-10-28-repeat-terrain/。
+- 下一步先筛查真实47MBMalo／20MBGo2网格响应的协商压缩／当前版本复用，原始解码字节、接口、CPU／事件循环／内存和冷加载仍要验证，尚未实现。整体质感／轻量／可玩性目标持续，小功能成功率未动。
+
+
+## 2026-10-28 — Robot part surfaces
+
+- 2026-10-28 robot part surfaces: opt-in direct-body Original/plastic/wood/steel on imported/library/template unmounted rigid robots, preserving base colours/physics/rays/sensor dressing; guarded pose-carry/reset/pause/noop/Undo/layout loop. Explicit user styling, no inferred CMF/global shader change.
+  Frozen56078aa4/767inputs: pre-JS-fix full default4037pass/128skip with unchanged product Python/dependencies; final viewer-default663 and related browser57, GPU9 (4103distinct passes),7canonical,source/fresh offline60-tool smoke and original11/11budgets pass. Wheel3948453B(+6898),416product files exact,13originalWIP preserved.
+  Three native full workflows decode/18root samples;24untouched-world main-canvas exact pairs (light media; one whole-window PNG differs),444nonappearance arrays per styled native session. Native OS zoom status:pending_manual_unlock; locked setup/no-op inputs are not passes; not monitor switching. No all-browser/Windows/every-frame/motion-success claim. Report docs/bench/2026-10-28-robot-body-surfaces.md/.json; broad goal active.

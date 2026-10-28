@@ -1,0 +1,1450 @@
+{
+  "feature": "shared fine heading and placement gesture boundary",
+  "date": "2026-10-28",
+  "base": "89f6cb9b8ed6880267ebc9a22c625792f181bfc1",
+  "source_sha256": "f2141fde3df34a3be5b9bf10fe1c1a6f1fd8c7f2ca84bda2f800736c3632118a",
+  "frozen_inputs": 759,
+  "tests": {
+    "browser-full": {
+      "passed": 286,
+      "skipped": 1,
+      "skip_names": [
+        [
+          "",
+          "tests.test_zenobench_mujoco"
+        ]
+      ]
+    },
+    "backend-related": {
+      "passed": 579,
+      "skipped": 0,
+      "skip_names": []
+    }
+  },
+  "distinct_pytest_passes": 865,
+  "framework": {
+    "cases": 7,
+    "python": "3.12.13",
+    "status": "pass"
+  },
+  "package": {
+    "wheel_bytes": 3941055,
+    "wheel_sha256": "6fd4d1b583b6a00bfff696759a2bdc5a9bf3a988473e17e2a17ba884da2025e5",
+    "production_files": 413,
+    "source_wheel_installed_exact": true,
+    "preserved_original_files": 13,
+    "original_hashes_exact": true,
+    "added_and_new_lines_scanned": 359,
+    "new_files_included": [
+      "tests/test_viewer_heading_browser.py"
+    ],
+    "secret_pattern_hits": {
+      "private_key": 0,
+      "known_token": 0,
+      "literal_secret_assignment": 0
+    },
+    "added_product_debug_statements": 0,
+    "scope": "Lightweight added-line review, not a bandit or pip-audit substitute."
+  },
+  "package_delta": {
+    "wheel_bytes": 365,
+    "changed_files": [
+      "robotforge/viewer/creation.py",
+      "robotforge/viewer/object_edit.py",
+      "robotforge/viewer/static/app.js",
+      "robotforge/viewer/static/creation.js",
+      "robotforge/viewer/static/i18n.js",
+      "robotforge/viewer/static/index.html",
+      "robotforge/viewer/static/style.css",
+      "robotforge/viewer/terrain_create.py",
+      "robotforge/viewer/terrain_edit.py"
+    ],
+    "static_raw_bytes": 1505
+  },
+  "budget": {
+    "statuses": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "metrics": {
+      "install": {
+        "wheel_kb": {
+          "value": 3848.6865,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.6364,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.5
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5385,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.335
+        },
+        "fps": {
+          "value": 60.3072,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1869,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 2.2,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.200000047683716,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.1,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 562.3
+        },
+        "idle_cpu_pct": {
+          "value": 4.4,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    }
+  },
+  "images": {
+    "screenshots": 48,
+    "exact_original_canvas_pairs": 24
+  },
+  "world_controls": {
+    "malo": {
+      "derivation": null,
+      "model_state_fields": 485,
+      "allowed_isolated_path_fields": [
+        "mesh_pathadr",
+        "paths"
+      ],
+      "resolved_identical_meshes": [
+        [
+          "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/screen-before/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+          "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/screen-candidate/malo/home/cache/import/meshes/base_link-df294dff02.stl",
+          "0213bb70c6796a4b9f070603405d83bff6d480c21f92ae4bc659772c30236ca3"
+        ]
+      ],
+      "views": {
+        "dpr1-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48180082,
+          "encoded_candidate": 48395291
+        },
+        "dpr1-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48180082,
+          "encoded_candidate": 48395291
+        },
+        "dpr1-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48180082,
+          "encoded_candidate": 48395291
+        },
+        "dpr1-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48180082,
+          "encoded_candidate": 48395291
+        },
+        "dpr2-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48180082,
+          "encoded_candidate": 48395291,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.10000002384185791,
+                "p95": 0.25500002801418276,
+                "samples": 30
+              },
+              "raf_fps": 59.99999999999999,
+              "raf_ms_p95": 16.800000000000182,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.10000002384185791,
+                "p95": 0.25499999523162814,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000748,
+              "raf_ms_p95": 16.705000000000656,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48180082,
+          "encoded_candidate": 48395291
+        },
+        "dpr2-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48180082,
+          "encoded_candidate": 48395291,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.10000002384185791,
+                "p95": 0.20000002086162566,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000751,
+              "raf_ms_p95": 16.700000000000728,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.10000002384185791,
+                "p95": 0.19999998807907104,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000751,
+              "raf_ms_p95": 16.705000000000656,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 50,
+            "textures": 8
+          },
+          "same_draws": {
+            "calls": 56,
+            "triangles": 690988,
+            "points": 0,
+            "lines": 8
+          },
+          "programs_before": 18,
+          "programs_candidate": 18,
+          "resource_count": 30,
+          "encoded_before": 48180082,
+          "encoded_candidate": 48395291
+        }
+      }
+    },
+    "go2": {
+      "derivation": null,
+      "model_state_fields": 485,
+      "allowed_isolated_path_fields": [],
+      "resolved_identical_meshes": [],
+      "views": {
+        "dpr1-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21447922,
+          "encoded_candidate": 21663131
+        },
+        "dpr1-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 93,
+            "triangles": 144188,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21447922,
+          "encoded_candidate": 21663131
+        },
+        "dpr1-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21447922,
+          "encoded_candidate": 21663131
+        },
+        "dpr1-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 93,
+            "triangles": 144188,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21447922,
+          "encoded_candidate": 21663131
+        },
+        "dpr2-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21447922,
+          "encoded_candidate": 21663131,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.30000001192092896,
+                "p95": 0.40000003576278687,
+                "samples": 30
+              },
+              "raf_fps": 59.99999999999999,
+              "raf_ms_p95": 16.700000000000728,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.30000001192092896,
+                "p95": 0.40000003576278687,
+                "samples": 30
+              },
+              "raf_fps": 59.999999999999986,
+              "raf_ms_p95": 16.800000000000182,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 93,
+            "triangles": 144188,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21447922,
+          "encoded_candidate": 21663131
+        },
+        "dpr2-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 156,
+            "triangles": 484614,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21447922,
+          "encoded_candidate": 21663131,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.30000001192092896,
+                "p95": 0.4550000160932538,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000748,
+              "raf_ms_p95": 16.700000000000728,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.30000001192092896,
+                "p95": 0.40000003576278687,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000751,
+              "raf_ms_p95": 16.800000000000182,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 137,
+            "textures": 6
+          },
+          "same_draws": {
+            "calls": 93,
+            "triangles": 144188,
+            "points": 18,
+            "lines": 18
+          },
+          "programs_before": 11,
+          "programs_candidate": 11,
+          "resource_count": 30,
+          "encoded_before": 21447922,
+          "encoded_candidate": 21663131
+        }
+      }
+    },
+    "panda": {
+      "derivation": null,
+      "model_state_fields": 485,
+      "allowed_isolated_path_fields": [],
+      "resolved_identical_meshes": [],
+      "views": {
+        "dpr1-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11259919,
+          "encoded_candidate": 11260648
+        },
+        "dpr1-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 58,
+            "triangles": 137631,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11259919,
+          "encoded_candidate": 11260648
+        },
+        "dpr1-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11259919,
+          "encoded_candidate": 11260648
+        },
+        "dpr1-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 58,
+            "triangles": 137631,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11259919,
+          "encoded_candidate": 11260648
+        },
+        "dpr2-studio-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11259919,
+          "encoded_candidate": 11260648,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.19999998807907104,
+                "p95": 0.20000004768371582,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000748,
+              "raf_ms_p95": 16.79999999999975,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.19999998807907104,
+                "p95": 0.30000001192092896,
+                "samples": 30
+              },
+              "raf_fps": 60.00600060006,
+              "raf_ms_p95": 16.705000000000677,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-studio-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 58,
+            "triangles": 137631,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11259919,
+          "encoded_candidate": 11260648
+        },
+        "dpr2-daylight-normal": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 67,
+            "triangles": 138060,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11259919,
+          "encoded_candidate": 11260648,
+          "cost": {
+            "before": {
+              "draw_ms": {
+                "median": 0.10000002384185791,
+                "p95": 0.20000004768371582,
+                "samples": 30
+              },
+              "raf_fps": 60.00300015000751,
+              "raf_ms_p95": 16.705000000000656,
+              "raf_intervals": 120
+            },
+            "candidate": {
+              "draw_ms": {
+                "median": 0.10000002384185791,
+                "p95": 0.20000004768371582,
+                "samples": 30
+              },
+              "raf_fps": 59.99999999999999,
+              "raf_ms_p95": 16.700000000000728,
+              "raf_intervals": 120
+            }
+          }
+        },
+        "dpr2-daylight-detail": {
+          "canvas_identical": true,
+          "same_memory": {
+            "geometries": 64,
+            "textures": 5
+          },
+          "same_draws": {
+            "calls": 58,
+            "triangles": 137631,
+            "points": 0,
+            "lines": 0
+          },
+          "programs_before": 7,
+          "programs_candidate": 7,
+          "resource_count": 31,
+          "encoded_before": 11259919,
+          "encoded_candidate": 11260648
+        }
+      }
+    }
+  },
+  "movies": {
+    "before-malo": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-malo-v2/workflow.mp4",
+      "video_sha256": "78462e7200cc073c3628424e90da31bedd2e12cd9e163e6f66bce83887371c7a",
+      "video_bytes": 2397662,
+      "duration_seconds": 15.2,
+      "raw_frame_count": 618,
+      "decoded_frame_count": 456,
+      "maximum_arrival_inversion_seconds": 0,
+      "drive": {
+        "root_body": "malo/base_link",
+        "before": [
+          -1.3,
+          -1.8,
+          0.0029999798590765363
+        ],
+        "after": [
+          -1.300613834274548,
+          -1.5640499586866594,
+          0.0002734591315171783
+        ],
+        "horizontal_displacement_m": 0.23595083977024486,
+        "qpos_changed_since_play": true,
+        "scope": "Native W held1s and real root displacement observed; not heading accuracy, controller quality or task-success certification."
+      },
+      "scope": "Original real-model workspaces copied to isolation. Fixed QA camera before recording; recorded in-page edits use trusted native mouse/touch/keyboard; final reload is programmatic, with mathematically projected ideal placement points. Before can only choose orthogonal alternatives, not the same fine final configuration; trajectories/duration are not human efficiency or action-success evidence. No shader quality improvement claim. Go2 phone camera is explicitly local dock view, not full-robot auto-fit.",
+      "initial_model_state_fields": 485
+    },
+    "before-go2": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-go2-v2/workflow.mp4",
+      "video_sha256": "af56f8f40d5163d16c94d6612256c80d83d09c25552af2143802ec22ca556058",
+      "video_bytes": 727909,
+      "duration_seconds": 8.366667,
+      "raw_frame_count": 389,
+      "decoded_frame_count": 251,
+      "maximum_arrival_inversion_seconds": 0,
+      "drive": null,
+      "scope": "Original real-model workspaces copied to isolation. Fixed QA camera before recording; recorded in-page edits use trusted native mouse/touch/keyboard; final reload is programmatic, with mathematically projected ideal placement points. Before can only choose orthogonal alternatives, not the same fine final configuration; trajectories/duration are not human efficiency or action-success evidence. No shader quality improvement claim. Go2 phone camera is explicitly local dock view, not full-robot auto-fit.",
+      "initial_model_state_fields": 485
+    },
+    "before-panda": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-panda-v3/workflow.mp4",
+      "video_sha256": "dc8ddb483b68d76263a09655bcc8c186896cf26f3ac4ad8995438cdfc7a209f1",
+      "video_bytes": 1878142,
+      "duration_seconds": 9.666667,
+      "raw_frame_count": 374,
+      "decoded_frame_count": 290,
+      "maximum_arrival_inversion_seconds": 0,
+      "drive": null,
+      "scope": "Original real-model workspaces copied to isolation. Fixed QA camera before recording; recorded in-page edits use trusted native mouse/touch/keyboard; final reload is programmatic, with mathematically projected ideal placement points. Before can only choose orthogonal alternatives, not the same fine final configuration; trajectories/duration are not human efficiency or action-success evidence. No shader quality improvement claim. Go2 phone camera is explicitly local dock view, not full-robot auto-fit.",
+      "initial_model_state_fields": 485
+    },
+    "candidate-malo": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-malo-v2/workflow.mp4",
+      "video_sha256": "604e1e4cb5ac876575a0817b03169dac4562946fff86944ef99b45fb644dd413",
+      "video_bytes": 2447634,
+      "duration_seconds": 15.5,
+      "raw_frame_count": 635,
+      "decoded_frame_count": 465,
+      "maximum_arrival_inversion_seconds": 0,
+      "drive": {
+        "root_body": "malo/base_link",
+        "before": [
+          -1.3,
+          -1.8,
+          0.0029999798590765363
+        ],
+        "after": [
+          -1.0988052345789312,
+          -1.6833628009191182,
+          0.0007273881115862621
+        ],
+        "horizontal_displacement_m": 0.2325587449275391,
+        "qpos_changed_since_play": true,
+        "scope": "Native W held1s and real root displacement observed; not heading accuracy, controller quality or task-success certification."
+      },
+      "scope": "Original real-model workspaces copied to isolation. Fixed QA camera before recording; recorded in-page edits use trusted native mouse/touch/keyboard; final reload is programmatic, with mathematically projected ideal placement points. Before can only choose orthogonal alternatives, not the same fine final configuration; trajectories/duration are not human efficiency or action-success evidence. No shader quality improvement claim. Go2 phone camera is explicitly local dock view, not full-robot auto-fit.",
+      "initial_model_state_fields": 485
+    },
+    "candidate-go2": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-go2-v2/workflow.mp4",
+      "video_sha256": "db10e872630e2fe6432c69ed520fef25a75b9c2ca1e15114ceaf0588188944b8",
+      "video_bytes": 719783,
+      "duration_seconds": 8.433333,
+      "raw_frame_count": 392,
+      "decoded_frame_count": 253,
+      "maximum_arrival_inversion_seconds": 0,
+      "drive": null,
+      "scope": "Original real-model workspaces copied to isolation. Fixed QA camera before recording; recorded in-page edits use trusted native mouse/touch/keyboard; final reload is programmatic, with mathematically projected ideal placement points. Before can only choose orthogonal alternatives, not the same fine final configuration; trajectories/duration are not human efficiency or action-success evidence. No shader quality improvement claim. Go2 phone camera is explicitly local dock view, not full-robot auto-fit.",
+      "initial_model_state_fields": 485
+    },
+    "candidate-panda": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-panda-v3/workflow.mp4",
+      "video_sha256": "a454cf1cfb7485b9e13e7bb1f03e8a068fce8067a21c7f390f7ae970fdf7dcb9",
+      "video_bytes": 1876014,
+      "duration_seconds": 8.566667,
+      "raw_frame_count": 313,
+      "decoded_frame_count": 257,
+      "maximum_arrival_inversion_seconds": 0,
+      "drive": null,
+      "scope": "Original real-model workspaces copied to isolation. Fixed QA camera before recording; recorded in-page edits use trusted native mouse/touch/keyboard; final reload is programmatic, with mathematically projected ideal placement points. Before can only choose orthogonal alternatives, not the same fine final configuration; trajectories/duration are not human efficiency or action-success evidence. No shader quality improvement claim. Go2 phone camera is explicitly local dock view, not full-robot auto-fit.",
+      "initial_model_state_fields": 485
+    }
+  },
+  "loading": {
+    "summary": {
+      "malo": {
+        "before": {
+          "browser_cold": {
+            "ready_ms": [
+              320.69999998807907,
+              314
+            ],
+            "mean_ready_ms": 317.34999999403954,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              48394308,
+              48394308
+            ],
+            "chrome_tree_rss_kib": [
+              1824256,
+              1819344
+            ],
+            "memory": [
+              {
+                "geometries": 50,
+                "textures": 8
+              },
+              {
+                "geometries": 50,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              18,
+              18
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              169.19999998807907,
+              172.39999997615814
+            ],
+            "mean_ready_ms": 170.7999999821186,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              48180082,
+              48180082
+            ],
+            "chrome_tree_rss_kib": [
+              1921760,
+              1844464
+            ],
+            "memory": [
+              {
+                "geometries": 45,
+                "textures": 5
+              },
+              {
+                "geometries": 50,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              7,
+              18
+            ]
+          }
+        },
+        "candidate": {
+          "browser_cold": {
+            "ready_ms": [
+              330.30000001192093,
+              306.0999999642372
+            ],
+            "mean_ready_ms": 318.19999998807907,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              48395291,
+              48395291
+            ],
+            "chrome_tree_rss_kib": [
+              1823088,
+              1822752
+            ],
+            "memory": [
+              {
+                "geometries": 50,
+                "textures": 8
+              },
+              {
+                "geometries": 50,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              18,
+              18
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              153.19999998807907,
+              170.9000000357628
+            ],
+            "mean_ready_ms": 162.05000001192093,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              48180811,
+              48180811
+            ],
+            "chrome_tree_rss_kib": [
+              1845216,
+              1966528
+            ],
+            "memory": [
+              {
+                "geometries": 45,
+                "textures": 5
+              },
+              {
+                "geometries": 50,
+                "textures": 8
+              }
+            ],
+            "programs": [
+              7,
+              18
+            ]
+          }
+        }
+      },
+      "go2": {
+        "before": {
+          "browser_cold": {
+            "ready_ms": [
+              391.9000000357628,
+              385.80000001192093
+            ],
+            "mean_ready_ms": 388.85000002384186,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              21662148,
+              21662148
+            ],
+            "chrome_tree_rss_kib": [
+              1738160,
+              1728608
+            ],
+            "memory": [
+              {
+                "geometries": 137,
+                "textures": 6
+              },
+              {
+                "geometries": 137,
+                "textures": 6
+              }
+            ],
+            "programs": [
+              11,
+              11
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              242.9000000357628,
+              237.69999998807907
+            ],
+            "mean_ready_ms": 240.30000001192093,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              21447922,
+              21447922
+            ],
+            "chrome_tree_rss_kib": [
+              1776656,
+              1754496
+            ],
+            "memory": [
+              {
+                "geometries": 135,
+                "textures": 5
+              },
+              {
+                "geometries": 135,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              9,
+              9
+            ]
+          }
+        },
+        "candidate": {
+          "browser_cold": {
+            "ready_ms": [
+              389.4000000357628,
+              386
+            ],
+            "mean_ready_ms": 387.7000000178814,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              21663131,
+              21663131
+            ],
+            "chrome_tree_rss_kib": [
+              1731776,
+              1736240
+            ],
+            "memory": [
+              {
+                "geometries": 137,
+                "textures": 6
+              },
+              {
+                "geometries": 137,
+                "textures": 6
+              }
+            ],
+            "programs": [
+              11,
+              11
+            ]
+          },
+          "reload": {
+            "ready_ms": [
+              227.5,
+              239.9000000357628
+            ],
+            "mean_ready_ms": 233.7000000178814,
+            "resource_counts": [
+              30,
+              30
+            ],
+            "encoded_bytes": [
+              21448651,
+              21448651
+            ],
+            "chrome_tree_rss_kib": [
+              1751552,
+              1809696
+            ],
+            "memory": [
+              {
+                "geometries": 135,
+                "textures": 5
+              },
+              {
+                "geometries": 135,
+                "textures": 5
+              }
+            ],
+            "programs": [
+              9,
+              9
+            ]
+          }
+        }
+      }
+    },
+    "scope": "ABBA with fresh Chrome profile per arm, first browser-cache-cold navigation then actual reload. Local model/OS disk caches warm; server already compiled and physics paused. Ready means scene rendered, no busy/loading plus2RAF and gl.finish, not human input latency or fresh remote model download. RSS is one Chrome process-tree snapshot, not VRAM or peak."
+  },
+  "visual_review": {
+    "decoded_contacts_reviewed": [
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-malo-v2/decoded-contact.jpg",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-go2-v2/decoded-contact.jpg",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-panda-v3/decoded-contact.jpg",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-malo-v2/decoded-contact.jpg",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-go2-v2/decoded-contact.jpg",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-panda-v3/decoded-contact.jpg"
+    ],
+    "decoded_samples_reviewed": 36,
+    "workflows": [
+      {
+        "workflow": "before-malo",
+        "contact": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-malo-v2/decoded-contact.jpg",
+        "samples": 6,
+        "post_reload_observed": true,
+        "video_seconds": 15.2
+      },
+      {
+        "workflow": "before-go2",
+        "contact": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-go2-v2/decoded-contact.jpg",
+        "samples": 6,
+        "post_reload_observed": true,
+        "video_seconds": 8.366667
+      },
+      {
+        "workflow": "before-panda",
+        "contact": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/before-panda-v3/decoded-contact.jpg",
+        "samples": 6,
+        "post_reload_observed": true,
+        "video_seconds": 9.666667
+      },
+      {
+        "workflow": "candidate-malo",
+        "contact": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-malo-v2/decoded-contact.jpg",
+        "samples": 6,
+        "post_reload_observed": true,
+        "video_seconds": 15.5
+      },
+      {
+        "workflow": "candidate-go2",
+        "contact": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-go2-v2/decoded-contact.jpg",
+        "samples": 6,
+        "post_reload_observed": true,
+        "video_seconds": 8.433333
+      },
+      {
+        "workflow": "candidate-panda",
+        "contact": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-panda-v3/decoded-contact.jpg",
+        "samples": 6,
+        "post_reload_observed": true,
+        "video_seconds": 8.566667
+      }
+    ],
+    "observations": [
+      "All six decoded contact sheets reviewed by root, including final reloaded frames; no blank final world or missing edited geometry observed.",
+      "Before is an orthogonal alternative, candidate uses fine headings; no same-final-layout or human-efficiency claim.",
+      "Go2 phone local dock view intentionally omits full robot initially; reload shows automatic full-world framing.",
+      "Transient preparing overlays and sensor preview refreshes remain visible in uncut native footage.",
+      "Malo before and candidate each show finite real driving, paused/reset state and saved layout.",
+      "Panda table support, barrier and edited root start remain visible through save/reload."
+    ],
+    "scope": "Six full software decodes plus36sampled frames inspected, not every-frame certification; CDP native input and emulated phone, scripted initial camera and final reload.",
+    "overview_contacts_reviewed": [
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/original-controls.jpg",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-10-28-fine-heading/candidate-controls.jpg"
+    ],
+    "overview_panels_reviewed": 12
+  },
+  "receipts": {
+    "build-upstream": {
+      "sha256": "4fb94ba1329df69a77c19e715a5a0c044e64de5f0d8b23d4995c0cb52c0e408e",
+      "seconds": 0.15191733301617205
+    },
+    "build-final": {
+      "sha256": "a9e6553d0c5a3df6d3fced314416e4b0b4698114433a7b4142468ca6ea85cfa2",
+      "seconds": 0.1405441669630818
+    },
+    "lint": {
+      "sha256": "000bc6108c59eaa98a68a3930d4c3481edb600693725ccc1268ad704a09d0dc6",
+      "seconds": 0.06219450000207871
+    },
+    "format": {
+      "sha256": "d4ad15aa6f6c5f849f54a15ccde4b24eb9f8c97d0f98da56858ef7aa4064137c",
+      "seconds": 0.06711725000059232
+    },
+    "browser-full": {
+      "sha256": "916c3e69796fb8c99ec9e26e7775f63b25d3989e6186577ec8ecb557a4315e44",
+      "seconds": 1285.6365625829785
+    },
+    "backend-related": {
+      "sha256": "b10018a3a5352dc46dfc5e10b0bd64db5bde80f0c9d3a7816aa8b028673ebff8",
+      "seconds": 49.541836375021376
+    },
+    "smoke-source": {
+      "sha256": "1c9f7e735202050617fec8b52051efe89da0dee8401f0509a294b8a7aab67d4e",
+      "seconds": 3.8050833749584854
+    },
+    "wheel-install": {
+      "sha256": "51522f3b3835db09e7e72cb6d1b0457bacbde0b9ca1f6cfc8209a4fad1d2901f",
+      "seconds": 0.4006016249768436
+    },
+    "smoke-installed": {
+      "sha256": "4d09c6d5bc1c9d0a703e42a621d7a6b33478faab650a4a33bc19aea3c358fdf8",
+      "seconds": 24.02505499997642
+    },
+    "framework": {
+      "sha256": "af7581f0580d7da549db453f68fa819a28ea07ec359d387ec4f925ec03e98257",
+      "seconds": 1.9821336670429446
+    },
+    "budget": {
+      "sha256": "b646befdfe3e8364999bbb0efc0d6fc008d99bd4aac84083cd52882dac8f7fbe",
+      "seconds": 25.52162983402377
+    },
+    "audit": {
+      "sha256": "cce0d5b186d151e76ded833723d5e0ffc2045848e50de19e29b2578dec377645",
+      "seconds": 0.3222991250222549
+    },
+    "gesture90": {
+      "sha256": "f24f17ee327efb63fe9187ee2eb917eb09deb8d5086d2b9831ecd5169b77fc90",
+      "seconds": 13.093155084003229
+    },
+    "screen-before": {
+      "sha256": "2a1b21a11396276d90ab5ec9862f0979e5bba238316ff36ca0950226e88cf4f9",
+      "seconds": 35.59164025000064
+    },
+    "screen-candidate": {
+      "sha256": "e0a92ce6781072c5c0e70b0f8df7eb529d9121d02d454eebd4a424fe3d6e5503",
+      "seconds": 35.45149720902555
+    },
+    "screen-compare": {
+      "sha256": "a99e795b608efd3c392d522f7cb2b89bbc05fe127ab2d00eb67f7235a600374c",
+      "seconds": 0.6477169169811532
+    },
+    "loading": {
+      "sha256": "8d57cff2bba88139cef730be4bc6c65289078a397bb7a368dbefaa5b523995f2",
+      "seconds": 21.08004858304048
+    },
+    "record-before-malo-v2": {
+      "sha256": "37f80adf8f32b27a045d6864d80695a73f8aa55b10912bb2cffb68f9333777bc",
+      "seconds": 21.861244875006378
+    },
+    "encode-before-malo-v2": {
+      "sha256": "0eaadba9620b0f949b09c9ceb52640297dba9994a1c63c5c11d310f1240b3e20",
+      "seconds": 4.496320792008191
+    },
+    "record-before-go2-v2": {
+      "sha256": "9eee4d90cd793f876fffb4e8c379a963c899d02229013376983f4705a030740f",
+      "seconds": 12.604987541970331
+    },
+    "encode-before-go2-v2": {
+      "sha256": "814971bb5398c0f980bc8f0a9341de32e8277a99703a1aa0b5d10ce817ad3417",
+      "seconds": 1.1310614999965765
+    },
+    "record-before-panda-v3": {
+      "sha256": "5233d0f1807e51d7815ef168cd47d10c8e9e43ae16159a39c51f703eb25c5a6e",
+      "seconds": 12.746769249963108
+    },
+    "encode-before-panda-v3": {
+      "sha256": "c579a392347eaf0c8e47676eb0447cd82c7cc61e58a2177de982a6fabafb98b7",
+      "seconds": 3.6029463339946233
+    },
+    "record-candidate-malo-v2": {
+      "sha256": "1f5e2c7f4363cddad5ba112deeed9acbe089f09540cfe5c2ba03c7e419d7a5bb",
+      "seconds": 22.509798332990613
+    },
+    "encode-candidate-malo-v2": {
+      "sha256": "84fd9d0ed32179aca0bfde09167a54358529f13ceac0c714b741d602d9368936",
+      "seconds": 4.41377104195999
+    },
+    "record-candidate-go2-v2": {
+      "sha256": "6603ae13b92c5a7255eecfca9e97ebb85cf72070a103598c63c02eaf701cf161",
+      "seconds": 12.33694866602309
+    },
+    "encode-candidate-go2-v2": {
+      "sha256": "5df762a03a56ce6f6e5f01e18b41da9a7d6987538c0e534156d4fa34ea8fd0be",
+      "seconds": 1.1350999590358697
+    },
+    "record-candidate-panda-v3": {
+      "sha256": "fb97302424355baea2f02855fe65a8f84deaf8ba500c0c5865bb3146efabb755",
+      "seconds": 11.766322667011991
+    },
+    "encode-candidate-panda-v3": {
+      "sha256": "2d30b49c4cbcbc763fc777fe0100b82c046c9ef822979aa10b7a53e5fcd2f8b4",
+      "seconds": 3.70218066702364
+    }
+  },
+  "evidence": {
+    "directory": "../robotforge-evidence/2026-10-28-fine-heading",
+    "indexed_files": 5741,
+    "index_sha256": "4ee2d46a68e5c0a43f9f3e1b083d054d33a5bfd25e7b92f6cefc97f8afe833d0"
+  },
+  "source_bridge": "Both cohorts share final Python/server. Before serves exact 89f6 static tree; candidate serves exact final static tree. Served app.js hashes checked. Native before workflows use explicitly orthogonal alternatives; they do not reproduce fine final configurations.",
+  "limitations": [
+    "No shader or material appearance change; original-world fixed pixels are controls, not aesthetic gains.",
+    "Conservative diagonal terrain AABB may reject visually open narrow gaps; protections retained.",
+    "Template/model initial placement protocol unchanged; start editing exposes heading.",
+    "Complete non-slow browser and related backend suites, not complete regular/slow GPU suite. Optional type/security tools unavailable, not passes.",
+    "ABBA two samples per cohort/world, warm local model/OS caches and compiled paused server. RSS snapshots are not peak or VRAM; no universal speedup claim.",
+    "Native CDP ideal projected target operations and programmatic final reload; emulated phone, not physical handset or human efficiency. Six full decodes plus36sampled frames are not every-frame certification.",
+    "Initial test-helper wait failures and any recorder/fixture failures retained.",
+    "No individual action-success tuning."
+  ],
+  "goal": "Broad shared material quality, lightweight loading and creative play goal remains active.",
+  "coverage_correction_2026_10_28": {
+    "claim": "The original DPR1/2 labels did not describe two actual renderer ratios.",
+    "observed": "All recorded screen cohort views.dpr values are2, including labels beginning dpr1. Counts are observed captures with repeated DPR2 conditions, not distinct resolution settings.",
+    "source": "../robotforge-evidence/2026-10-28-responsive-dpr/legacy-dpr-audit.json",
+    "raw_evidence_preserved": true,
+    "does_not_retroactively_validate_dpr1": true
+  }
+}

@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     from robotforge.viewer.object_edit import Edit
     from robotforge.viewer.object_surface import SurfaceEdit
     from robotforge.viewer.robot_edit import RobotEdit
+    from robotforge.viewer.robot_surface import RobotSurfaceEdit
     from robotforge.viewer.terrain_create import TerrainAddition
     from robotforge.viewer.terrain_edit import TerrainEdit
 
@@ -128,7 +129,7 @@ class Playground:
     _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
     _play_addition: Addition | TerrainAddition | None = field(default=None, init=False, repr=False)
-    _play_edit: Edit | SurfaceEdit | None = field(default=None, init=False, repr=False)
+    _play_edit: Edit | SurfaceEdit | RobotSurfaceEdit | None = field(default=None, init=False, repr=False)
     _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
     _play_terrain_edit: TerrainEdit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
@@ -264,6 +265,7 @@ class Playground:
         def extras() -> dict[str, Any]:
             from robotforge.viewer.object_edit import metadata
             from robotforge.viewer.robot_edit import metadata as robot_metadata
+            from robotforge.viewer.robot_surface import metadata as surface_metadata
             from robotforge.viewer.terrain_edit import metadata as terrain_metadata
 
             world = self.current_world()
@@ -273,6 +275,7 @@ class Playground:
                 "robots": robots,
                 "object_edit": metadata(self),
                 "robot_edit": robot_metadata(self),
+                "robot_surface": surface_metadata(self),
                 "terrain_edit": terrain_metadata(self),
                 "task_contracts": task_contracts(world),
                 "learned": learned,
@@ -288,6 +291,8 @@ class Playground:
 
         def world_request(msg: dict[str, Any]) -> dict[str, Any]:
             action = msg.get("action")
+            if action in {"set_robot_surface", "undo_robot_surface"}:
+                return self.edit_robot_surface_for_play(msg)
             if action in {"layout_list", "layout_save", "layout_restore", "layout_remove"}:
                 return self.layouts_for_play(msg)
             if action == "add_robot":
@@ -553,6 +558,13 @@ class Playground:
         from robotforge.viewer.model_create import place
 
         return place(self, message)
+
+    @_one_edit_at_a_time
+    def edit_robot_surface_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Change one explicit robot part finish with protected publication and Undo."""
+        from robotforge.viewer.robot_surface import handle
+
+        return handle(self, message)
 
     @_one_edit_at_a_time
     def edit_robot_start_for_play(self, message: dict[str, Any]) -> dict[str, Any]:

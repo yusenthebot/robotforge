@@ -30,6 +30,10 @@ See its per-model results and the [legged](docs/LEGGED.md), [humanoid](docs/HUMA
 For an existing Zeno Malo description package, the [local Malo workspace guide](docs/MALO.md) covers import, independent steering, joint controls and reusable saved designs.
 Malo meshes stay local; the guide records controller and sensor limits.
 
+In a saved world, **Robots → Part surface** lets you try existing plastic, wood or steel finishes on one opaque,
+untextured part of an unmounted robot, with Original and Undo. Base colours and physical parameters stay intact;
+applying preserves the current pose, resets motion and pauses. See the [creative play guide](docs/CREATIVE_PLAY.md).
+
 ## In the viewer
 
 These are actual viewer captures of real robot models in simulation.
