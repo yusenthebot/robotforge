@@ -1,5 +1,12 @@
 # progress
 
+## Mesh transport pre-screen (2026-10-28)
+
+- 固定外部gzip level1/mtime0，分别加载真实Malo／Go2原世界，三次压缩逐字节解压核对；47,064,672→11,897,380B与20,332,512→6,058,843B，减少74.72%／70.20%。Malo CPU中位261.499ms超过事先250ms门槛，停止晋升，不调等级、不追加样本。
+- Go2 CPU中位149.878ms通过，但共同门槛未满足。未测试真实浏览器冷／编辑加载、异步worker或完整内存成本，不能推断这些一定退化。ru_maxrss受编译高水位影响，零增量不是零压缩成本。
+- 产品bd83fe3b和761输入保持；29现有server／native-texture测试、Ruff／format／离线wheel通过，413包文件及原13WIP保持。初pytest不存在文件退出4、无测试，日志与更正后结果分别保留。无新全量／框架／安装冒烟／预算／画面对照或视频声明。
+- 报告 docs/bench/2026-10-28-mesh-transport-screen.md/.json；证据 ../robotforge-evidence/2026-10-28-mesh-transport/。下一步先用真实参考核对Malo／Go2普通视距可见大部件的材质身份与生效映射，不因名字或截图差分凭空改共享参数。整体目标持续，小功能成功率未动。
+
 ## Authored environment contribution fidelity (2026-10-28)
 
 Shared implicit environment now composes scene intensity with nondefault author multipliers, including diffuse/specular/clearcoat; grain/weave hooks, explicit maps, sensor lighting and context restoration retained.

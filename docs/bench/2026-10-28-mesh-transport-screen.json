@@ -1,0 +1,127 @@
+{
+  "base": "622f55476f40a69087f67ce958c5a8b3a345fff5",
+  "decision": "not promoted: Malo CPU median exceeds fixed 250ms stage1 gate",
+  "plan_sha256": "a9eb18792d7d19d7c1bed144b7885f023cb640c41f4a361a0d7a80194398e9a0",
+  "external_helper_sha256": "87538c9b2ff56c79268f5a28d62261abe2ffec34197fa172a170053ac1724a2d",
+  "source_sha256": "bd83fe3b4eee1e7ec8059194cdd4767ad54c8ee8c194b4147db8748108502b61",
+  "frozen_inputs": 761,
+  "models": {
+    "malo": {
+      "raw_bytes": 47064672,
+      "mesh_sha256": "72e54611114d186f7c81893985c9ef39040b838d7ef4d288d172e5d9d7e1f2f3",
+      "reduction": 0.7472120914812708,
+      "cpu_median_ms": 261.4989999999997,
+      "stage1_passed": false,
+      "samples": [
+        {
+          "index": 0,
+          "gzip_bytes": 11897380,
+          "gzip_sha256": "c9f56b0ea08edfe367a750f186f95ae0f2db6d366280e8306588d2f21a7bfc43",
+          "compression_cpu_ms": 263.10099999999983,
+          "compression_wall_ms": 264.0264999936335,
+          "decompression_wall_ms": 51.09304201323539,
+          "decoded_bytes_exact": true,
+          "rss_high_water_before_bytes": 1724743680,
+          "rss_high_water_after_bytes": 1724743680
+        },
+        {
+          "index": 1,
+          "gzip_bytes": 11897380,
+          "gzip_sha256": "c9f56b0ea08edfe367a750f186f95ae0f2db6d366280e8306588d2f21a7bfc43",
+          "compression_cpu_ms": 261.4989999999997,
+          "compression_wall_ms": 262.5423749559559,
+          "decompression_wall_ms": 44.707832974381745,
+          "decoded_bytes_exact": true,
+          "rss_high_water_before_bytes": 1756626944,
+          "rss_high_water_after_bytes": 1756626944
+        },
+        {
+          "index": 2,
+          "gzip_bytes": 11897380,
+          "gzip_sha256": "c9f56b0ea08edfe367a750f186f95ae0f2db6d366280e8306588d2f21a7bfc43",
+          "compression_cpu_ms": 261.0760000000001,
+          "compression_wall_ms": 261.911167006474,
+          "decompression_wall_ms": 43.221083004027605,
+          "decoded_bytes_exact": true,
+          "rss_high_water_before_bytes": 1756626944,
+          "rss_high_water_after_bytes": 1756626944
+        }
+      ],
+      "world_sha256": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db"
+    },
+    "go2": {
+      "raw_bytes": 20332512,
+      "mesh_sha256": "5a9d47d3df9920ecfec7995888f86a091217e05448688224c1aee51294c7a760",
+      "reduction": 0.7020120779960686,
+      "cpu_median_ms": 149.87799999999996,
+      "stage1_passed": true,
+      "samples": [
+        {
+          "index": 0,
+          "gzip_bytes": 6058843,
+          "gzip_sha256": "93e1e73ce139a86fba985b7c560dd3bb6b7c0463101fbc186b027d3633a22af6",
+          "compression_cpu_ms": 149.87799999999996,
+          "compression_wall_ms": 150.218416005373,
+          "decompression_wall_ms": 25.813291023951024,
+          "decoded_bytes_exact": true,
+          "rss_high_water_before_bytes": 581074944,
+          "rss_high_water_after_bytes": 581566464
+        },
+        {
+          "index": 1,
+          "gzip_bytes": 6058843,
+          "gzip_sha256": "93e1e73ce139a86fba985b7c560dd3bb6b7c0463101fbc186b027d3633a22af6",
+          "compression_cpu_ms": 152.1650000000001,
+          "compression_wall_ms": 153.82633300032467,
+          "decompression_wall_ms": 22.399250010494143,
+          "decoded_bytes_exact": true,
+          "rss_high_water_before_bytes": 609861632,
+          "rss_high_water_after_bytes": 609861632
+        },
+        {
+          "index": 2,
+          "gzip_bytes": 6058843,
+          "gzip_sha256": "93e1e73ce139a86fba985b7c560dd3bb6b7c0463101fbc186b027d3633a22af6",
+          "compression_cpu_ms": 148.35299999999972,
+          "compression_wall_ms": 149.0472910227254,
+          "decompression_wall_ms": 22.61858299607411,
+          "decoded_bytes_exact": true,
+          "rss_high_water_before_bytes": 609861632,
+          "rss_high_water_after_bytes": 609861632
+        }
+      ],
+      "world_sha256": "a4c86e31af6c2eaf8922aabb6cefcb9545d315619d2eb931955a04323748c036"
+    }
+  },
+  "package": {
+    "files": 413,
+    "source_previous_wheel_exact": true,
+    "wheel_bytes": 3941555,
+    "wheel_sha256": "8c11f9139d7f40772cff6f9a600bdcfab3450cc7e20cbf950fb355cfd46894f2",
+    "previous_wheel_bytes": 3941555
+  },
+  "verification": {
+    "pytest_passed": 29,
+    "skipped": 0,
+    "failures": 0,
+    "ruff": true,
+    "format": true,
+    "offline_wheel": true,
+    "optional_tools": {
+      "mypy": false,
+      "pyright": false,
+      "bandit": false,
+      "pip_audit": false
+    },
+    "original_WIP_files": 13
+  },
+  "limits": [
+    "No product compression candidate implemented",
+    "No real browser cold/edit latency, async worker, control-response, memory gate or video measured",
+    "ru_maxrss is model-compilation-influenced high-water mark, not current RSS or compression cost",
+    "No new full suite, canonical cases, installed smoke or budget run",
+    "Initial pytest nonexistent scene file collected zero, exit4 retained",
+    "Two original world yamls verified; no exhaustive underlying asset manifest claim"
+  ],
+  "next": "Check actual large-part material references and effective mapping on original Malo and Go2; no shared-rule candidate until visible attributable mismatch is established."
+}
