@@ -161,6 +161,22 @@ def test_fingertips_pressing_down_on_an_object_do_not_lock_it():
     assert not locked
 
 
+def test_authored_inertia_without_principal_axes_keeps_its_rotational_inertia():
+    # USD reads unauthored principalAxes as (0, 0, 0, 0), meaning identity; taken literally, MuJoCo would
+    # give the body no rotational inertia and it would spin up on the first contact
+    stage = _scene()
+    mass = UsdPhysics.MassAPI.Apply(stage.GetPrimAtPath("/World/box"))
+    mass.CreateCenterOfMassAttr(Gf.Vec3f(0, 0, 0))
+    mass.CreateDiagonalInertiaAttr(Gf.Vec3f(0.01, 0.02, 0.03))
+    m = usd_mjcf.convert(stage, OPTIONS).spec.compile()
+    d = __import__("mujoco").MjData(m)
+    __import__("mujoco").mj_forward(m, d)
+    box = m.body("/World/box").id
+    assert m.body_iquat[box] == pytest.approx([1, 0, 0, 0])
+    dof = m.jnt_dofadr[m.body_jntadr[box]]
+    assert np.allclose(sorted(m.dof_M0[dof + 3 : dof + 6]), [0.01, 0.02, 0.03])
+
+
 def test_conversion_keeps_joint_frames_limits_and_drive_units():
     conv = usd_mjcf.convert(_scene(), OPTIONS)
     m = conv.spec.compile()
