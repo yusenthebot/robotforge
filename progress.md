@@ -1,5 +1,47 @@
 # progress
 
+## Continuous robot placement (2026-10-29)
+
+Opt-in continuous placement covers templates, curated library models and saved designs; separate commits/fresh guards/latest Undo/default one-shot preserved, camera eye/aim retained.
+Runtime1f984522/775inputs:685scoped default+356complete current non-slow browser+9GPU=1050distinct pytest,7canonical,source/fresh offline60-tool smoke and original11/11budgets pass.
+Three paired native workflows yield6fully decoded movies/36root samples,12exact workflow and24exact original-world canvas pairs,2050model/state/workflow checks.
+Wheel4031512B(+309),417package files and13originalWIP exact; no new asset/pass/dependency, mixed loading observations retained.
+Sensor-panel projection avoidance remains; fixed-camera controls disable previews and normalize old one-shot clip planes via native Fit.
+Initial product/QA failures retained; report docs/bench/2026-10-29-repeat-robots.md/.json; broad goal active, single-action success tuning deferred.
+
+[Report](docs/bench/2026-10-29-repeat-robots.md).
+
+## Natural grass imagery (2026-10-29)
+
+Shared floor/terrain/detailed chooser use a bounded 256-square local CC0 pair with authored tint/metric bump/physics and old wood APIs retained; independent 1,000 ms preparation/fallback, no dependency or action-success tuning.
+  Runtime 74ae683d / 774 inputs: 685 viewer-default + 338 current browser (split same-product coverage) + 9 GPU = 1,032 distinct pytest, 7 canonical, source/fresh offline 60-tool smoke and original 11/11 budgets pass. Reset-generation test race reproduced on base and replaced by two actual-message orders; initial failures retained.
+  24 default main-canvas exact pairs; production bridge 23/24 whole-window exact with one bounded clock label difference, 1,447 checks. Six fully decoded movies / 36 root samples include native Malo/touch Go2 grass/wood/grass, drive/release/reset/reload. Wheel 4,031,203 B (+79,500), 417 product files and 13 original WIP exact; mixed loading samples retained, no universal speed claim. Report docs/bench/2026-10-29-natural-grass.md/.json; broad goal active.
+
+[Report](docs/bench/2026-10-29-natural-grass.md).
+
+## Batch robot part surfaces (2026-10-29)
+
+Explicit multi-selection reduces the same three-part surface design from three full compile/load transactions to one,with one Undo restoring the previous heterogeneous mapping.
+Legacy single-part defaults and body responses remain; bodies accepts1–64distinct eligible direct parts,all validated before compilation and within the existing saved64override cap.
+All-no-op keeps previous runtime/receipt;saved worlds retain finishes,not checkbox state;generation/world/socket changes clear selection.
+Frozen7ebb8412/770inputs:681viewer-default,322non-slow browser and9GPU cases pass,plus7canonical,source/fresh installed60-tool smoke and original11/11budgets.
+Native Malo,Chinese narrow-touch Go2 and builtin rover have six fully decoded movies/36root-viewed samples;poor initial Go2 framing remains preliminary,and the old-phone-select/fixture failures are fixed before freeze.
+24default main-canvas pairs and12workflow checkpoints match;444physical arrays/workflow and all10material fields outside exact selected geoms are guarded;13originalWIP preserved.
+Wheel+1828B,416source/wheel/installed files exact,31HTTP resources unchanged,cold bytes+5320;balanced cold mean−46.98/−14.37ms Malo/Go2 and mixed RSS observations do not imply universal speed or memory gains.
+[Report](docs/bench/2026-10-29-batch-part-surfaces.md).
+Broad visual/lightweight/creative-play goal remains active;single-action success tuning deferred.
+
+## Shared tile grout baseline (2026-10-29)
+
+Two actual application paths retain the existing material: copied Panda world loaded through desk_lab, and builtin pool deck_south with default ROV.
+24 fixed PNGs cover actual DPR1/2, two lights and front/oblique/near views; four complete five-second paused camera arcs retain endpoint holds, strict raw continuity and full MP4 decode.
+Eight root-viewed ordinary PNGs and24 decoded samples do not establish the preregistered two-path defect gate; no candidate is made or promoted.
+Resolved procedural tile identity, visible ray samples, camera/light controls,482model ndarray/name/path fields per scene and complete MuJoCo integration state stay guarded.
+Frozen b399c6c4/768 inputs and13originalWIP retained;106 backend+20 existing browser cases, offline wheel and Ruff/format pass.
+No new full-suite, budget, installed smoke, performance, every-frame or material-quality gain claim; previous preliminary helpers/receipts remain distinct.
+[Report](docs/bench/2026-10-29-tile-grout-screen.md).
+The broad visual-quality/lightweight/creative-play goal remains active; single-action success tuning stays deferred.
+
 ## Mesh transport pre-screen (2026-10-28)
 
 - 固定外部gzip level1/mtime0，分别加载真实Malo／Go2原世界，三次压缩逐字节解压核对；47,064,672→11,897,380B与20,332,512→6,058,843B，减少74.72%／70.20%。Malo CPU中位261.499ms超过事先250ms门槛，停止晋升，不调等级、不追加样本。
@@ -1197,3 +1239,11 @@ PR32 创建时同步 main6b06e55 的四个独立 ZenoBench 模块及专属测试
 - 2026-10-28 robot part surfaces: opt-in direct-body Original/plastic/wood/steel on imported/library/template unmounted rigid robots, preserving base colours/physics/rays/sensor dressing; guarded pose-carry/reset/pause/noop/Undo/layout loop. Explicit user styling, no inferred CMF/global shader change.
   Frozen56078aa4/767inputs: pre-JS-fix full default4037pass/128skip with unchanged product Python/dependencies; final viewer-default663 and related browser57, GPU9 (4103distinct passes),7canonical,source/fresh offline60-tool smoke and original11/11budgets pass. Wheel3948453B(+6898),416product files exact,13originalWIP preserved.
   Three native full workflows decode/18root samples;24untouched-world main-canvas exact pairs (light media; one whole-window PNG differs),444nonappearance arrays per styled native session. Native OS zoom status:pending_manual_unlock; locked setup/no-op inputs are not passes; not monitor switching. No all-browser/Windows/every-frame/motion-success claim. Report docs/bench/2026-10-28-robot-body-surfaces.md/.json; broad goal active.
+
+## 2026-10-28 — Surface inspection
+
+- 2026-10-28 surface inspection: Views → Look here picks a current visible world point for robot/fixed-scene/terrain/flex orbit and zoom, with existing Back and gesture/editor/stale-state guards. Camera-only; water still level, no live body tracking or automatic magnification. No shared shader/material or action-success change.
+  663 viewer-default +317 non-slow browser +9 GPU =989 distinct pytest passes;7 canonical, source/fresh offline60-tool smoke and original11/11 budgets pass.24 main-canvas exact default pairs,6 fully decoded workflow movies/36root samples;3/3 pivot gates and sampled handler p95≤18.61ms. Native Mac Chrome80/90/100/110/100 now passes current-code buffer/GL/camera/all480model-array/state guards in an owned foreground tab, original zoom restored; earlier locked/failed attempts remain failed, not monitor switching.
+  Wheel3949773B(+1320),416source/wheel/installed files and13originalWIP exact;31HTTP resources unchanged, cold bytes+5265. Balanced fresh-profile Malo/Go2 mean cold−5.90/+4.05ms, no universal/causal speed or shader-quality gain claim. Report docs/bench/2026-10-28-surface-inspection.md/.json; broad goal active.
+
+Surface-inspection latest-main bridge: merged upstreamab05dd1 USD fix before PR; only2/768 frozen inputs change, allviewer bytes exact. Integrated runtimeb399c6c;28optional USD tests +989 earlier =1017phased distinct; rebuild/fresh offline install, both60-tool smoke, Ruff/format and7canonical pass. Integrated416files/13WIP exact; finalwheel3949875B(+1422 vs3b916, including102upstream). Original viewer/native/media/budget results retain0c9hash. See surface-inspection report integration section.

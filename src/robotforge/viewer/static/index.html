@@ -58,8 +58,14 @@
       <button class="pill" type="button" data-camera-view="front" aria-pressed="false" data-i18n="view_front">Front · −Y</button>
       <button class="pill" type="button" data-camera-view="side" aria-pressed="false" data-i18n="view_side">Side · +X</button>
     </div>
+    <button class="pill" id="view-inspect" type="button" data-i18n="view_inspect">Look here</button>
     <button class="pill" id="view-back" type="button" disabled data-i18n="view_back">Return to original view</button>
   </section>
+
+  <div class="placement-bar" id="inspection-bar" role="status" hidden>
+    <div data-i18n="view_inspect_note">Tap a visible surface to orbit and zoom around it. Drag or pinch to adjust the view.</div>
+    <button class="pill" id="inspection-cancel" type="button" data-i18n="cancel_place">Cancel</button>
+  </div>
 
   <div class="learn-panel" id="learn-panel" hidden>
     <h2 class="learn-heading" data-i18n="learn_title">Learn robotics by doing</h2>
@@ -207,8 +213,15 @@
       <button class="pill" id="robot-start" type="button" hidden data-i18n="robot_start">Set start / heading</button>
       <button class="pill" id="robot-surface" type="button" hidden aria-expanded="false" aria-controls="robot-surface-controls" data-i18n="robot_surface">Part surface</button>
       <div id="robot-surface-controls" hidden>
-        <p class="note" data-i18n="robot_surface_lead">Style one highlighted part, including all its visible surfaces. Base colours and physics stay the same. Applies at the current pose, resets motion and pauses.</p>
+        <p class="note" data-i18n="robot_surface_lead">Style highlighted parts, including their direct visible surfaces. Base colours and physics stay the same. Applies at the current pose, resets motion and pauses.</p>
         <label class="prop-material-control"><span data-i18n="robot_surface_body">Part</span><select id="robot-surface-body"></select></label>
+        <label class="check"><input type="checkbox" id="robot-surface-multiple"><span data-i18n="robot_surface_multiple">Select multiple parts</span></label>
+        <fieldset id="robot-surface-batch-controls" hidden>
+          <legend data-i18n="robot_surface_parts">Parts (up to 64)</legend>
+          <div id="robot-surface-part-list"></div>
+          <p class="note" id="robot-surface-count" aria-live="polite"></p>
+          <button class="pill" id="robot-surface-clear" type="button" data-i18n="robot_surface_clear">Clear selection</button>
+        </fieldset>
         <label class="prop-material-control"><span data-i18n="prop_surface">Surface</span><select id="robot-surface-material"><option value="" data-i18n="surface_original">Original</option><option value="plastic" data-i18n="material_plastic">Plastic</option><option value="wood" data-i18n="material_wood">Wood</option><option value="steel" data-i18n="material_steel">Steel</option></select></label>
         <button class="pill" id="robot-surface-apply" type="button" data-i18n="surface_apply">Apply and reset</button>
       </div>
@@ -290,12 +303,12 @@
       <label class="prop-material-control" id="prop-material-control" hidden><span data-i18n="prop_material">Material</span>
         <select id="place-material"><option value="" data-i18n="material_default">Default</option><option value="plastic" data-i18n="material_plastic">Plastic</option><option value="wood" data-i18n="material_wood">Wood</option><option value="steel" data-i18n="material_steel">Steel</option></select>
       </label>
-      <label class="check repeat-placement"><input type="checkbox" id="place-repeat"><span data-i18n="keep_placing">Keep placing</span></label>
     </div>
     <div class="placement-coordinates">
       <label class="prop-material-control"><span data-i18n="placement_snap">Snap</span>
         <select id="place-spacing"><option value="free" data-i18n="placement_free">Free placement</option><option value="0.1">0.10 m</option><option value="0.25">0.25 m</option></select>
       </label>
+      <label class="check repeat-placement"><input type="checkbox" id="place-repeat"><span data-i18n="keep_placing">Keep placing</span></label>
       <div class="placement-coordinate-readout">
         <output id="placement-position" aria-live="off" data-i18n="placement_position_empty">Choose a surface to see its position.</output>
         <p class="note" id="placement-coordinate-status" aria-live="polite" hidden></p>

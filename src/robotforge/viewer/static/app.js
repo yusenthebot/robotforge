@@ -11,7 +11,7 @@ import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { orientWoodGrain, surfaceMaterial } from "./look.js";
 import { createLighting } from "./lighting.js";
-import { groundMaterial, groundPreview, groundStyle, prepareGroundTextures } from "./ground-look.js";
+import { groundMaterial, groundPreview, groundStyle, prepareGroundTextures, prepareGrassTextures } from "./ground-look.js";
 import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
 import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
@@ -235,9 +235,10 @@ function planeObject(geom, extent, look) {
 // ---------------------------------------------------------------- ground surfaces and terrain
 
 let sceneWoodTile = null;
+let sceneGrassTile = null;
 function groundLook(geom, look) {
   return groundMaterial(groundStyle(geom.material, look), rgbaColor(geom.rgba),
-    renderer.capabilities.getMaxAnisotropy(), sceneWoodTile);
+    renderer.capabilities.getMaxAnisotropy(), sceneWoodTile, sceneGrassTile);
 }
 
 function groundMapping(mat, x, y, offset = [0, 0]) {
@@ -389,6 +390,7 @@ let layoutCatalog = null, layoutConfirmation = null, layoutMutating = false, lay
 let layoutRequest = 0, layoutError = "";
 
 async function applyScene(desc) {
+  cancelInspection();
   screenDrive?.clear(false); // the server already replaced the old scene; never stop its new controllers
   const request = ++sceneRequest;
   loadingScene = true;
@@ -432,7 +434,9 @@ async function installScene(desc, request) {
       if (!res.ok) throw new Error(`mesh request returned ${res.status}`);
       return res.arrayBuffer();
     }) : Promise.resolve(buffer);
-  const [meshBuffer, textureData, preparedWood] = await Promise.all([meshLoad, textureLoad, prepareGroundTextures(desc)]);
+  const [meshBuffer, textureData, preparedWood, preparedGrass] = await Promise.all([
+    meshLoad, textureLoad, prepareGroundTextures(desc), prepareGrassTextures(desc),
+  ]);
   buffer = meshBuffer;
   if (request !== sceneRequest) return; // another scene or connection superseded this mesh fetch
   const textureFor = textureData ? textureData[0].modelTextures(desc.textures, textureData[1], renderer.capabilities.getMaxAnisotropy()) : () => null;
@@ -445,6 +449,7 @@ async function installScene(desc, request) {
   water = null;
   disposeWorld();
   sceneWoodTile = preparedWood;
+  sceneGrassTile = preparedGrass;
   sceneDesc = desc;
   worldRoot = new THREE.Group();
   bodyNodes = desc.bodies.map((b) => {
@@ -752,8 +757,10 @@ function applyPoses(buffer) {
   const f = new Float32Array(buffer);
   const nb = sceneDesc.nbody;
   if (f.length !== 1 + 7 * nb) return; // frame from a different model version
+  const firstPoses = posedVersion !== sceneDesc.version;
   const resetLights = f[0] < latestTime;
-  if (resetLights) { lastAddition = null; updateUndo(); }
+  // A new model starts at zero too; its late first pose must keep the matching committed Undo.
+  if (resetLights && !firstPoses) { lastAddition = null; updateUndo(); }
   latestTime = f[0];
   const qOff = 1 + 3 * nb;
   for (let b = 0; b < nb; b++) {
@@ -783,7 +790,6 @@ function applyPoses(buffer) {
     fitWhenPosed = null;
     pendingFit = null;
   }
-  const firstPoses = posedVersion !== sceneDesc.version;
   posedVersion = sceneDesc.version;
   if (firstPoses) renderLayouts();
   resolveCreatedRobot();
@@ -797,6 +803,7 @@ function sceneReadyToDraw() {
 
 let tween = null; // { fromEye, fromTarget, toEye, toTarget, t0 }
 let originalCameraView = null, currentCameraView = null;
+let inspection = null;
 const viewButtons = [...$("view-panel").querySelectorAll("[data-camera-view]")];
 const TWEEN_MS = 450;
 
@@ -825,6 +832,7 @@ function updateTween() {
 }
 
 function setViewPanel(open) {
+  if (open) cancelInspection();
   setOpen("view-toggle", "view-panel", open);
   if (open) {
     stopDriving(); endDrag();
@@ -836,11 +844,13 @@ function setViewPanel(open) {
 }
 
 function resetCameraViews() {
+  cancelInspection();
   originalCameraView = currentCameraView = null;
   setViewPanel(false);
 }
 
 function chooseCameraView(name) {
+  cancelInspection();
   if ($("view-toggle").disabled || !hasSize()) return;
   if (name === "back" && !originalCameraView) return;
   // Drain residual orbit damping before saving a view or starting a deliberate arc.
@@ -867,7 +877,76 @@ for (const button of viewButtons) {
   button.addEventListener("click", () => chooseCameraView(button.dataset.cameraView));
 }
 $("view-back").addEventListener("click", () => chooseCameraView("back"));
+function cancelInspection() {
+  if (!inspection) return;
+  const previous = inspection;
+  inspection = null;
+  creationGesture.invalidate();
+  $("inspection-bar").hidden = true;
+  canvas.classList.remove("inspecting");
+  if (creator.session() === previous.session) {
+    $("placement-bar").hidden = previous.placementHidden;
+    $("object-edit-bar").hidden = previous.objectHidden;
+  }
+  shiftForDrawers(); renderDrive();
+}
+
+$("view-inspect").addEventListener("click", () => {
+  cancelInspection();
+  if ($("view-inspect").disabled || !hasSize()) return;
+  stopDriving(); endDrag(); freeDriveCamera();
+  const damping = controls.enableDamping;
+  controls.enableDamping = false; controls.update(); controls.enableDamping = damping;
+  creationGesture.invalidate();
+  if (creator.active()) clearCreationPoint();
+  inspection = { version: sceneDesc.version, generation: stateGeneration, session: creator.session(),
+    eye: camera.position.clone(), target: controls.target.clone(),
+    placementHidden: $("placement-bar").hidden, objectHidden: $("object-edit-bar").hidden };
+  $("placement-bar").hidden = $("object-edit-bar").hidden = true;
+  setViewPanel(false); setDrawer(false); setWorldPanel(false); setHelp(false);
+  $("inspection-bar").hidden = false;
+  canvas.classList.remove("hover-body"); canvas.classList.add("inspecting");
+  shiftForDrawers(); renderDrive(); canvas.focus();
+});
+$("inspection-cancel").addEventListener("click", () => { cancelInspection(); canvas.focus(); });
+
+function inspectSurface(point) {
+  if (!inspection || !worldRoot) return;
+  setPointer(point);
+  const inDepth = (point) => {
+    const depth = -point.clone().applyMatrix4(camera.matrixWorldInverse).z;
+    return depth >= camera.near && depth <= camera.far;
+  };
+  let hit = raycaster.intersectObjects(worldRoot.children, true).find(({ object, point, face }) => {
+    if (!inDepth(point)) return false;
+    if (!object.isMesh) return false;
+    for (let node = object; node; node = node.parent) if (!node.visible) return false;
+    const material = Array.isArray(object.material) ? object.material[face?.materialIndex ?? 0] : object.material;
+    return material?.visible && material.opacity > 0;
+  });
+  // The animated water deliberately has no triangle raycast. Use its bounded still
+  // level, as paths/rings do, rather than silently selecting the bottom through it.
+  if (water) {
+    const point = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -water.water.level), new THREE.Vector3());
+    if (point && inDepth(point) && stillLevel(water, point.x, point.y) !== null
+        && (!hit || camera.position.distanceTo(point) < hit.distance)) hit = { point };
+  }
+  if (!hit) { toast(t("view_inspect_miss")); return; }
+  const direction = camera.position.clone().sub(controls.target);
+  const distance = camera.position.distanceTo(hit.point);
+  if (!Number.isFinite(distance) || distance <= 0 || direction.lengthSq() < 1e-10) return;
+  const previous = inspection;
+  if (!originalCameraView) originalCameraView = { eye: previous.eye, target: previous.target };
+  const eye = hit.point.clone().addScaledVector(direction.normalize(), distance);
+  cancelInspection();
+  refitRig = null; currentCameraView = null;
+  creationClickUntil = performance.now() + (reduceMotion ? 350 : TWEEN_MS + 350);
+  moveCamera(eye, hit.point.clone(), true, true);
+  renderCameraControls(); canvas.focus();
+}
+
 document.addEventListener("pointerdown", (event) => {
+  if (inspection && event.target !== canvas && !$("inspection-bar").contains(event.target)) cancelInspection();
   if ($("view-panel").hidden || $("view-panel").contains(event.target) || $("view-toggle").contains(event.target)) return;
   setViewPanel(false);
   // A tap that dismisses the view picker must not also place a prop or push a robot.
@@ -1049,9 +1128,9 @@ function pickBody(e) {
 canvas.addEventListener(
   "pointerdown",
   (e) => {
-    creationGesture.down(e, (creator.active() || selectingObjects) && !busy && !tween?.arc && performance.now() >= creationClickUntil
-      ? { session: creator.session(), version: sceneDesc?.version, generation: stateGeneration } : null);
-    if (creator.active() || selectingObjects) {
+    creationGesture.down(e, (inspection || creator.active() || selectingObjects) && !busy && !tween?.arc && performance.now() >= creationClickUntil
+      ? { session: creator.session(), version: sceneDesc?.version, generation: stateGeneration, inspection } : null);
+    if (inspection || creator.active() || selectingObjects) {
       if (creator.active()) clearCreationPoint();
       return; // OrbitControls owns camera motion; only a qualified release will place.
     }
@@ -1081,7 +1160,8 @@ canvas.addEventListener(
 
 canvas.addEventListener("pointermove", (e) => {
   creationGesture.move(e);
-  if (creator.active() || selectingObjects) {
+  if (inspection || creator.active() || selectingObjects) {
+    if (inspection) return;
     if (creator.active() && !creationGesture.active() && e.pointerType !== "touch") creationPoint(e);
     return;
   }
@@ -1119,6 +1199,13 @@ function finishCreationGesture(e) {
   // OrbitControls installs its release listener dynamically. Let it drain before a scene edit,
   // and recheck ownership in case the session changed during this pointer event.
   setTimeout(() => {
+    if (context.inspection) {
+      if (inspection === context.inspection && !creationGesture.active() && creationGesture.epoch() === epoch
+          && !busy && sceneReadyToDraw() && renderedVersion === context.version && sceneDesc?.version === context.version
+          && stateGeneration === context.generation && creator.session() === context.session
+          && ws?.readyState === WebSocket.OPEN && performance.now() >= creationClickUntil) inspectSurface(point);
+      return;
+    }
     if (!$("view-panel").hidden || creationGesture.active() || creationGesture.epoch() !== epoch || !(creator.active() || selectingObjects) || busy || creator.session() !== context.session
         || sceneDesc?.version !== context.version || stateGeneration !== context.generation
         || performance.now() < creationClickUntil) return;
@@ -1132,6 +1219,7 @@ canvas.addEventListener("lostpointercapture", () => {
   if (creationGesture.active()) creationGesture.invalidate();
 });
 window.addEventListener("blur", () => {
+  cancelInspection();
   creationGesture.reset();
   if (creator.active()) clearCreationPoint();
 });
@@ -1140,7 +1228,7 @@ window.addEventListener("blur", () => {
 // destination) and shows its path. A robot or a loose object under the pointer is for dragging, not a place;
 // so is a wall's side: only a face that looks up (the floor, a ramp, a table top) is.
 canvas.addEventListener("dblclick", (e) => {
-  if (creator.active() || selectingObjects || performance.now() < creationClickUntil) return;
+  if (inspection || creator.active() || selectingObjects || performance.now() < creationClickUntil) return;
   if (!sceneReadyToDraw() || renderedVersion !== sceneDesc.version) return;
   const robot = driveTarget();
   if (!robot || lessonActive() || !worldRoot || !sceneDesc) return;
@@ -1612,7 +1700,7 @@ const pressed = new Set();
 let lastDrive = "";
 
 function driveTarget() {
-  if (creator.active() || selectingObjects) return null;
+  if (inspection || creator.active() || selectingObjects) return null;
   const robot = robotByName(selected);
   return canMove(robot) ? robot : null;
 }
@@ -1771,7 +1859,9 @@ function freeDriveCamera() {
 
 function renderCameraControls() {
   const disabled = !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version || busy || ws?.readyState !== WebSocket.OPEN;
+  if (inspection && (disabled || inspection.version !== sceneDesc?.version || inspection.generation !== stateGeneration)) cancelInspection();
   $("view-toggle").disabled = disabled;
+  $("view-inspect").disabled = disabled;
   $("view-back").disabled = disabled || !originalCameraView;
   for (const entry of viewButtons) {
     entry.disabled = disabled;
@@ -1789,6 +1879,7 @@ function renderCameraControls() {
 }
 
 $("camera-view").addEventListener("click", () => {
+  cancelInspection();
   if ($("camera-view").hidden || $("camera-view").disabled) return;
   if (follow && canMove(robotByName(selected))) { freeDriveCamera(); return; }
   focusRobot(selected);
@@ -1937,7 +2028,7 @@ function freeRect() {
   if (bar) top = Math.max(top, bar.bottom);
   const dock = box(document.querySelector(".dock"));
   if (dock) bottom = Math.min(bottom, dock.top);
-  for (const id of ["object-edit-bar", "placement-bar"]) {
+  for (const id of ["object-edit-bar", "placement-bar", "inspection-bar"]) {
     const edit = box($(id));
     if (edit) bottom = Math.min(bottom, edit.top);
   }
@@ -2008,7 +2099,7 @@ window.addEventListener("resize", shiftForDrawers);
 window.addEventListener("resize", renderScreenDrive);
 // Panels change size with what they show (a quiz answered, the record unfolded): follow them.
 const panelWatch = new ResizeObserver(() => shiftForDrawers());
-for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar", "placement-bar", "view-panel"]) panelWatch.observe($(id));
+for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views", "object-edit-bar", "placement-bar", "inspection-bar", "view-panel"]) panelWatch.observe($(id));
 
 function setHelp(open) {
   setOpen("help-toggle", "help", open);
@@ -2063,7 +2154,7 @@ function resetWorld() {
   send({ type: "cmd", cmd: "reset" });
 }
 $("btn-reset").addEventListener("click", resetWorld);
-function viewWholeScene() { freeDriveCamera(); frameCamera({ animate: true }); }
+function viewWholeScene() { cancelInspection(); freeDriveCamera(); frameCamera({ animate: true }); }
 $("btn-frame").addEventListener("click", viewWholeScene);
 $("btn-record").addEventListener("click", () => (recording ? stopRecording() : startRecording()));
 
@@ -2152,6 +2243,10 @@ $("show-shadows").addEventListener("change", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (inspection) {
+    if (e.key === "Escape") { cancelInspection(); canvas.focus(); e.preventDefault(); }
+    return; // Inspection owns input until a qualified surface tap or explicit cancel.
+  }
   if (!$("view-panel").hidden) {
     if (e.key === "Escape") { setViewPanel(false); $("view-toggle").focus(); e.preventDefault(); }
     return; // The picker owns keyboard focus; selecting a view cannot start driving.
@@ -2391,7 +2486,8 @@ function changePlacementOptions() {
 }
 
 function creationPoint(e) {
-  if (!$("view-panel").hidden || tween?.arc || !sceneReadyToDraw() || renderedVersion !== sceneDesc.version) {
+  if (!$("view-panel").hidden || tween?.arc || performance.now() < creationClickUntil
+      || !sceneReadyToDraw() || renderedVersion !== sceneDesc.version) {
     clearCreationPoint(); return;
   }
   setPointer(e);
@@ -2447,14 +2543,18 @@ const robotSurface = initRobotSurface({
     const info = sceneDesc?.robot_surface;
     const entry = info && sceneDesc?.world && info.version === sceneDesc.version && !sceneDesc.lesson
       ? info.robots.find((r) => r.name === selected) : null;
-    return entry ? { ...entry, version: info.version, world_sha256: info.world_sha256 } : null;
+    return entry && ws?.readyState === WebSocket.OPEN
+      ? { ...entry, version: info.version, generation: stateGeneration, world_sha256: info.world_sha256 } : null;
   },
   ready: () => !busy && !creator.active() && !selectingObjects && !creationGesture.active()
     && sceneReadyToDraw() && renderedVersion === sceneDesc?.version && stateVersion === sceneDesc?.version
     && Number.isInteger(stateGeneration),
-  apply: async (entry, body, surface, button) => {
+  apply: async (entry, targets, surface, button) => {
     stopDriving(); endDrag();
-    await runChoice(button, { type: "world", action: "set_robot_surface", name: entry.name, body,
+    const batch = Array.isArray(targets);
+    let acknowledgement = null;
+    await runChoice(button, { type: "world", action: "set_robot_surface", name: entry.name,
+      ...(batch ? { bodies: targets } : { body: targets }),
       surface_material: surface, version: entry.version, generation: stateGeneration,
       world_sha256: entry.world_sha256 }, {
       done: async (data) => {
@@ -2463,6 +2563,7 @@ const robotSurface = initRobotSurface({
             lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
             throw new Error(t("create_scene_changed"));
           }
+          acknowledgement = { ...data, world_sha256: sceneDesc.robot_surface?.world_sha256 };
           toast(t("surface_unchanged")); return;
         }
         const receipt = data.undo_surface ? { ...data.undo_surface, kind: "robot_surface" } : null;
@@ -2472,9 +2573,12 @@ const robotSurface = initRobotSurface({
           lastObjectEdit = stateVersion === data.version && stateGeneration === data.generation ? receipt : null;
           updateUndo(); throw error;
         }
-        updateUndo(); toast(t("surface_saved", { name: `${entry.name} / ${body}` }));
+        acknowledgement = { ...data, world_sha256: sceneDesc.robot_surface?.world_sha256 };
+        updateUndo(); toast(batch ? t("robot_surface_saved", { name: entry.name, count: targets.length })
+          : t("surface_saved", { name: `${entry.name} / ${targets}` }));
       },
     });
+    return acknowledgement;
   },
 });
 let robotSurfaceHighlight = null;
@@ -2716,15 +2820,15 @@ function resolveCreatedRobot() {
     wanted.reject(new Error(t("create_scene_changed"))); return;
   }
   if (wanted.rendered && renderedVersion !== wanted.version) return;
-  if (wanted.robot) select(wanted.robot, { focus: true });
+  if (wanted.robot) select(wanted.robot, { focus: wanted.focus });
   wanted.resolve();
 }
 
-function waitForCreation(data, rendered = false) {
+function waitForCreation(data, rendered = false, { focus = true } = {}) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => creationSelection?.reject(new Error(t("create_scene_changed"))), 15000);
     const finish = (callback, error) => { clearTimeout(timer); creationSelection = null; callback(error); };
-    creationSelection = { ...data, rendered, resolve: () => finish(resolve), reject: (error) => finish(reject, error) };
+    creationSelection = { ...data, rendered, focus, resolve: () => finish(resolve), reject: (error) => finish(reject, error) };
     resolveCreatedRobot();
   });
 }
@@ -2738,7 +2842,8 @@ async function placeEntity(item, pos) {
     }
   }
   pos = pos.slice();
-  if (creator.repeating() && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
+  const repeating = creator.repeating();
+  if (repeating && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
   if ((item.kind === "terrain" || item.kind === "terrain-edit") && (!Number.isInteger(placementGeneration) || !placementWorldSha)) { toast(t("loading_scene")); return; }
   const placementSession = creator.session();
   creationGesture.invalidate();
@@ -2753,7 +2858,7 @@ async function placeEntity(item, pos) {
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw,
         ...(item.material ? { material: item.material } : {}) };
   await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
-    frame: item.kind === "robot" || item.kind === "model",
+    frame: !repeating && (item.kind === "robot" || item.kind === "model"),
     progress: (event) => { if (placementSession === creator.session()) creator.progress(event.stage, event.fraction); },
     done: async (data) => {
       if (data.unchanged) {
@@ -2767,12 +2872,13 @@ async function placeEntity(item, pos) {
       if (item.kind === "terrain-edit") lastTerrainEdit = data.undo_terrain_edit || null;
       // A committed terrain edit remains undoable even if its first displayed geometry times out.
       if (item.kind === "terrain") lastAddition = data.undo || null;
-      if (creator.repeating() && !Number.isInteger(data.generation)) {
+      if (repeating && !Number.isInteger(data.generation)) {
+        lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
       if (item.kind === "model") creator.progress("display");
       try {
-        await waitForCreation(data, item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || creator.repeating() || item.kind === "edit" || item.kind === "copy" || item.kind === "start");
+        await waitForCreation(data, item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || repeating || item.kind === "edit" || item.kind === "copy" || item.kind === "start", { focus: !repeating });
       } catch (error) {
         if (item.kind === "terrain-edit") {
           lastTerrainEdit = stateVersion === data.version && stateGeneration === data.generation ? data.undo_terrain_edit || null : null;
@@ -2780,6 +2886,11 @@ async function placeEntity(item, pos) {
         }
         if (item.kind === "terrain") {
           lastAddition = stateVersion === data.version && stateGeneration === data.generation ? data.undo || null : null;
+          cancelCreation(true);
+        }
+        if (repeating && placementSession === creator.session()) {
+          lastAddition = stateVersion === data.version && stateGeneration === data.generation ? data.undo || null : null;
+          lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
           cancelCreation(true);
         }
         // A committed model stays undoable if only display completion timed out.
@@ -2791,7 +2902,13 @@ async function placeEntity(item, pos) {
         throw error;
       }
       if (placementSession !== creator.session()) return;
-      if (item.kind === "terrain" && creator.repeating()) {
+      if (repeating && (loadingScene || stateVersion !== data.version || stateGeneration !== data.generation
+          || sceneDesc?.version !== data.version || posedVersion !== data.version || renderedVersion !== data.version)) {
+        lastAddition = stateVersion === data.version && stateGeneration === data.generation ? data.undo || null : null;
+        lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
+        cancelCreation(true); throw new Error(t("create_scene_changed"));
+      }
+      if (item.kind === "terrain" && repeating) {
         const info = sceneDesc?.terrain_edit;
         const current = Number.isInteger(data.generation)
           && stateVersion === data.version && stateGeneration === data.generation;
@@ -2809,7 +2926,7 @@ async function placeEntity(item, pos) {
       lastRobotEdit = data.undo_robot_start || null;
       lastTerrainEdit = data.undo_terrain_edit || null;
       creationClickUntil = performance.now() + 500;
-      if (creator.repeating()) {
+      if (repeating) {
         if (item.kind === "copy" && (!editableObjects().some((o) => o.name === item.name) || !sceneDesc.object_edit.world_sha256)) {
           cancelCreation(true); throw new Error(t("create_scene_changed"));
         }
@@ -3464,7 +3581,7 @@ screenDrive = createScreenDrive($("screen-drive"), (refresh) => {
 initGamepad({
   send,
   toast,
-  robot: () => creator.active() || selectingObjects ? null : robotByName(selected),
+  robot: () => inspection || creator.active() || selectingObjects ? null : robotByName(selected),
   screenToWorld,
   changed: renderDrive,
   onDrive: () => {
