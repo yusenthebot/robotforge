@@ -1,5 +1,16 @@
 # progress
 
+## Shared tile grout baseline (2026-10-29)
+
+Two actual application paths retain the existing material: copied Panda world loaded through desk_lab, and builtin pool deck_south with default ROV.
+24 fixed PNGs cover actual DPR1/2, two lights and front/oblique/near views; four complete five-second paused camera arcs retain endpoint holds, strict raw continuity and full MP4 decode.
+Eight root-viewed ordinary PNGs and24 decoded samples do not establish the preregistered two-path defect gate; no candidate is made or promoted.
+Resolved procedural tile identity, visible ray samples, camera/light controls,482model ndarray/name/path fields per scene and complete MuJoCo integration state stay guarded.
+Frozen b399c6c4/768 inputs and13originalWIP retained;106 backend+20 existing browser cases, offline wheel and Ruff/format pass.
+No new full-suite, budget, installed smoke, performance, every-frame or material-quality gain claim; previous preliminary helpers/receipts remain distinct.
+[Report](docs/bench/2026-10-29-tile-grout-screen.md).
+The broad visual-quality/lightweight/creative-play goal remains active; single-action success tuning stays deferred.
+
 ## Mesh transport pre-screen (2026-10-28)
 
 - 固定外部gzip level1/mtime0，分别加载真实Malo／Go2原世界，三次压缩逐字节解压核对；47,064,672→11,897,380B与20,332,512→6,058,843B，减少74.72%／70.20%。Malo CPU中位261.499ms超过事先250ms门槛，停止晋升，不调等级、不追加样本。
