@@ -148,8 +148,8 @@ function surfaceTile(style) {
   return result;
 }
 
-export function groundMaterial(style, color, anisotropy, preparedWood = null) {
-  const tile = style === "wood" && preparedWood ? preparedWood : surfaceTile(style);
+export function groundMaterial(style, color, anisotropy, preparedWood = null, preparedGrass = null) {
+  const tile = (style === "wood" && preparedWood) || (style === "grass" && preparedGrass) || surfaceTile(style);
   const map = new THREE.CanvasTexture(tile.color);
   map.source = tile.colorSource;
   map.colorSpace = THREE.SRGBColorSpace;
@@ -185,7 +185,8 @@ vec2 rfTileSlope() {
         "perturbNormalArb( - vViewPosition, normal, dHdxy_fwd(), faceDirection )",
         "rfMetricBump( - vViewPosition, normal, rfTileSlope(), faceDirection )"));
   };
-  mat.userData.groundSource = style === "wood" && preparedWood ? "natural-oak" : "procedural";
+  mat.userData.groundSource = style === "wood" && preparedWood ? "natural-oak"
+    : style === "grass" && preparedGrass ? "natural-leafy-grass" : "procedural";
   mat.customProgramCacheKey = () => "rf-ground-metric-v1";
   return mat;
 }
@@ -201,8 +202,10 @@ export function groundPreview(style, rgb, detailed = true) {
   ctx.fillRect(0, 0, 96, 64);
   if (detailed) {
     ctx.globalCompositeOperation = "multiply";
-    ctx.drawImage((style === "wood" && naturalWood ? naturalWood : surfaceTile(style)).color, 0, 0, 96, 64);
-    if (style === "wood" && !naturalWood) loadWood().then((tile) => {
+    const natural = style === "wood" ? naturalWood : style === "grass" ? naturalGrass : null;
+    ctx.drawImage((natural || surfaceTile(style)).color, 0, 0, 96, 64);
+    const pending = !natural && (style === "wood" ? loadWood() : style === "grass" ? loadGrass() : null);
+    if (pending) pending.then((tile) => {
       if (!tile) return;
       ctx.globalCompositeOperation = "source-over";
       ctx.fillRect(0, 0, 96, 64);
@@ -248,6 +251,47 @@ export async function prepareGroundTextures(desc) {
   try {
     return await Promise.race([loadWood(), new Promise((resolve) => {
       timer = setTimeout(() => resolve(woodFallback("timeout")), 1000);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Keep the wood preparation API and cache independent. A mixed scene prepares both
+// concurrently; a late grass decode can help later scenes without changing this one.
+let naturalGrass = null, grassPending = null, grassWarned = false;
+
+function grassFallback(reason) {
+  if (!grassWarned) console.warn("robotforge: optional grass texture unavailable; using procedural ground", reason);
+  grassWarned = true;
+  return null;
+}
+
+function loadGrass() {
+  if (naturalGrass) return Promise.resolve(naturalGrass);
+  if (!grassPending) {
+    grassPending = import("./ground-grass.js")
+      .then((module) => module.grassTiles())
+      .then(({ color, detail }) => {
+        naturalGrass = { color, detail, colorSource: new THREE.Source(color), detailSource: new THREE.Source(detail) };
+        return naturalGrass;
+      })
+      .catch((error) => grassFallback(error?.name || "load"))
+      .finally(() => { grassPending = null; });
+  }
+  return grassPending;
+}
+
+export async function prepareGrassTextures(desc) {
+  const usesGrass = desc.geoms.some((geom) => {
+    const look = desc.grounds?.[geom.material];
+    return look && !(geom.type === "plane" && look.pattern === "checker") && groundStyle(geom.material, look) === "grass";
+  });
+  if (!usesGrass) return null;
+  let timer;
+  try {
+    return await Promise.race([loadGrass(), new Promise((resolve) => {
+      timer = setTimeout(() => resolve(grassFallback("timeout")), 1000);
     })]);
   } finally {
     clearTimeout(timer);
