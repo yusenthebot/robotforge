@@ -64,14 +64,16 @@ keep = np.array(
     [a != b and frozenset((a, b)) not in mo.rs.ignore for a, b in zip(links[i_all], links[j_all], strict=True)]
 )
 i_all, j_all = i_all[keep], j_all[keep]
-mismatch = 0
-for q in ctx.lo + rng.random((150, len(ctx.lo))) * (ctx.hi - ctx.lo):
+mismatch = collisions = 0
+for q in ctx.lo + rng.random((5000, len(ctx.lo))) * (ctx.hi - ctx.lo):
     mo._set_robot(d, ctx, q)
     mujoco.mj_kinematics(m, d)
     X = d.geom_xpos[mo.sph]
     full = (np.linalg.norm(X[i_all] - X[j_all], axis=1) - mo.sph_r[i_all] - mo.sph_r[j_all]).min() >= 0
     mismatch += int(full != mo._row(d, ctx, q, "self"))
+    collisions += int(not full)
 out["self_mismatch"] = mismatch
+out["self_collisions_seen"] = collisions
 
 # 5. a 5 cm block put in the way of a straight joint move: the segment is blocked, a plan goes around
 q1 = q0.copy()
@@ -126,11 +128,15 @@ name = mo._attach_held("right", kin, q0, {"name": "wooden_block_a"})
 mo._set_robot(d, ctx, q0)
 mujoco.mj_kinematics(m, d)
 lo, hi = mo._owner_box("object:wooden_block_a")
-on = mo.held_geoms["right"][m.geom_contype[mo.held_geoms["right"]] != 0]
+on = mo.held_geoms["right"][: mo._held_n["right"]]  # the spheres the hand uses (switched on per query)
 centres = d.geom_xpos[on]
 out["held_attached"] = name
 out["held_spheres"] = int(len(on))
 out["held_inside_box"] = bool(np.all(centres > lo - 1e-6) and np.all(centres < hi + 1e-6))
+# a left-arm query in between must not switch the right hand's held spheres off
+mo.free(rig.left_kin, np.r_[rig.q_cmd[:2], rig.left_q_cmd])
+mo.free(kin, q0)
+out["held_after_left_query"] = int(np.count_nonzero(m.geom_contype[mo.held_geoms["right"]]))
 mo._attach_held("right", kin, q0, None)
 out["held_off"] = int(np.count_nonzero(m.geom_contype[mo.held_geoms["right"]]))
 
@@ -142,4 +148,23 @@ with mo.part_at("kitchen_microwave", -1.4):
 box2 = mo._owner_box(part)
 out["part_moves"] = float(np.abs(np.r_[box1] - np.r_[box0]).max())
 out["part_restored"] = float(np.abs(np.r_[box2] - np.r_[box0]).max())
+# 9. the point Jacobian collision repair uses matches finite differences of a sphere centre
+ctx = mo._context(kin, None, {}, (), True)
+s_geom = int(mo.sph[np.nonzero(mo.sph_link == "right_arm_link_6")[0][0]])
+jacp = np.zeros((3, m.nv))
+mo._set_robot(d, ctx, q0)
+mujoco.mj_kinematics(m, d)
+mujoco.mj_comPos(m, d)
+mujoco.mj_jac(m, d, jacp, None, d.geom_xpos[s_geom].copy(), m.geom_bodyid[s_geom])
+J = jacp[:, mo.side_dof["right"]]
+x0 = d.geom_xpos[s_geom].copy()
+fd = np.zeros_like(J)
+for k in range(J.shape[1]):
+    dq = np.zeros(len(q0))
+    dq[k] = 1e-6
+    mo._set_robot(d, ctx, q0 + dq)
+    mujoco.mj_kinematics(m, d)
+    fd[:, k] = (d.geom_xpos[s_geom] - x0) / 1e-6
+out["repair_jac_err"] = float(np.abs(J - fd).max())
+out["repair_jac_norm"] = float(np.abs(J).max())
 print("MOTION_CHECKS " + json.dumps(out), flush=True)

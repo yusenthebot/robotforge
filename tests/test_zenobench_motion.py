@@ -190,5 +190,8 @@ def test_stand_in_on_a_real_kitchen_scene():
     assert r["clearance_at_object"] == 0.0 and r["clearance_posture"] > 0.0
     assert r["tilt_plan_ok"] and r["tilt_max"] < 0.01
     assert r["held_attached"] == "wooden_block_a" and r["held_spheres"] > 0 and r["held_inside_box"]
+    assert r["held_after_left_query"] == r["held_spheres"]  # the other arm's queries leave them on
     assert r["held_off"] == 0
+    assert r["self_collisions_seen"] > 50
+    assert r["repair_jac_norm"] > 0.05 and r["repair_jac_err"] < 1e-4
     assert r["part_moves"] > 0.05 and r["part_restored"] < 1e-9

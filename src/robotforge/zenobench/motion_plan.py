@@ -60,7 +60,7 @@ def plan(
     timeout: float,
     attempts: int,
     constraint: Constraint | None = None,
-    simplify: float = 1.0,
+    simplify: bool = True,
 ):
     """Waypoints after q0 ending at a goal (one joint vector, or a list: whichever the search reaches),
     or (None, status).  ``valid`` judges one joint vector; edges are checked every ``resolution``
@@ -123,8 +123,8 @@ def plan(
             ss.clear()
         if not ss.haveExactSolutionPath():
             return None, status
-        if simplify > 0:
-            ss.simplifySolution(simplify)
+        if simplify:
+            ss.simplifySolution()  # no time budget: OMPL's full pass, the same however busy the machine is
         path = ss.getSolutionPath()
         if constraint is not None:
             path.interpolate()  # dense on the manifold: the executor interpolates linearly

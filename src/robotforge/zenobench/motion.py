@@ -186,7 +186,13 @@ class MujocoMotion:
         U = _upstream()
         t0 = time.perf_counter()
         self.ann = ann
-        self.world = shim.current_world()
+        try:
+            self.world = shim.current_world()
+        except RuntimeError:  # no simulation (tools/build_tasks.py's reach check): a world from the stage
+            from robotforge.zenobench.world import World
+
+            self.world = World(stage, options=shim.STATE.options, spec_hooks=(add_planning_spheres,))
+            self.world.build()
         self.rs = RobotSpheres.load(Path(robot_cfg or U.ROBOT_CFG))
         m0 = self.world.model
         self.model = m = copy.copy(m0)
@@ -280,7 +286,7 @@ class MujocoMotion:
         self.held_state = {}
         self.other_touching = {s: set() for s in SIDES}
         self._held_box = {}
-        self._held_on = {s: False for s in SIDES}
+        self._held_n = {s: 0 for s in SIDES}  # held-object spheres in use per hand (0: none attached)
         self._boxes = None
         self._mask_key = None
         U.STATS["init_s"] = round(U.STATS.get("init_s", 0.0) + time.perf_counter() - t0, 3)
@@ -315,12 +321,13 @@ class MujocoMotion:
         self.link_body = np.array(
             [mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"{ASSET}/{n}") for n in self.links]
         )
+        pos = self.model.geom_pos[self.sph]  # sphere centres in their link frames, in sph order
         centres, radii = [], []
         for k in range(len(self.links)):
             sel = self.sph_li == k
-            c = self.rs.centers[sel].mean(0)
+            c = pos[sel].mean(0)
             centres.append(c)
-            radii.append(float((np.linalg.norm(self.rs.centers[sel] - c, axis=1) + self.rs.radii[sel]).max()))
+            radii.append(float((np.linalg.norm(pos[sel] - c, axis=1) + self.sph_r[sel]).max()))
         self.link_c, self.link_r = np.array(centres), np.array(radii)
         self.link_pairs = {}
 
@@ -453,8 +460,8 @@ class MujocoMotion:
         m.geom_pos[geoms] = (0.0, 0.0, -self.tcp_depth)
         m.geom_size[geoms, 0] = m.geom_rbound[geoms] = HELD_IDLE
         m.geom_aabb[geoms] = (0.0, 0.0, 0.0, HELD_IDLE, HELD_IDLE, HELD_IDLE)
-        self._held_on[side] = False
-        self._mask_key = None
+        self._held_n[side] = 0
+        self._mask_key = None  # _context switches the pool on for this hand's queries
         if name is not None and len(self.owner_geoms.get(f"object:{name}", ())):
             frame, lo, hi = self._box_of(name)
             self._scene_kinematics(self.data)
@@ -472,8 +479,7 @@ class MujocoMotion:
             m.geom_pos[g] = pos
             m.geom_size[g, 0] = m.geom_rbound[g] = b[:, 3]
             m.geom_aabb[g] = np.c_[np.zeros((len(b), 3)), np.repeat(b[:, 3:4], 3, 1)]
-            m.geom_contype[g] = PLAN_BIT
-            self._held_on[side] = True
+            self._held_n[side] = len(b)
         else:
             name = None
         self._refit_tree(int(m.geom_bodyid[geoms[0]]))
@@ -561,7 +567,8 @@ class MujocoMotion:
         yaw = math.atan2(kin.base_R[1, 0], kin.base_R[0, 0])
         allow = self._targets_allow([np.asarray(p, float) for p in targets]) if collision and targets else set()
         excluded = frozenset(self.held[side] | allow)
-        key = (side, frozenset(off), excluded, self._held_on[side])
+        n_held = self._held_n[side]
+        key = (side, frozenset(off), excluded, n_held)
         if key != self._mask_key:
             m = self.model
             m.geom_conaffinity[self.scene] = PLAN_BIT
@@ -569,15 +576,15 @@ class MujocoMotion:
                 m.geom_conaffinity[self.owner_geoms.get(o, [])] = 0
             on = ~np.isin(self.sph_link, list(off))
             m.geom_contype[self.sph] = np.where(on, PLAN_BIT, 0)
-            m.geom_contype[self.held_geoms[_other(side)]] = 0
-            if not self._held_on[side]:
-                m.geom_contype[self.held_geoms[side]] = 0
+            for s in SIDES:  # only this hand's held object, and only the spheres it uses
+                m.geom_contype[self.held_geoms[s]] = 0
+            m.geom_contype[self.held_geoms[side][:n_held]] = PLAN_BIT
             self._mask_key = key
         on = self.model.geom_contype[self.sph] != 0
         i, j, lp = self.pairs[side]
         sel = on[i] & on[j]
         pairs = (i[sel], j[sel], lp[sel], *self.link_pairs[side])
-        return _Query(side, kin, self.chains[side], self._base_q(kin.base_p, yaw), lo, hi, pairs, self._held_on[side])
+        return _Query(side, kin, self.chains[side], self._base_q(kin.base_p, yaw), lo, hi, pairs, n_held > 0)
 
     def _set_margin(self, margin):
         if margin != self._margin:
@@ -752,6 +759,7 @@ class MujocoMotion:
                 self._set_margin(target)
                 self._set_robot(d, ctx, q)
                 mujoco.mj_kinematics(m, d)
+                mujoco.mj_comPos(m, d)  # mj_jac reads cdof and subtree_com
                 mujoco.mj_collision(m, d)
                 tcp, Rq, J = ctx.chain.tcp_jac(q[None], ctx.kin.base_p, ctx.kin.base_R)
                 e = np.r_[p - tcp[0], K.rotvec((R @ Rq[0].T)[None])[0]]
@@ -882,9 +890,16 @@ class MujocoMotion:
 
         self._set_margin(U.ACTIVATION)
         qs, status = motion_plan.plan(q0, goals, ctx.lo, ctx.hi, valid, SEGMENT_RES, U.PLAN_TIMEOUT, U.PLAN_ATTEMPTS)
-        if qs is not None and not self._segments_free(ctx, [q0] + qs):
+        if qs is None:
+            return None, status
+        if not self._segments_free(ctx, [q0] + qs):
             return None, "planned path failed the dense check"
-        return qs, status
+        # dense like cuRobo's trajectory: a tilt check on the waypoints sees what the executor drives
+        dense, prev = [], q0
+        for q in qs:
+            dense += _dense(prev, q, SEGMENT_RES)
+            prev = q
+        return dense, None
 
     def _tilt_constraint(self, ctx, R_goal):
         """F(q) = 0: the TCP carries the world z axis exactly as R_goal does (tilt held, yaw free)."""
@@ -917,12 +932,15 @@ class MujocoMotion:
         for q in dense:
             target = ctx.chain.tcp(q[None], kin.base_p, kin.base_R)[0][0]
             x = q.copy() if prev is None else np.clip(prev + (q - prev_free), ctx.lo, ctx.hi)
-            for _ in range(LEVEL_ITERS):
+            for it in range(LEVEL_ITERS + 1):
                 tcp, R, J = ctx.chain.tcp_jac(x[None], kin.base_p, kin.base_R)
                 Rv = R[0] @ v
                 e = np.r_[Rv[:2], tcp[0] - target] if hold_position else Rv[:2]
                 if np.linalg.norm(e[:2]) < LEVEL_TOL and np.linalg.norm(e[2:]) < LEVEL_POS_TOL:
                     break
+                if it == LEVEL_ITERS:
+                    _count("level_fail_converge")
+                    return None
                 A = np.cross(J[0, 3:].T, Rv)[:, :2].T
                 if hold_position:
                     A = np.vstack([A, J[0, :3]])
@@ -931,9 +949,6 @@ class MujocoMotion:
                 if blocked.any():
                     dx = -np.linalg.pinv(A * ~blocked, rcond=1e-4) @ e * ~blocked
                 x = np.clip(x + dx, ctx.lo, ctx.hi)
-            else:
-                _count("level_fail_converge")
-                return None
             if prev is not None and np.max(np.abs(x - prev)) > LEVEL_JUMP:
                 _count("level_fail_jump")
                 return None
@@ -1086,16 +1101,20 @@ class MujocoMotion:
             p_pre = p - R[:, axis] * (float(d[axis]) * U.APPROACH_FRACTION)
             goals = self._goal_set(ctx, p_pre, R, [q0])
             qs, status = None, "no collision-free IK at the approach start"
-            while goals and qs is None:
+            for _ in range(len(goals)):
                 leg1, status = self._plan_js(ctx, q0, goals)
                 if leg1 is None:
                     break
                 leg2, ok2 = self._cart(ctx, leg1[-1], p, R, 0.01, True)
                 if ok2:
                     qs, status = leg1 + leg2, None
-                else:  # that branch cannot go straight in: the next one
-                    status = "straight approach blocked"
-                    goals = [g for g in goals if np.max(np.abs(g - leg1[-1])) > 1e-9]
+                    break
+                # that branch cannot go straight in: the next one
+                status = "straight approach blocked"
+                reached = min(range(len(goals)), key=lambda k: float(np.max(np.abs(goals[k] - leg1[-1]))))
+                goals = goals[:reached] + goals[reached + 1 :]
+                if not goals:
+                    break
         _count("plan_to_ok", qs is not None)
         return qs, status
 
