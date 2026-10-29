@@ -52,6 +52,7 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
   const $ = (id) => document.getElementById(id);
   let item = null, point = null, sending = false, size = "normal", yaw = 0, yawDelta = 0, session = 0;
   const repeat = $("place-repeat");
+  const canRepeat = (kind) => ["object", "copy", "terrain", "robot", "model"].includes(kind);
   const material = $("place-material");
   const spacing = $("place-spacing");
   spacing.addEventListener("change", coordinateChange);
@@ -64,7 +65,10 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     if (note.textContent !== message) note.textContent = message;
     note.hidden = !message;
   }
-  const syncRepeat = () => { $("place-cancel").textContent = t(repeat.checked ? "done_placing" : "cancel_place"); };
+  const syncRepeat = () => {
+    $("place-cancel").textContent = t(repeat.checked ? "done_placing" : "cancel_place");
+    $("placement-bar").classList.toggle("repeating-robot", repeat.checked && (item?.kind === "robot" || item?.kind === "model"));
+  };
   repeat.addEventListener("change", syncRepeat);
   const scales = { small: 0.75, normal: 1, large: 1.5 };
   const send = () => {
@@ -113,7 +117,7 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     showHeading();
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
     for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
-    $("placement-bar").querySelector(".repeat-placement").hidden = kind === "edit" || kind === "start" || kind === "model" || kind === "terrain-edit";
+    $("placement-bar").querySelector(".repeat-placement").hidden = !canRepeat(kind);
     $("placement-title").textContent = t(kind === "terrain-edit" ? "move_named_terrain" : kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
@@ -149,7 +153,7 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     duplicate: (entry) => begin(entry, "copy", entry.name),
     session: () => session,
     spacing: () => spacing.value,
-    repeating: () => (item?.kind === "object" || item?.kind === "copy" || item?.kind === "terrain") && repeat.checked,
+    repeating: () => canRepeat(item?.kind) && repeat.checked,
     next(guard = {}) {
       item = { ...item, ...guard };
       point = null; coordinates(null); $("place-here").disabled = true;
@@ -191,6 +195,7 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     clear() {
       session++; item = point = null;
       sending = false;
+      $("placement-bar").classList.remove("repeating-robot");
       coordinates(null);
       $("placement-bar").hidden = true;
       $("place-cancel").disabled = false;

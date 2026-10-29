@@ -1,5 +1,16 @@
 # progress
 
+## Continuous robot placement (2026-10-29)
+
+Opt-in continuous placement covers templates, curated library models and saved designs; separate commits/fresh guards/latest Undo/default one-shot preserved, camera eye/aim retained.
+Runtime1f984522/775inputs:685scoped default+356complete current non-slow browser+9GPU=1050distinct pytest,7canonical,source/fresh offline60-tool smoke and original11/11budgets pass.
+Three paired native workflows yield6fully decoded movies/36root samples,12exact workflow and24exact original-world canvas pairs,2050model/state/workflow checks.
+Wheel4031512B(+309),417package files and13originalWIP exact; no new asset/pass/dependency, mixed loading observations retained.
+Sensor-panel projection avoidance remains; fixed-camera controls disable previews and normalize old one-shot clip planes via native Fit.
+Initial product/QA failures retained; report docs/bench/2026-10-29-repeat-robots.md/.json; broad goal active, single-action success tuning deferred.
+
+[Report](docs/bench/2026-10-29-repeat-robots.md).
+
 ## Natural grass imagery (2026-10-29)
 
 Shared floor/terrain/detailed chooser use a bounded 256-square local CC0 pair with authored tint/metric bump/physics and old wood APIs retained; independent 1,000 ms preparation/fallback, no dependency or action-success tuning.
