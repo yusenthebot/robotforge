@@ -146,8 +146,6 @@ def pick(kin, Q, seed0, lo, hi, local, limit_clear, manip_w, max_step):
     """Upstream's choice (zeno_skills/motion.py `_Arm.ik`): closest to the first seed, clear of the
     joint limits; ``local`` never trades continuity for the margin, otherwise away from singular
     postures.  Q holds successful solutions only; returns (q, ok)."""
-    from zeno_skills.kinematics import manipulability
-
     Q = np.atleast_2d(Q)
     if len(Q) == 0:
         return None, False
@@ -162,6 +160,8 @@ def pick(kin, Q, seed0, lo, hi, local, limit_clear, manip_w, max_step):
     if local:
         score = np.where(near <= max_step, score, 1e3 + near)
     else:
+        from zeno_skills.kinematics import manipulability
+
         m = np.array([manipulability(kin, q) for q in Q])
         score = score + manip_w * (1.0 - m / max(float(m.max()), 1e-9))
     return Q[int(np.argmin(score))], True

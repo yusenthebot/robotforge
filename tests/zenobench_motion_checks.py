@@ -120,4 +120,26 @@ if qt is not None:
     dense = [qa + (qb - qa) * u for qa, qb in zip([q0] + qt[:-1], qt, strict=True) for u in np.linspace(0, 1, 5)]
     out["tilt_max"] = max(tilt(R1, kin.tcp(q)[1]) for q in dense)
     out["tilt_limit"] = CARRY_TILT
+# 7. a held object's box rides on the hand: its spheres sit inside the object's box, then switch off
+ctx = mo._context(kin, None, {}, (), True)
+name = mo._attach_held("right", kin, q0, {"name": "wooden_block_a"})
+mo._set_robot(d, ctx, q0)
+mujoco.mj_kinematics(m, d)
+lo, hi = mo._owner_box("object:wooden_block_a")
+on = mo.held_geoms["right"][m.geom_contype[mo.held_geoms["right"]] != 0]
+centres = d.geom_xpos[on]
+out["held_attached"] = name
+out["held_spheres"] = int(len(on))
+out["held_inside_box"] = bool(np.all(centres > lo - 1e-6) and np.all(centres < hi + 1e-6))
+mo._attach_held("right", kin, q0, None)
+out["held_off"] = int(np.count_nonzero(m.geom_contype[mo.held_geoms["right"]]))
+
+# 8. part_at moves an articulated part for the queries inside, and back
+part = "part:kitchen_microwave"
+box0 = mo._owner_box(part)
+with mo.part_at("kitchen_microwave", -1.4):
+    box1 = mo._owner_box(part)
+box2 = mo._owner_box(part)
+out["part_moves"] = float(np.abs(np.r_[box1] - np.r_[box0]).max())
+out["part_restored"] = float(np.abs(np.r_[box2] - np.r_[box0]).max())
 print("MOTION_CHECKS " + json.dumps(out), flush=True)
