@@ -190,6 +190,8 @@ def test_stand_in_on_a_real_kitchen_scene():
     assert r["clearance_at_object"] == 0.0 and r["clearance_posture"] > 0.0
     assert r["tilt_plan_ok"] and r["tilt_max"] < 0.01
     assert r.get("level_end_err") is None or r["level_end_err"] < 1e-9  # ends at the goal or is refused
+    assert r["ts_ok"] and r["ts_tilt_max"] < 0.05 and r["ts_end_err"] < 0.004 and r["ts_dense_free"]
+    assert r["ts_max_step"] <= 0.25  # continuous: no joint jumps more than MAX_STEP between waypoints
     assert r["held_attached"] == "wooden_block_a" and r["held_spheres"] > 0 and r["held_inside_box"]
     assert r["held_after_left_query"] == r["held_spheres"]  # the other arm's queries leave them on
     assert r["held_off"] == 0

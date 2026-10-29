@@ -128,6 +128,18 @@ if ok:
     lv = mo._level_path(ctx, q0, free_path, R1, hold_position=False)
     out["level_end_err"] = None if lv is None else float(np.max(np.abs(lv[-1] - q_goal)))
 
+# 6c. the task-space carry search: tilt fixed all the way, ends at the goal's TCP pose
+if ok:
+    t = time.perf_counter()
+    ts = mo._plan_level_ts(ctx, q0, [q_goal], R1)
+    out["ts_plan_s"] = time.perf_counter() - t
+    out["ts_ok"] = ts is not None
+    if ts is not None:
+        out["ts_tilt_max"] = max(tilt(R1, kin.tcp(q)[1]) for q in ts)
+        out["ts_end_err"] = float(np.linalg.norm(kin.tcp(ts[-1])[0] - kin.tcp(q_goal)[0]))
+        out["ts_dense_free"] = mo._segments_free(ctx, [q0] + ts)
+        out["ts_max_step"] = float(max(np.max(np.abs(b - a)) for a, b in zip([q0] + ts[:-1], ts, strict=True)))
+
 # 7. a held object's box rides on the hand: its spheres sit inside the object's box, then switch off
 ctx = mo._context(kin, None, {}, (), True)
 name = mo._attach_held("right", kin, q0, {"name": "wooden_block_a"})

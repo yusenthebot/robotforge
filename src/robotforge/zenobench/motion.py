@@ -48,6 +48,14 @@ PLAN_BIT = 1 << 4  # contype / conaffinity bit of the planning pairs: robot sphe
 STATIC_BIT = 1 << 5  # fixed scene geometry (walls, furniture), which ignored fingers may still only graze
 FINGER_GRAZE = 0.01  # m: how deep ignored fingers may go into fixed geometry on a joint-space move
 HELD_IDLE = 1e-3  # m: radius of an unused held-object sphere (at the TCP, switched off)
+TS_BUDGET = 4.0  # s for a task-space carry search
+TS_STEP = 0.015  # m between IK-tracked points on a task-space edge
+TS_YAW_M = 0.15  # m a radian of yaw counts as in task-space distance
+TS_EXTEND = 0.12  # m: longest task-space edge grown towards a sample
+TS_MARGIN = 0.3  # m the search box extends beyond the start and goal positions
+TS_NODES = 400
+TS_GOAL_BIAS = 0.25
+TS_SEED = 0  # task-space samples are the same every search
 LEVEL_ITERS = 30  # Newton steps to level one waypoint
 LEVEL_TOL, LEVEL_POS_TOL = 1e-3, 1e-3  # rad (tilt), m (TCP held)
 LEVEL_JUMP = 0.2  # rad: largest joint change between two levelled waypoints 0.05 rad apart
@@ -994,11 +1002,124 @@ class MujocoMotion:
             return None
         return out
 
+    def _plan_level_ts(self, ctx, q0, goals, R_goal, budget=TS_BUDGET):
+        """Task-space RRT for a carry: the hand's position and yaw are searched with the tilt fixed at
+        the goal's (orientation Rz(psi) @ R_goal), the arm tracked by IK in short steps along each edge
+        (continuous, every dense joint segment free), biased towards the first goal's TCP pose, which the
+        path ends at (on whichever arm branch the tracking reaches it).  A held object is moved level from
+        A to B, which is what the carry is; projecting a free joint path onto level often had to flip the
+        wrist half-way.  Returns a dense joint path after q0, or None."""
+        import time as _time
+
+        U = _upstream()
+        kin = ctx.kin
+        q0 = np.clip(np.asarray(q0, float), ctx.lo, ctx.hi)
+        goal_q = np.clip(np.asarray(_as_goals(goals)[0], float), ctx.lo, ctx.hi)
+        p_goal, R_g = kin.tcp(goal_q)
+        cons = self._tilt_constraint(ctx, R_g)
+        qa = cons.project(q0, ctx.lo, ctx.hi)
+        if qa is None or not self._segments_free(ctx, [q0, qa]):
+            return None
+
+        def psi_of(R):
+            M = R @ R_g.T  # a rotation about world z when R holds the goal's tilt
+            return math.atan2(M[1, 0], M[0, 0])
+
+        def pose(st):
+            c, s_ = math.cos(st[3]), math.sin(st[3])
+            return st[:3], np.array([[c, -s_, 0.0], [s_, c, 0.0], [0.0, 0.0, 1.0]]) @ R_g
+
+        def dist(a, b):
+            return float(np.linalg.norm(a[:3] - b[:3]) + TS_YAW_M * abs(a[3] - b[3]))
+
+        def track_edge(q, sa, sb):
+            """IK along the straight task-space segment sa -> sb from q, in TS_STEP steps; continuous, free
+            of self collision, every dense joint segment free.  The joint path after q, or None."""
+            n = max(1, int(math.ceil(max(np.linalg.norm(sb[:3] - sa[:3]) / TS_STEP, abs(sb[3] - sa[3]) / 0.05))))
+            out, qk = [], q
+            for k in range(1, n + 1):
+                pt, Rt = pose(sa + (sb - sa) * (k / n))
+                Q, ep, er = K.solve(
+                    ctx.chain,
+                    kin.base_p,
+                    kin.base_R,
+                    pt,
+                    Rt,
+                    qk[None],
+                    ctx.lo,
+                    ctx.hi,
+                    retract=qk,
+                    iters=40,
+                    limit_gain=0.0,
+                )
+                if not (ep[0] < U.POS_TOL and er[0] < U.ROT_TOL) or np.max(np.abs(Q[0] - qk)) > U.MAX_STEP:
+                    return None
+                qk = Q[0]
+                out.append(qk)
+            if not all(self._eval(ctx, np.array(out), "self")) or not self._segments_free(ctx, [q] + out):
+                return None
+            return out
+
+        sa = np.r_[kin.tcp(qa)[0], psi_of(kin.tcp(qa)[1])]
+        sg = np.r_[p_goal, psi_of(R_g)]
+        lo_b = np.minimum(sa[:3], sg[:3]) - TS_MARGIN
+        hi_b = np.maximum(sa[:3], sg[:3]) + TS_MARGIN
+        lo_b[2] = max(lo_b[2], 0.05)
+        y_lo, y_hi = min(sa[3], sg[3]) - math.pi / 2, max(sa[3], sg[3]) + math.pi / 2
+        nodes = [(sa, qa, -1, [])]  # (state, q, parent, joint path from the parent)
+        rng = np.random.default_rng(TS_SEED)
+        t_end = _time.monotonic() + budget
+        found = None
+        while _time.monotonic() < t_end and len(nodes) < TS_NODES:
+            target = sg if rng.random() < TS_GOAL_BIAS else np.r_[rng.uniform(lo_b, hi_b), rng.uniform(y_lo, y_hi)]
+            k = min(range(len(nodes)), key=lambda i: dist(nodes[i][0], target))
+            s0, qk = nodes[k][0], nodes[k][1]
+            d = dist(s0, target)
+            s_new = target if d <= TS_EXTEND else s0 + (target - s0) * (TS_EXTEND / d)
+            path = track_edge(qk, s0, s_new)
+            if path is None:
+                continue
+            nodes.append((s_new, path[-1], k, path))
+            last = len(nodes) - 1
+            if dist(s_new, sg) < 1e-9:
+                found = last
+                break
+            path = track_edge(path[-1], s_new, sg)
+            if path is not None:
+                nodes.append((sg, path[-1], last, path))
+                found = len(nodes) - 1
+                break
+        if found is None:
+            _count("plan_ts_fail")
+            return None
+        chain, k = [], found
+        while k >= 0:
+            chain.append(k)
+            k = nodes[k][2]
+        chain = chain[::-1]
+        original = [q for i in chain[1:] for q in nodes[i][3]]
+        # shortcut: from each kept node, the farthest later node a direct edge reaches; edges are tracked
+        # again from where the previous one ended (a direct edge may reach a node on another arm branch)
+        out, i, cur = [], 0, nodes[chain[0]][1]
+        while i < len(chain) - 1:
+            for j in range(len(chain) - 1, i, -1):
+                direct = track_edge(cur, nodes[chain[i]][0], nodes[chain[j]][0])
+                if direct is not None:
+                    break
+            else:
+                out = original
+                break
+            out += direct
+            cur, i = direct[-1], j
+        _count("plan_ts")
+        return ([qa] if np.max(np.abs(qa - q0)) > 1e-6 else []) + out
+
     def _plan_tilt(self, ctx, q0, goals, R_goal):
         """Joint path from q0 to a goal (one joint vector or a list) with the held object's tilt kept at
         R_goal's.  First a free path, levelled waypoint by waypoint (cuRobo, too, seeds its optimiser
-        with a free graph search); else OMPL on the constraint manifold, both ends projected onto
-        that tilt (q0 may tilt up to CARRY_TILT away, an IK goal by its tolerance)."""
+        with a free graph search); then a task-space search with the tilt fixed (_plan_level_ts); last,
+        OMPL on the constraint manifold, both ends projected onto that tilt (q0 may tilt up to
+        CARRY_TILT away, an IK goal by its tolerance)."""
         U = _upstream()
         free, _ = self._plan_js(ctx, q0, goals)
         if free is not None:
@@ -1007,6 +1128,9 @@ class MujocoMotion:
                 if level is not None:
                     _count("plan_level" if hold else "plan_level_moved")
                     return level, None
+        level = self._plan_level_ts(ctx, q0, goals, R_goal)
+        if level is not None:
+            return level, None
         cons = self._tilt_constraint(ctx, R_goal)
         q0 = np.clip(np.asarray(q0, float), ctx.lo, ctx.hi)
         qa = cons.project(q0, ctx.lo, ctx.hi)
