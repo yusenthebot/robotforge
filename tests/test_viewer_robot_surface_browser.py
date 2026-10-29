@@ -100,9 +100,31 @@ def test_native_part_apply_original_noop_undo_and_reload(viewer, size, lang):  #
     viewer(size, lang, journey, world=world)
 
 
-def test_a_reset_during_display_wait_does_not_restore_stale_undo(viewer):  # noqa: F811
+RESET_WIRE = """
+const Native=window.WebSocket;
+window.__partReset={generation:null,holdGeneration:null,states:[]};
+window.WebSocket=class extends Native{
+ set onmessage(handler){super.onmessage=event=>{
+  const m=typeof event.data==='string'?JSON.parse(event.data):null,w=window.__partReset;
+  const deliver=()=>{handler(event);if(m?.type==='state')w.generation=m.generation;};
+  if(m?.type==='state'&&w.holdGeneration!==null&&m.generation>=w.holdGeneration){
+    w.states.push(deliver);return;
+  }
+  deliver();
+ }}
+};
+window.__releasePartReset=()=>{
+ const w=window.__partReset;w.holdGeneration=null;for(const deliver of w.states.splice(0))deliver();
+};
+"""
+
+
+@pytest.mark.parametrize("state_first", [True, False], ids=["state-first", "display-first"])
+def test_a_reset_during_display_wait_does_not_restore_stale_undo(viewer, state_first):  # noqa: F811
     async def journey(tab, server):
         server.pg.session.paused = True
+        await tab.page.call("Page.addScriptToEvaluateOnNewDocument", source=RESET_WIRE)
+        await tab.navigate()
         await open_parts(tab)
         await select(tab, "#robot-surface-material", "steel")
         await tab.run("""const fetch0=window.fetch;window.__heldPartPoses=false;window.__releasePartPoses=null;
@@ -113,9 +135,26 @@ def test_a_reset_during_display_wait_does_not_restore_stale_undo(viewer):  # noq
         await tab.until("window.__heldPartPoses")
         receipt = server.pg._play_edit
         assert receipt is not None
+        await tab.until(f"window.__partReset.generation==={receipt.generation}")
+        generation = receipt.generation + 1
+        version = server.pg.session.version
+        await tab.run(f"window.__partReset.holdGeneration={generation}")
         server.pg.session.reset()
+        assert server.pg.session.version == version and server.pg.session.generation == generation
+        await tab.until("window.__partReset.states.length>0")
+        if state_first:
+            # Version-only READY cannot observe a reset. Deliver its actual state
+            # while display is held, then test that completion cannot restore Undo.
+            await tab.run("window.__releasePartReset()")
+            await tab.until(f"window.__partReset.generation==={generation}")
         await tab.run("window.__releasePartPoses()")
         await tab.until(READY + " && !window.__robotforge.busy().busy")
+        if not state_first:
+            # Before delivery, the client still knows only the edit's generation.
+            assert await tab.eval("window.__partReset.generation") == receipt.generation
+            assert not await tab.eval("document.getElementById('undo-edit').hidden")
+            await tab.run("window.__releasePartReset()")
+            await tab.until(f"window.__partReset.generation==={generation}")
         assert await tab.eval("document.getElementById('undo-edit').hidden")
         assert receipt.generation != server.pg.session.generation
         with pytest.raises(PlaygroundError, match="changed|stale|no longer"):

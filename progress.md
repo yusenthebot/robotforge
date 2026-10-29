@@ -1,5 +1,13 @@
 # progress
 
+## Natural grass imagery (2026-10-29)
+
+Shared floor/terrain/detailed chooser use a bounded 256-square local CC0 pair with authored tint/metric bump/physics and old wood APIs retained; independent 1,000 ms preparation/fallback, no dependency or action-success tuning.
+  Runtime 74ae683d / 774 inputs: 685 viewer-default + 338 current browser (split same-product coverage) + 9 GPU = 1,032 distinct pytest, 7 canonical, source/fresh offline 60-tool smoke and original 11/11 budgets pass. Reset-generation test race reproduced on base and replaced by two actual-message orders; initial failures retained.
+  24 default main-canvas exact pairs; production bridge 23/24 whole-window exact with one bounded clock label difference, 1,447 checks. Six fully decoded movies / 36 root samples include native Malo/touch Go2 grass/wood/grass, drive/release/reset/reload. Wheel 4,031,203 B (+79,500), 417 product files and 13 original WIP exact; mixed loading samples retained, no universal speed claim. Report docs/bench/2026-10-29-natural-grass.md/.json; broad goal active.
+
+[Report](docs/bench/2026-10-29-natural-grass.md).
+
 ## Batch robot part surfaces (2026-10-29)
 
 Explicit multi-selection reduces the same three-part surface design from three full compile/load transactions to one,with one Undo restoring the previous heterogeneous mapping.
