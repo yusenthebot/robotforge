@@ -7,7 +7,7 @@ robotforge 的 `zenobench` 模块把它搬到 MuJoCo 上：ZenoBench 自己的 P
 ## 怎么做到的
 
 ZenoBench 和 Isaac 打交道的地方很少，只有三个文件：`zeno_skills/runtime.py` 打开场景、建仿真和相机，`zeno_skills/rig.py` 读写关节和物体，`zeno_skills/skills.py` 有一处给电器电机下目标。
-技能、谓词、规划器、碰撞模型和逆运动学都是纯 Python。
+技能、谓词和规划器都是纯 Python；手臂的逆运动学、碰撞检测和关节规划在默认固定的版本（`d573467`）里也是纯 Python，上游 10-27 之后改用 cuRobo（只能跑在 CUDA 上），这里另有一个 MuJoCo 实现，见"跟上上游"一节。
 所以 robotforge 不改 ZenoBench，而是提供它 import 的那几个 Isaac 模块，背后换成 MuJoCo：
 
 - `usd_mjcf` 用 usd-core 读 USD 场景，按 PhysX 的语义建 MuJoCo 模型：刚体、关节（转动、滑动、固定）、关节限位、驱动、质量、摩擦材质、碰撞过滤、关闭重力的连杆（变成重力补偿）。
@@ -18,6 +18,7 @@ ZenoBench 和 Isaac 打交道的地方很少，只有三个文件：`zeno_skills
   结果按网格内容缓存在磁盘上。
   会动的刚体（物体和机器人）的凸包再按 PhysX 的顶点上限处理：PhysX 烹制凸包时最多保留 64 个顶点（场景里写了 `hullVertexLimit` 就用写的值），超出时把包围盒按凸包的面一刀刀切下去，见后文。
 - `world` 按 PhysX 的方式推进仿真：一步 1/120 秒拆成 8 个 MuJoCo 子步，关节驱动用 PhysX 的隐式公式，底座跟随场景里那个被 ZenoBench 改写的固定关节锚点。
+- `motion` 只在上游 10-27 之后的 checkout 上生效：把 `zeno_skills.motion.Motion`（cuRobo）换成 `MujocoMotion`，在 MuJoCo 模型上做 IK、碰撞检测和关节规划，规划部分用 OMPL。
 - `shim` 把 `isaacsim.core.prims`、`isaaclab.sim`、`isaaclab.sensors`、`isaaclab.app`、`omni.usd` 和 `pxr.PhysxSchema` 注册成真实的模块名，接口只做 ZenoBench 用到的部分。
   没装 PyTorch 时，一个很小的 NumPy 替身负责 ZenoBench 用到的几个 torch 调用。
   ZenoBench 是对着 Isaac Sim 自带的 NumPy 1.26 写的，有几处用二维向量做 `np.cross`，NumPy 2 已经不支持，shim 在 ZenoBench 进程里恢复了旧行为。
@@ -30,7 +31,7 @@ ZenoBench 没有自己的许可证，所以 robotforge 不附带它的任何代�
 ## 安装和运行
 
 ```bash
-uv sync --extra zenobench          # usd-core、scipy、opencv、imageio
+uv sync --extra zenobench          # usd-core、scipy、opencv、imageio、ompl
 brew install git-lfs               # 场景放在 Git LFS 里
 uv run robotforge zenobench fetch  # 下载 ZenoBench（约 1 GB）
 uv run robotforge zenobench check
@@ -322,15 +323,69 @@ probes 里 P03 擀面杖（推到台面中间时离边只有 4.7 厘米，要求
 - UsdPhysics 的驱动 maxForce 以力（转动关节是力矩）为单位，PhysX 文档说这个上限不分驱动类型都生效，这里按力矩上限处理，一致；机器人连杆在 USD 里关了重力，这里也换成了重力补偿。
 - 差的这 4 毫米取决于手臂被顶开多少，没有找到移植上的差别。
 
-上游的进展（2026-10-29 查）：
+上游在 10-27（`4fd4ae5`）把上面查的这套手写规划器换成了 cuRobo，所以微波炉这一处没有给上游提 issue；灶台按键的代码（`PressButtonPolicy`）上游没变，但 Isaac 上这一步是过的，差别只在 MuJoCo 里手腕被顶开多少，所以也没有提。
+在上游的新版本上，T07 用下一节的 MuJoCo 规划器能完整走通（种子 0，微波炉可用的那个变体）。
 
-- ZenoBench 在 10-27（`4fd4ae5`）把手臂的 IK、碰撞检测和关节规划全部换成了 cuRobo 0.7.8，对着 PhysX 的真实碰撞体规划。
-- 上面查的这套手写规划器（球对标注盒、五个固定经过点）已经删掉，合并说明里写 T07 和 P06 在种子 10 上通过。
-- 它的 `benchmark/RESULTS.md` 和 README 里的 rollout 表还是 cuRobo 之前跑的，没有按新代码重跑。
-- cuRobo 要 CUDA，上游也写明没有别的求解器；这里固定在 10-26 的 `d573467`，还是旧规划器。
-- 要跟上上游，得先给 `zeno_skills/motion.py` 的 `Motion` 接口做一个不用 CUDA 的实现。
-- 所以微波炉这一处没有给上游提 issue，出问题的代码上游已经换掉了。
-- 灶台按键的代码（`PressButtonPolicy`）上游没变，但 Isaac 上这一步是过的，差别只在 MuJoCo 里手腕被顶开多少，所以也没有提。
+## 跟上上游：Mac 上顶替 cuRobo
+
+ZenoBench 从 10-27（`4fd4ae5`）起把手臂的 IK、碰撞检测和关节规划全部交给 cuRobo 0.7.8，上游写明没有别的求解器。
+cuRobo 只能跑在 CUDA 上，4 月发布的 v0.8（cuRoboV2）是重写，仍然要 CUDA，而且 ZenoBench 用的是 0.7.8 的接口。
+上游所有调用都经过 `zeno_skills/motion.py` 里的一个类 `Motion`，所以 `robotforge.zenobench.motion` 只换掉这个类（`MujocoMotion`），上游其余代码，包括这个模块里的工具函数和常量，都照原样运行。
+计划和取舍见 `docs/ZENOBENCH_MOTION_PLAN.md`。
+
+默认固定的版本仍是 `d573467`（上表的结果都来自它），`MujocoMotion` 在那个版本上不起作用。
+要跑上游的新版本，准备一个它的 checkout，再把 `ZENOBENCH_ROOT` 指过去：
+
+```bash
+git -C ~/dev/ZenoBench worktree add --detach ~/dev/ZenoBench-914d2a2 914d2a2
+git -C ~/dev/ZenoBench-914d2a2 lfs pull
+ZENOBENCH_ROOT=~/dev/ZenoBench-914d2a2 uv run robotforge zenobench episode -- --task T07_heat_oatmeal --seed 0 --variant microwave_works --route nominal
+```
+
+### 怎么做的
+
+- 碰撞世界：规划用物理模型的一份副本，场景碰撞体和机器人在仿真里真实撞到的完全一样（带 PhysX 顶点上限的凸包，静态三角网格拆出的凸块）。
+- 机器人：用上游 `robot_sources/curobo/zeno_malo.yml` 里的 283 个 cuRobo 球（27 个连杆，Isaac 的工具按 PhysX 碰撞体拟合的），每只手再预留 32 个球表示手里的物体，和上游的保守程度一致。
+- 这些球在物理模型编译前加进去：物理里不参与碰撞、没有质量，规划副本里打开它们、只让它们和场景配对，一次 `mj_collision` 就得到所有距离；自碰撞按 yml 的忽略表用 numpy 算。
+- 两个 MuJoCo 细节：每个刚体的碰撞树是编译时按"能碰撞的几何体"建的，球要用一个物理几何体都不用的接触位编译，否则以后永远查不到；手里物体的球换位置后，要重算夹爪那棵树的包围盒。
+- 碰撞规则逐条照抄上游：手里的物体和它装着的东西对拿着它的手不算障碍，TCP 目标处的物体不算障碍，`ignore_fingers` 和 `hand_touches_part` 关掉手指或整只手，另一只手臂锁在最后一次设定的位置，搬运阶段把手中物体的包围盒挂到手上。
+- IK：9 个关节（升降、腰、7 个手臂关节）一次解 32 个种子的阻尼最小二乘；顶到限位、还要往外推的关节在那一步里不参与，零空间把手臂关节推离限位（升降和腰不推，地面抓取要用到它们的限位），选解照抄上游的打分。
+- 关节规划：先试直线，不行用 OMPL 的 RRT-Connect，再用 OMPL 的路径简化；姿态目标给 4 个不同分支的 IK 解作为目标集合。
+- 搬运时保持物体水平：先把一条自由路径逐点拉回水平，不行就在"手的位置和朝向、倾角固定"的空间里搜（IK 一步步跟着走），最后才用 OMPL 的约束空间。
+- 和上游语义的两处不同：上游在 2.5 米外关掉障碍，这里没做，那只是加速，手够不到那么远；`ignore_fingers` 时上游完全不查手指，这里在关节空间的大动作里仍然只许手指擦进墙和固定家具 1 厘米以内，因为一次长距离转动让手指扫进 TV 柜后面的墙，手臂卡死了（PhysX 里手指一样会撞墙）。
+
+### 测量（2026-10-30，M5 Max）
+
+- 规划模型里的夹爪位姿和 ZenoBench 自己按 URDF 算的正运动学差 3e-8 米。
+- 一次碰撞判断约 0.34 毫秒：正运动学 42 微秒，自碰撞 30 微秒，`mj_collision` 约 225 微秒；8 个线程每秒约 8 万次。
+- IK：200 个随机可达位姿（四分之一的关节贴近限位）全部解出；加上限位处理之前是 167 个。
+- `tests/test_zenobench_motion.py` 有一项在真实厨房场景上跑上面这些检查，没有上游新版本的 checkout 时跳过。
+
+### 整任务基准（上游 `914d2a2`）
+
+和"整任务基准"一节同样的 111 个回合，跑了两轮：
+
+| 批次 | 第一轮 | 修正后 | 固定版本 `d573467` | Isaac（cuRobo 之前的代码） |
+|---|---|---|---|---|
+| accept（路线） | 29/60 | 30/60 | 43/60 | 60/60 |
+| probes | 13/21 | 11/21 | 13/21 | 14/21 |
+| fixed | 2/10 | 2/10 | 2/10 | 2/10 |
+| retry | 3/10 | 2/10 | 2/10 | 3/10 |
+| oracle | 5/10 | 7/10 | 9/10 | 9/10 |
+
+两轮之间修了四处，都是这里规划器的问题，修完的回合单独重跑都过了：
+
+- 只保持倾角的水平化让手的终点漂开，T03 放擀面杖时手停在目标 11.5 厘米外；现在路径必须终止在目标上。
+- IK 解贴着关节限位：上游代码里写过，按键姿态肘关节在限位上会被按键顶开；T07 的开门键差了 3.8 厘米，现在过了。
+- 手指扫进墙（上一段说的），T10 拿易拉罐和 T08 拿海绵时手臂卡死。
+- 搬运时手里物体的球在另一只手臂查询一次后就被关掉了，P20 端锅盖时盖子滑掉；这条和链接包围球顺序的错、碰撞修复的雅可比为零，是一轮代码审查查出来的。
+
+剩下的失败里，和固定版本相同的有 T01 推书、T02 挤在一起的木块、T05 找铅笔。
+新出现的大多是物理上的：T07 往微波炉里放时碗从手里滑掉或撞上炉子（上游这几步规划不带手里的物体），T09 端锅盖滑掉，T03 抬到搬运高度不够。
+T06 要把木块保持水平往下放 56 厘米到 TV 柜上，三种规划都找不到路（20 秒也不行）；保持水平这条要求是上游 10-28 才加的，Isaac 那张表的结果早于它。
+T08 停好车以后按新位置重新算的目标确实够不着（4096 个种子、旧版本的 IK 都解不出），停在哪里取决于 IK 对各个候选位置的排序。
+上游没有按新代码重跑 `RESULTS.md`，所以现在分不清哪些失败在 Isaac 上也会出现；要分清，得在有 NVIDIA 显卡的机器上跑一遍上游的新版本，或者把那边每次 `Motion` 查询录下来拿到这里回放。
+在那之前，默认固定版本不升级。
 
 ## 推、拖和滚：凸包顶点上限和锁的误判
 
