@@ -45,6 +45,7 @@ SPHERE_TAG = "rf_plan_sphere"
 HELD_TAG = "rf_plan_held"
 SPHERE_GROUP = 5  # never rendered (the viewer shows the visual group only)
 PLAN_BIT = 1 << 4  # contype / conaffinity bit of the planning pairs: robot sphere x scene
+HELD_IDLE = 1e-3  # m: radius of an unused held-object sphere (at the TCP, switched off)
 SEGMENT_RES = 0.05  # rad: dense check spacing on a joint segment (upstream _segments_free)
 RANDOM_SEEDS = 28  # IK seeds beyond the 4 a query passes (cuRobo solves 32)
 EXTRA_SEEDS = 64  # one more batch when every solution collides
@@ -119,7 +120,13 @@ class RobotSpheres:
 
 
 def add_planning_spheres(spec, conv=None) -> None:
-    """World.build hook: the cuRobo spheres and the held-object pools as inert geoms on the robot links."""
+    """World.build hook: the cuRobo spheres and the held-object pools as inert geoms on the robot links.
+
+    They compile with contype PLAN_BIT and conaffinity 0: the physics geoms (contype = conaffinity = 1)
+    never pair with them, but MuJoCo puts them in each body's collision tree, which is built once at
+    compile from the geoms that can collide (spheres compiled with masks 0 are never found later).
+    The held-object pool compiles as tiny spheres at the TCP; MujocoMotion refits the gripper's tree
+    in its planning copy when a held object's spheres move in."""
     U = _upstream()
     path = Path(U.ROBOT_CFG)
     if not path.exists() or spec.body(f"{ASSET}/right_gripper_link") is None:
@@ -135,7 +142,7 @@ def add_planning_spheres(spec, conv=None) -> None:
     for side in SIDES:
         body = spec.body(f"{ASSET}/{side}_gripper_link")
         for i in range(U.HELD_SPHERES):
-            _inert_sphere(body, f"{HELD_TAG}:{side}:{i}", (0.0, 0.0, -TCP_DEPTH), 1e-3)
+            _inert_sphere(body, f"{HELD_TAG}:{side}:{i}", (0.0, 0.0, -TCP_DEPTH), HELD_IDLE)
 
 
 def _inert_sphere(body, name, pos, radius) -> None:
@@ -144,7 +151,7 @@ def _inert_sphere(body, name, pos, radius) -> None:
     g.type = mujoco.mjtGeom.mjGEOM_SPHERE
     g.size = (float(radius), 0.0, 0.0)
     g.pos = [float(v) for v in pos]
-    g.contype = g.conaffinity = 0
+    g.contype, g.conaffinity = PLAN_BIT, 0
     g.group = SPHERE_GROUP
     g.density = 0.0
     g.rgba = (0.0, 0.0, 0.0, 0.0)
@@ -159,7 +166,7 @@ class _Query:
     base_q: np.ndarray  # planar base joint values for kin's base pose
     lo: np.ndarray
     hi: np.ndarray
-    pairs: tuple  # (i, j) sphere index arrays checked for self collision
+    pairs: tuple  # (i, j, link pair of each) sphere pairs checked for self collision
     held_on: bool  # this arm's held-object spheres are attached
 
 
@@ -208,6 +215,11 @@ class MujocoMotion:
         m.geom_margin[:] = 0.0
         m.geom_gap[:] = 0.0
         m.geom_conaffinity[self.scene] = PLAN_BIT
+        m.geom_contype[self.sph] = PLAN_BIT
+        robot_body = np.array([n.startswith("/World/ZenoMalo") for n in body_name])
+        m.body_contype[:] = np.where(robot_body, PLAN_BIT, 0)
+        m.body_conaffinity[:] = 0
+        m.body_conaffinity[np.unique(m.geom_bodyid[self.scene])] = PLAN_BIT
         m.opt.enableflags &= ~int(mujoco.mjtEnableBit.mjENBL_SLEEP)
         self._margin = None
         # owners (upstream scene_geometry.collect): annotated objects and articulated parts by prim prefix
@@ -250,6 +262,7 @@ class MujocoMotion:
         self.part_adr = {
             a["name"]: int(m.jnt_qposadr[self.jid[a["joint"]]]) for a in ann.articulated if a.get("joint") in self.jid
         }
+        self._link_bounds()
         self.pairs = {s: self._self_pairs(s) for s in SIDES}
         self.data = mujoco.MjData(m)
         self.qpos_world = self.world.data.qpos.copy()
@@ -282,7 +295,29 @@ class MujocoMotion:
             idx = np.nonzero(keep)[0][~ign]
         else:
             idx = np.nonzero(keep)[0]
-        return i[idx], j[idx]
+        i, j = i[idx], j[idx]
+        # link pair of each sphere pair: a check tests the links' bounding spheres first
+        li, lj = self.sph_li[i], self.sph_li[j]
+        key = li * len(self.links) + lj
+        uniq, lp = np.unique(key, return_inverse=True)
+        self.link_pairs[side] = (uniq // len(self.links), uniq % len(self.links))
+        return i, j, lp
+
+    def _link_bounds(self):
+        """Per link with spheres: its body, and the centre and radius of a sphere around all of them."""
+        self.links = sorted(set(self.sph_link))
+        self.sph_li = np.array([self.links.index(n) for n in self.sph_link])
+        self.link_body = np.array(
+            [mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"{ASSET}/{n}") for n in self.links]
+        )
+        centres, radii = [], []
+        for k in range(len(self.links)):
+            sel = self.sph_li == k
+            c = self.rs.centers[sel].mean(0)
+            centres.append(c)
+            radii.append(float((np.linalg.norm(self.rs.centers[sel] - c, axis=1) + self.rs.radii[sel]).max()))
+        self.link_c, self.link_r = np.array(centres), np.array(radii)
+        self.link_pairs = {}
 
     def _calibrate_base(self):
         """Base pose of the planar anchor at zero joint values; checked against a moved base."""
@@ -407,34 +442,64 @@ class MujocoMotion:
         at q; None (or a bimanual hold) empties the pool.  Returns the object's name."""
         U = _upstream()
         geoms = self.held_geoms[side]
+        m = self.model
         name = None if h is None or h.get("kind") == "bimanual" else h.get("name")
-        if name is None or not len(self.owner_geoms.get(f"object:{name}", ())):
-            self.model.geom_contype[geoms] = 0
-            self._held_on[side] = False
-            self._mask_key = None
-            return None
-        frame, lo, hi = self._box_of(name)
-        self._scene_kinematics(self.data)
-        T_obj = np.eye(4)
-        T_obj[:3, :3] = self.data.geom_xmat[frame].reshape(3, 3)
-        T_obj[:3, 3] = self.data.geom_xpos[frame]
-        p, R = kin.tcp(np.asarray(q, float))
-        T_tcp = np.eye(4)
-        T_tcp[:3, :3], T_tcp[:3, 3] = R, p
-        M = np.linalg.inv(T_tcp) @ T_obj
-        b = U.box_spheres(lo, hi)[: len(geoms)]
-        pos = b[:, :3] @ M[:3, :3].T + M[:3, 3]
-        pos[:, 2] -= self.tcp_depth  # TCP frame -> gripper_link frame
-        g = geoms[: len(b)]
-        self.model.geom_pos[g] = pos
-        self.model.geom_size[g, 0] = b[:, 3]
-        self.model.geom_rbound[g] = b[:, 3]
-        self.model.geom_aabb[g] = np.c_[np.zeros((len(b), 3)), np.repeat(b[:, 3:4], 3, 1)]
-        self.model.geom_contype[geoms] = 0
-        self.model.geom_contype[g] = PLAN_BIT
-        self._held_on[side] = True
+        m.geom_contype[geoms] = 0
+        m.geom_pos[geoms] = (0.0, 0.0, -self.tcp_depth)
+        m.geom_size[geoms, 0] = m.geom_rbound[geoms] = HELD_IDLE
+        m.geom_aabb[geoms] = (0.0, 0.0, 0.0, HELD_IDLE, HELD_IDLE, HELD_IDLE)
+        self._held_on[side] = False
         self._mask_key = None
+        if name is not None and len(self.owner_geoms.get(f"object:{name}", ())):
+            frame, lo, hi = self._box_of(name)
+            self._scene_kinematics(self.data)
+            T_obj = np.eye(4)
+            T_obj[:3, :3] = self.data.geom_xmat[frame].reshape(3, 3)
+            T_obj[:3, 3] = self.data.geom_xpos[frame]
+            p, R = kin.tcp(np.asarray(q, float))
+            T_tcp = np.eye(4)
+            T_tcp[:3, :3], T_tcp[:3, 3] = R, p
+            M = np.linalg.inv(T_tcp) @ T_obj
+            b = U.box_spheres(lo, hi)[: len(geoms)]
+            pos = b[:, :3] @ M[:3, :3].T + M[:3, 3]
+            pos[:, 2] -= self.tcp_depth  # TCP frame -> gripper_link frame
+            g = geoms[: len(b)]
+            m.geom_pos[g] = pos
+            m.geom_size[g, 0] = m.geom_rbound[g] = b[:, 3]
+            m.geom_aabb[g] = np.c_[np.zeros((len(b), 3)), np.repeat(b[:, 3:4], 3, 1)]
+            m.geom_contype[g] = PLAN_BIT
+            self._held_on[side] = True
+        else:
+            name = None
+        self._refit_tree(int(m.geom_bodyid[geoms[0]]))
         return name
+
+    def _refit_tree(self, body):
+        """Recompute a body's collision-tree boxes (body inertial frame, as MuJoCo compiles them) after
+        its geoms moved or changed size: leaves from the geoms, inner nodes the union of their children."""
+        from scipy.spatial.transform import Rotation
+
+        m = self.model
+        a = int(m.body_bvhadr[body])
+        if a < 0:
+            return
+        Ri = Rotation.from_quat(m.body_iquat[body][[1, 2, 3, 0]]).as_matrix()
+
+        def box(k):
+            g = int(m.bvh_nodeid[a + k])
+            if g >= 0:
+                Rgi = Ri.T @ Rotation.from_quat(m.geom_quat[g][[1, 2, 3, 0]]).as_matrix()
+                c = Ri.T @ (m.geom_pos[g] - m.body_ipos[body]) + Rgi @ m.geom_aabb[g, :3]
+                out = np.r_[c, np.abs(Rgi) @ m.geom_aabb[g, 3:]]
+            else:
+                kids = [box(int(c)) for c in m.bvh_child[a + k] if c >= 0]
+                lo = np.min([x[:3] - x[3:] for x in kids], 0)
+                hi = np.max([x[:3] + x[3:] for x in kids], 0)
+                out = np.r_[(lo + hi) / 2, (hi - lo) / 2]
+            m.bvh_aabb[a + k] = out
+            return out
+
+        box(0)
 
     def _box_of(self, name):
         """(frame geom, lo, hi): the object's box over all its colliders, in its first collider's frame."""
@@ -504,11 +569,10 @@ class MujocoMotion:
                 m.geom_contype[self.held_geoms[side]] = 0
             self._mask_key = key
         on = self.model.geom_contype[self.sph] != 0
-        i, j = self.pairs[side]
+        i, j, lp = self.pairs[side]
         sel = on[i] & on[j]
-        return _Query(
-            side, kin, self.chains[side], self._base_q(kin.base_p, yaw), lo, hi, (i[sel], j[sel]), self._held_on[side]
-        )
+        pairs = (i[sel], j[sel], lp[sel], *self.link_pairs[side])
+        return _Query(side, kin, self.chains[side], self._base_q(kin.base_p, yaw), lo, hi, pairs, self._held_on[side])
 
     def _set_margin(self, margin):
         if margin != self._margin:
@@ -535,7 +599,13 @@ class MujocoMotion:
         self._set_robot(d, ctx, q)
         mujoco.mj_kinematics(self.model, d)
         if mode in ("feasible", "self"):
-            i, j = ctx.pairs
+            i, j, lp, la, lb = ctx.pairs
+            if len(i):
+                body = self.link_body
+                C = d.xpos[body] + (d.xmat[body].reshape(-1, 3, 3) @ self.link_c[..., None])[..., 0]
+                near = np.linalg.norm(C[la] - C[lb], axis=1) < self.link_r[la] + self.link_r[lb]
+                k = near[lp]
+                i, j = i[k], j[k]
             if len(i):
                 X = d.geom_xpos[self.sph]
                 gap = np.linalg.norm(X[i] - X[j], axis=1) - self.sph_r[i] - self.sph_r[j]
@@ -804,17 +874,19 @@ class MujocoMotion:
         return motion_plan.Constraint(f, jac, 2)
 
     def _plan_tilt(self, ctx, q0, q_goal, R_goal):
-        """Joint path q0 -> q_goal with the held object's tilt kept at R_goal's: q0 is first projected
-        onto that tilt (a short straight move), then OMPL plans on the constraint manifold."""
+        """Joint path q0 -> q_goal with the held object's tilt kept at R_goal's.  Both ends are first
+        projected onto that tilt (q0 may tilt up to CARRY_TILT away, an IK goal by its tolerance), a
+        short straight move each, and OMPL plans on the constraint manifold between them."""
         U = _upstream()
         cons = self._tilt_constraint(ctx, R_goal)
         q0 = np.clip(np.asarray(q0, float), ctx.lo, ctx.hi)
-        qa = cons.project(q0, ctx.lo, ctx.hi)
-        if qa is None:
-            return None, "could not level the start onto the goal tilt"
+        q_goal = np.clip(np.asarray(q_goal, float), ctx.lo, ctx.hi)
+        qa, qb = cons.project(q0, ctx.lo, ctx.hi), cons.project(q_goal, ctx.lo, ctx.hi)
+        if qa is None or qb is None:
+            return None, "could not level the start or goal onto the goal tilt"
         if not self._segments_free(ctx, [q0, qa]):
             return None, "levelling the start collides"
-        if not self._feasible(ctx, np.asarray(q_goal, float)[None])[0]:
+        if not self._segments_free(ctx, [qb, q_goal]):
             return None, "goal state in collision"
         d = self.data
 
@@ -823,18 +895,12 @@ class MujocoMotion:
 
         self._set_margin(U.ACTIVATION)
         qs, status = motion_plan.plan(
-            qa,
-            np.clip(q_goal, ctx.lo, ctx.hi),
-            ctx.lo,
-            ctx.hi,
-            valid,
-            SEGMENT_RES,
-            U.PLAN_TIMEOUT,
-            U.PLAN_ATTEMPTS,
-            constraint=cons,
+            qa, qb, ctx.lo, ctx.hi, valid, SEGMENT_RES, U.PLAN_TIMEOUT, U.PLAN_ATTEMPTS, constraint=cons
         )
         if qs is None:
             return None, status
+        if np.max(np.abs(qb - q_goal)) > 1e-9:
+            qs = qs + [q_goal]
         path = ([qa] if np.max(np.abs(qa - q0)) > 1e-6 else []) + qs
         if not self._segments_free(ctx, [q0] + path):
             return None, "tilt-held path failed the dense check"
