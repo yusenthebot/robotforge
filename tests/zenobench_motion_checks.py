@@ -122,6 +122,12 @@ if qt is not None:
     dense = [qa + (qb - qa) * u for qa, qb in zip([q0] + qt[:-1], qt, strict=True) for u in np.linspace(0, 1, 5)]
     out["tilt_max"] = max(tilt(R1, kin.tcp(q)[1]) for q in dense)
     out["tilt_limit"] = CARRY_TILT
+# 6b. a tilt-only levelled path still ends exactly at its goal (the hand must not stop short)
+if ok:
+    free_path = [q0 + (q_goal - q0) * u for u in np.linspace(0, 1, 12)[1:]]
+    lv = mo._level_path(ctx, q0, free_path, R1, hold_position=False)
+    out["level_end_err"] = None if lv is None else float(np.max(np.abs(lv[-1] - q_goal)))
+
 # 7. a held object's box rides on the hand: its spheres sit inside the object's box, then switch off
 ctx = mo._context(kin, None, {}, (), True)
 name = mo._attach_held("right", kin, q0, {"name": "wooden_block_a"})

@@ -921,8 +921,9 @@ class MujocoMotion:
         """A free joint path with every dense waypoint moved onto R_goal's tilt (Newton steps, joints at
         a limit left out of a step that would push them further), its TCP position held or (without
         ``hold_position``) left free; each waypoint starts from the previous levelled one plus the free
-        path's own step.  None when a waypoint cannot be levelled, the levelled path jumps, or it
-        collides.  The path starts with the levelling of q0."""
+        path's own step (tilt only: from the free waypoint).  None when a waypoint cannot be levelled,
+        the levelled path jumps, does not end at the free path's goal, or collides.  The path starts with
+        the levelling of q0."""
         kin = ctx.kin
         v = np.asarray(R_goal, float).T @ np.array([0.0, 0.0, 1.0])
         dense = [np.asarray(q0, float)]
@@ -931,7 +932,10 @@ class MujocoMotion:
         out, prev, prev_free = [], None, None
         for q in dense:
             target = ctx.chain.tcp(q[None], kin.base_p, kin.base_R)[0][0]
-            x = q.copy() if prev is None else np.clip(prev + (q - prev_free), ctx.lo, ctx.hi)
+            # held TCP: continue from the previous levelled waypoint; tilt only: start from the free waypoint
+            # itself, or the hand drifts further from the free path with every waypoint
+            chain = prev is not None and hold_position
+            x = np.clip(prev + (q - prev_free), ctx.lo, ctx.hi) if chain else q.copy()
             for it in range(LEVEL_ITERS + 1):
                 tcp, R, J = ctx.chain.tcp_jac(x[None], kin.base_p, kin.base_R)
                 Rv = R[0] @ v
@@ -955,8 +959,12 @@ class MujocoMotion:
             out.append(x)
             prev, prev_free = x, q
         goal = np.asarray(qs[-1], float)
-        if np.max(np.abs(out[-1] - goal)) <= LEVEL_JUMP:
-            out[-1] = goal  # end exactly where the free path ended (the goal, level within its IK tolerance)
+        if np.max(np.abs(out[-1] - goal)) > LEVEL_JUMP:
+            # levelling moved the end away from the goal (the TCP drifts when only the tilt is held): the
+            # path must end where it was asked to, or the hand stops short of its target
+            _count("level_fail_end")
+            return None
+        out[-1] = goal  # end exactly at the goal (level within its IK tolerance)
         if not self._segments_free(ctx, [np.asarray(q0, float)] + out):
             _count("level_fail_collide")
             return None
