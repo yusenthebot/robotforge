@@ -87,6 +87,7 @@ Evolving。
 
 ZenoBench（用户 2026-10-27 批准）：
 - 可选 extra `zenobench`：usd-core、scipy、opencv-python-headless、imageio、imageio-ffmpeg，用来读取 ZenoBench 的 USD 场景并原样运行它的代码。核心安装不包含。
+- 同一个 extra 里的 ompl（用户 2026-10-29 批准）：在 Mac 上顶替上游的 cuRobo 做关节空间规划，见 `docs/ZENOBENCH_MOTION_PLAN.md`。
 
 超出这个列表的新依赖属于 Gate。
 

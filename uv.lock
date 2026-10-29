@@ -963,6 +963,21 @@ wheels = [
 ]
 
 [[package]]
+name = "ompl"
+version = "2.0.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/18/31/3a26c1371b5de82778914ca05ff1dbd24e5b38cbd110decb9c7dbb4d0958/ompl-2.0.1-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:ccfc22cb870986b4720c9f722dadc03c9532ed40655662e8ca02fb6afc1991cb", size = 2304323, upload-time = "2026-06-23T05:46:16.11Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/16/4d9449532f03532b1b0b12756ff690518e3171ae6a8cbc36c26e46e59e5c/ompl-2.0.1-cp312-cp312-macosx_15_0_x86_64.whl", hash = "sha256:f0a885358e37f3e34b06584ea9e83cdb000cbf3de889a0c456ad234e5e70c0c4", size = 3055309, upload-time = "2026-06-23T05:46:22.833Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/c0/8115e7c09adfed6fac18f05746c603b38a76a69fee7421b70c9a568b37d8/ompl-2.0.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:23a0df9b698cfc310b99e06a37fca42e28d9ffb4be0a99acde5dc2968f0235d0", size = 4389643, upload-time = "2026-06-23T05:46:29.681Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/6e/cfbe93750730a2e3268bfec9214cf7b6ce4488c306c6591fd6afecf0c027/ompl-2.0.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3792acfda54e2c5a9462d92272863823c1ef6e781258341a470a198a186e5d47", size = 4566067, upload-time = "2026-06-23T05:46:36.049Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/27/62aababae4b5c16f735997cff15425e8e368948aa2159d7285f82c372e42/ompl-2.0.1-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:953662c5b109d25c05a44d7fa3ebaf51f34be4545b77c378c76d8b80d9a54ce2", size = 2304237, upload-time = "2026-06-23T05:46:17.523Z" },
+    { url = "https://files.pythonhosted.org/packages/b8/4a/786f85bdc33d9ea8bfae79e9d387bf9bba787c70575f98fb49c89544e470/ompl-2.0.1-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:2b457ae068fd505ff990cc363a0e0d2739ed5aa1d3dc0c553b7b24ab0b1b4ff1", size = 3055214, upload-time = "2026-06-23T05:46:24.384Z" },
+    { url = "https://files.pythonhosted.org/packages/28/ed/e9f8ac1b0be200946af715e0d4a6bb076a82ff89177588934117346d99cf/ompl-2.0.1-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:90d417436d91b139022f068d11bdd2e874dbb8467778b6c007bb4f0282b049ee", size = 4389541, upload-time = "2026-06-23T05:46:31.102Z" },
+    { url = "https://files.pythonhosted.org/packages/28/db/a9ce66a982b22f597077cef79de41e2ef5107500e3860035a8e903d02147/ompl-2.0.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a740777f1959f3ae858d397ed1557b5a01729219f8261b0455654664f9161cd8", size = 4565961, upload-time = "2026-06-23T05:46:37.779Z" },
+]
+
+[[package]]
 name = "onnxruntime"
 version = "1.31.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1422,6 +1437,7 @@ rl = [
 zenobench = [
     { name = "imageio" },
     { name = "imageio-ffmpeg" },
+    { name = "ompl" },
     { name = "opencv-python-headless" },
     { name = "scipy" },
     { name = "usd-core" },
@@ -1442,6 +1458,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=2.3.0" },
     { name = "mujoco", specifier = ">=3.15.0" },
     { name = "numpy", specifier = ">=2.5.4" },
+    { name = "ompl", marker = "extra == 'zenobench'", specifier = ">=2.0.1" },
     { name = "onnxruntime", marker = "extra == 'policy'", specifier = ">=1.20" },
     { name = "opencv-python-headless", marker = "extra == 'zenobench'", specifier = ">=4.11" },
     { name = "pillow", specifier = ">=12.3.0" },

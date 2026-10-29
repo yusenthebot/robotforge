@@ -32,6 +32,7 @@ policy = ["onnxruntime>=1.20"]
 zenobench = [
     "imageio>=2.37",
     "imageio-ffmpeg>=0.6",
+    "ompl>=2.0.1",
     "opencv-python-headless>=4.11",
     "scipy>=1.15",
     "usd-core>=25.5",
