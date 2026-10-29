@@ -31,6 +31,7 @@ class _State:
     world: World | None = None
     options = usd_mjcf.Options()
     substeps = SUBSTEPS
+    spec_hooks: list = []  # World.build hooks (the planning spheres of motion.py)
 
 
 STATE = _State()
@@ -173,7 +174,9 @@ class SimulationContext:
         if STATE.stage is None:
             raise RuntimeError("open a stage first (omni.usd.get_context().open_stage)")
         self.cfg = cfg or SimulationCfg()
-        STATE.world = World(STATE.stage, dt=self.cfg.dt, substeps=STATE.substeps, options=STATE.options)
+        STATE.world = World(
+            STATE.stage, dt=self.cfg.dt, substeps=STATE.substeps, options=STATE.options, spec_hooks=STATE.spec_hooks
+        )
         self.world = STATE.world
         for cam in _PENDING_CAMERAS:
             cam._register(self.world)
@@ -307,6 +310,11 @@ def _world() -> World:
     if STATE.world is None or STATE.world.model is None:
         raise RuntimeError("the simulation is not built yet: call SimulationContext.reset() first")
     return STATE.world
+
+
+def current_world() -> World:
+    """The built MuJoCo world of the running simulation."""
+    return _world()
 
 
 class SingleArticulation:

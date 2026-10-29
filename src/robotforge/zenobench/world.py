@@ -62,8 +62,16 @@ class CameraSpec:
 
 
 class World:
-    def __init__(self, stage, dt: float = 1 / 120, substeps: int = SUBSTEPS, options: usd_mjcf.Options | None = None):
+    def __init__(
+        self,
+        stage,
+        dt: float = 1 / 120,
+        substeps: int = SUBSTEPS,
+        options: usd_mjcf.Options | None = None,
+        spec_hooks=(),
+    ):
         self.stage = stage
+        self.spec_hooks = tuple(spec_hooks)  # (spec, conversion) -> None, run just before the spec compiles
         self.dt = dt
         self.substeps = substeps
         self.options = options or usd_mjcf.Options()
@@ -117,6 +125,8 @@ class World:
         spec.visual.global_.offwidth, spec.visual.global_.offheight = w, h
         spec.visual.quality.shadowsize = 4096
         spec.visual.map.znear = 0.002  # times the model extent (about 10 m): 2 cm, for the wrist cameras
+        for hook in self.spec_hooks:
+            hook(spec, conv)
         m = spec.compile()
         if self._sun_tracks:  # the shadow map spans SUN_REACH around the robot instead of the whole model
             m.vis.map.shadowclip = min(1.0, SUN_REACH / max(float(m.stat.extent), 1e-6))

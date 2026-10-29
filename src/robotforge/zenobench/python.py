@@ -16,7 +16,7 @@ import runpy
 import sys
 from pathlib import Path
 
-from robotforge.zenobench import shim, source
+from robotforge.zenobench import motion, shim, source
 from robotforge.zenobench.world import SUBSTEPS
 
 
@@ -33,6 +33,7 @@ def prepare() -> Path:
     # ZenoBench tools that start workers (verify_skills --jobs, env_service) run $ISAACLAB_PYTHON
     os.environ.setdefault("ISAACLAB_PYTHON", str(wrapper()))
     shim.install(shim.zeno_options(), substeps=int(os.environ.get("ZENOBENCH_SUBSTEPS", SUBSTEPS)))
+    motion.install()
     return zb
 
 

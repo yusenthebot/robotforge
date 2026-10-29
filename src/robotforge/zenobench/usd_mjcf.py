@@ -553,9 +553,10 @@ class _Builder:
             log.debug("collider %s (%s) is not supported", prim.GetPath(), prim.GetTypeName())
             return 0
         r, t, s = _rigid(rel)
+        patch = _get(prim, "physxCollision:torsionalPatchRadius")
         if prim.IsA(UsdGeom.Cube) and owner and owner.endswith(self.opt.capsule_pads):
             half = np.maximum(float(_get(prim, "size", 2.0)) / 2 * np.abs(s), 1e-4)
-            return self._capsule_pad(parent, str(prim.GetPath()), r, t, half, material, dynamic)
+            return self._capsule_pad(parent, str(prim.GetPath()), r, t, half, material, dynamic, patch)
         g = parent.add_geom()
         g.name = str(prim.GetPath())
         g.pos, g.quat = t, _quat(r)
@@ -579,10 +580,10 @@ class _Builder:
                     "Y": np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], float),
                 }[axis]
                 g.quat = _quat(r @ turn.T)
-        self._collision_style(g, material, dynamic)
+        self._collision_style(g, material, dynamic, patch)
         return 1
 
-    def _capsule_pad(self, parent, name, r, t, half, material, dynamic) -> int:
+    def _capsule_pad(self, parent, name, r, t, half, material, dynamic, patch=None) -> int:
         """A finger pad box as parallel capsules along its long side, filling its width: the same contact
         face, but smooth. A flat box face on a faceted hull switches its contact points abruptly as the
         object turns, and the impulse flung a pinched bottle out of the fingers."""
@@ -604,7 +605,7 @@ class _Builder:
             g.type = mujoco.mjtGeom.mjGEOM_CAPSULE
             g.size = (radius, length, 0)
             g.pos, g.quat = t + r @ shift, _quat(rot)
-            self._collision_style(g, material, dynamic)
+            self._collision_style(g, material, dynamic, patch)
         return len(offsets)
 
     def _hull_geom(self, parent, piece, material, dynamic, name):
@@ -618,14 +619,16 @@ class _Builder:
         g.type, g.meshname = mujoco.mjtGeom.mjGEOM_MESH, mesh.name
         self._collision_style(g, material, dynamic)
 
-    def _collision_style(self, g, material, dynamic):
+    def _collision_style(self, g, material, dynamic, patch=None):
         g.group = COLLISION_GROUP
         g.rgba = (0.8, 0.3, 0.3, 0.4)
         friction = material[0] if material else 0.5
         # MuJoCo's torsional friction is a length: torque = coefficient x normal force. PhysX contacts
         # between flat faces are patches, which resist twisting by about friction x patch radius; a can
-        # pinched by 55 mm finger pads pivoted out of the hand with MuJoCo's default 0.005.
-        g.friction = (friction, friction * PATCH_RADIUS, 0.0002)
+        # pinched by 55 mm finger pads pivoted out of the hand with MuJoCo's default 0.005. A collider that
+        # authors PhysX's torsional patch radius (ZenoBench's finger pads since physics.pad_torsion) uses it.
+        radius = PATCH_RADIUS if patch is None else float(patch)
+        g.friction = (friction, friction * radius, 0.0002)
         g.condim = 4 if dynamic else 3
 
     def _physics_material(self, prim):
