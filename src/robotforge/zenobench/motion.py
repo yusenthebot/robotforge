@@ -810,16 +810,19 @@ class MujocoMotion:
                 Q, ep, er = K.solve(ctx.chain, kin.base_p, kin.base_R, p, R, S, ctx.lo, ctx.hi, retract=q)
                 ok = (ep < U.POS_TOL) & (er < U.ROT_TOL)
                 if not ok.any():
+                    _count("cart_fail_ik")
                     return out, False
                 Q = Q[ok]
                 jump = np.max(np.abs(Q - q), axis=1)
                 k = int(np.argmin(jump))
                 if jump[k] > U.MAX_STEP:
+                    _count("cart_fail_jump")
                     return out, False
                 Q = Q[k : k + 1]
             q = Q[0]
             out.append(q)
         if out and not all(self._eval(ctx, np.array(out), "self")):
+            _count("cart_fail_self")
             return out, False
         return out, True
 
@@ -837,6 +840,7 @@ class MujocoMotion:
         if not ok:
             return out, False
         if collision and not self._segments_free(ctx, [np.asarray(q0, float)] + out):
+            _count("cart_fail_collide")
             return out, False
         return out, True
 
@@ -898,27 +902,35 @@ class MujocoMotion:
 
         return motion_plan.Constraint(f, jac, 2)
 
-    def _level_path(self, ctx, q0, qs, R_goal):
-        """A free joint path with every dense waypoint moved onto R_goal's tilt, its TCP position held
-        (Newton steps on tilt and position, from the waypoint itself); None when a waypoint cannot be
-        levelled, the levelled path jumps, or it collides.  The path starts with the levelling of q0."""
+    def _level_path(self, ctx, q0, qs, R_goal, hold_position=True):
+        """A free joint path with every dense waypoint moved onto R_goal's tilt (Newton steps, joints at
+        a limit left out of a step that would push them further), its TCP position held or (without
+        ``hold_position``) left free; each waypoint starts from the previous levelled one plus the free
+        path's own step.  None when a waypoint cannot be levelled, the levelled path jumps, or it
+        collides.  The path starts with the levelling of q0."""
         kin = ctx.kin
         v = np.asarray(R_goal, float).T @ np.array([0.0, 0.0, 1.0])
         dense = [np.asarray(q0, float)]
         for q in qs:
             dense += _dense(dense[-1], np.asarray(q, float), SEGMENT_RES)
-        out, prev = [], None
+        out, prev, prev_free = [], None, None
         for q in dense:
             target = ctx.chain.tcp(q[None], kin.base_p, kin.base_R)[0][0]
-            x = q.copy()
+            x = q.copy() if prev is None else np.clip(prev + (q - prev_free), ctx.lo, ctx.hi)
             for _ in range(LEVEL_ITERS):
                 tcp, R, J = ctx.chain.tcp_jac(x[None], kin.base_p, kin.base_R)
                 Rv = R[0] @ v
-                e = np.r_[Rv[:2], tcp[0] - target]
+                e = np.r_[Rv[:2], tcp[0] - target] if hold_position else Rv[:2]
                 if np.linalg.norm(e[:2]) < LEVEL_TOL and np.linalg.norm(e[2:]) < LEVEL_POS_TOL:
                     break
-                A = np.vstack([np.cross(J[0, 3:].T, Rv)[:, :2].T, J[0, :3]])
-                x = np.clip(x - np.linalg.pinv(A, rcond=1e-4) @ e, ctx.lo, ctx.hi)
+                A = np.cross(J[0, 3:].T, Rv)[:, :2].T
+                if hold_position:
+                    A = np.vstack([A, J[0, :3]])
+                dx = -np.linalg.pinv(A, rcond=1e-4) @ e
+                blocked = ((x <= ctx.lo + 1e-9) & (dx < 0)) | ((x >= ctx.hi - 1e-9) & (dx > 0))
+                if blocked.any():
+                    dx = -np.linalg.pinv(A * ~blocked, rcond=1e-4) @ e * ~blocked
+                x = np.clip(x + dx, ctx.lo, ctx.hi)
             else:
                 _count("level_fail_converge")
                 return None
@@ -926,7 +938,7 @@ class MujocoMotion:
                 _count("level_fail_jump")
                 return None
             out.append(x)
-            prev = x
+            prev, prev_free = x, q
         goal = np.asarray(qs[-1], float)
         if np.max(np.abs(out[-1] - goal)) <= LEVEL_JUMP:
             out[-1] = goal  # end exactly where the free path ended (the goal, level within its IK tolerance)
@@ -943,10 +955,11 @@ class MujocoMotion:
         U = _upstream()
         free, _ = self._plan_js(ctx, q0, goals)
         if free is not None:
-            level = self._level_path(ctx, q0, free, R_goal)
-            if level is not None:
-                _count("plan_level")
-                return level, None
+            for hold in (True, False):
+                level = self._level_path(ctx, q0, free, R_goal, hold_position=hold)
+                if level is not None:
+                    _count("plan_level" if hold else "plan_level_moved")
+                    return level, None
         cons = self._tilt_constraint(ctx, R_goal)
         q0 = np.clip(np.asarray(q0, float), ctx.lo, ctx.hi)
         qa = cons.project(q0, ctx.lo, ctx.hi)

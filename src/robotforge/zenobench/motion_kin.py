@@ -99,14 +99,15 @@ def pose_error(chain, Q, base_p, base_R, p_t, R_t):
 def solve(chain, base_p, base_R, p_t, R_t, seeds, lo, hi, retract=None, iters=120, null_gain=0.02):
     """Damped least squares on the TCP pose from every seed at once, joints kept inside [lo, hi].
 
+    A joint at a limit that the step pushes further out drops out of that step (its Jacobian column
+    zeroed), so the other joints take up the motion instead of the step stalling against the clamp:
+    many solutions sit near a limit (a high top-down reach has the elbow at 3.07 of 3.11 rad).
     Returns (Q, pos_err, rot_err).  ``retract`` pulls the null space towards a posture (cuRobo's
     retract config: the first seed)."""
     Q = np.clip(np.array(seeds, float, ndmin=2), lo, hi)
     p_t, R_t = np.asarray(p_t, float), np.asarray(R_t, float)
     W = np.array([1.0, 1.0, 1.0, W_ROT, W_ROT, W_ROT])
     live = np.ones(len(Q), bool)
-    eye6 = np.eye(6)
-    eyen = np.eye(chain.n)
     ep = er = None
     for it in range(iters):
         tcp, R, J = chain.tcp_jac(Q, base_p, base_R)
@@ -121,16 +122,33 @@ def solve(chain, base_p, base_R, p_t, R_t, seeds, lo, hi, retract=None, iters=12
         Jw = W[None, :, None] * J[idx]
         ew = W[None, :] * e[idx]
         lam = 0.01 if it < iters // 2 else 0.002
-        A = Jw @ Jw.transpose(0, 2, 1) + lam * eye6
-        step = (Jw.transpose(0, 2, 1) @ np.linalg.solve(A, ew[..., None]))[..., 0]
-        if retract is not None and null_gain > 0:
-            N = eyen - Jw.transpose(0, 2, 1) @ np.linalg.solve(A, Jw)
-            step += null_gain * (N @ (np.asarray(retract, float) - Q[idx])[..., None])[..., 0]
+        pull = None if retract is None or null_gain <= 0 else null_gain * (np.asarray(retract, float) - Q[idx])
+        step = _dls_step(Jw, ew, lam, pull)
+        q = Q[idx]
+        blocked = ((q <= lo + 1e-9) & (step < 0)) | ((q >= hi - 1e-9) & (step > 0))
+        rows = blocked.any(axis=1)
+        if rows.any():
+            free = ~blocked[rows]
+            step[rows] = (
+                _dls_step(Jw[rows] * free[:, None, :], ew[rows], lam, None if pull is None else pull[rows] * free)
+                * free
+            )
         norm = np.linalg.norm(step, axis=1, keepdims=True)
         step *= np.minimum(1.0, STEP_MAX / np.maximum(norm, 1e-12))
-        Q[idx] = np.clip(Q[idx] + step, lo, hi)
+        Q[idx] = np.clip(q + step, lo, hi)
     ep, er = pose_error(chain, Q, base_p, base_R, p_t, R_t)
     return Q, ep, er
+
+
+def _dls_step(Jw, ew, lam, pull=None):
+    """Damped least-squares joint step for weighted Jacobians (B, 6, n) and errors (B, 6), plus an
+    optional joint-space pull (B, n) projected into the null space of the task."""
+    A = Jw @ Jw.transpose(0, 2, 1) + lam * np.eye(6)
+    step = (Jw.transpose(0, 2, 1) @ np.linalg.solve(A, ew[..., None]))[..., 0]
+    if pull is not None:
+        N = np.eye(Jw.shape[2]) - Jw.transpose(0, 2, 1) @ np.linalg.solve(A, Jw)
+        step += (N @ pull[..., None])[..., 0]
+    return step
 
 
 def distinct(Q, tol=1e-3):

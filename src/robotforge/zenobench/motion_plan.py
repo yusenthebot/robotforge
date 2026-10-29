@@ -15,6 +15,7 @@ from collections.abc import Callable
 import numpy as np
 
 SEED = 7  # OMPL's global RNG seed: the same episode plans the same paths
+ATLAS = False  # constrained plans in OMPL's atlas space (charts) instead of the projected one
 _seeded = False
 
 
@@ -76,7 +77,7 @@ def plan(
     cons = None
     if constraint is not None:
         cons = _OmplConstraint(ob, n, constraint)
-        css = ob.ProjectedStateSpace(space, cons)
+        css = (ob.AtlasStateSpace if ATLAS else ob.ProjectedStateSpace)(space, cons)
         si = ob.ConstrainedSpaceInformation(css)
         css.setDelta(resolution)
         work = css
@@ -99,6 +100,9 @@ def plan(
     start = state(q0)
     goal = ob.GoalStates(si)
     targets = [state(g) for g in goals]
+    if constraint is not None and ATLAS:
+        for st in [start, *targets]:
+            work.anchorChart(st)
     for t in targets:
         goal.addState(t)
     ss.setStartState(start)
