@@ -51,7 +51,7 @@ class Constraint:
 
 def plan(
     q0,
-    q1,
+    goals,
     lo,
     hi,
     valid: Callable[[np.ndarray], bool],
@@ -61,10 +61,12 @@ def plan(
     constraint: Constraint | None = None,
     simplify: float = 1.0,
 ):
-    """Waypoints after q0 to q1 (q1 last), or (None, status).  ``valid`` judges one joint vector;
-    edges are checked every ``resolution`` (joint-space distance)."""
+    """Waypoints after q0 ending at a goal (one joint vector, or a list: whichever the search reaches),
+    or (None, status).  ``valid`` judges one joint vector; edges are checked every ``resolution``
+    (joint-space distance)."""
     ob, og = _ompl()
     n = len(q0)
+    goals = [np.asarray(goals, float)] if np.ndim(goals) == 1 else [np.asarray(g, float) for g in goals]
     space = ob.RealVectorStateSpace(n)
     bounds = ob.RealVectorBounds(n)
     for i in range(n):
@@ -84,14 +86,23 @@ def plan(
     work.setLongestValidSegmentFraction(resolution / max(work.getMaximumExtent(), 1e-9))
     ss = og.SimpleSetup(si)
     ss.setStateValidityChecker(lambda s: bool(valid(np.fromiter((s[i] for i in range(n)), float, n))))
-    start, goal = work.allocState(), work.allocState()
-    for state, q in ((start, q0), (goal, q1)):
+
+    def state(q):
+        st = work.allocState()
         if constraint is not None:
-            state.copy([float(v) for v in q])  # constrained states take no item assignment
+            st.copy([float(v) for v in q])  # constrained states take no item assignment
         else:
             for i, v in enumerate(q):
-                state[i] = float(v)
-    ss.setStartAndGoalStates(start, goal)
+                st[i] = float(v)
+        return st
+
+    start = state(q0)
+    goal = ob.GoalStates(si)
+    targets = [state(g) for g in goals]
+    for t in targets:
+        goal.addState(t)
+    ss.setStartState(start)
+    ss.setGoal(goal)
     ss.setPlanner(og.RRTConnect(si))
     status = "no plan"
     t_end = time.monotonic() + timeout
@@ -106,8 +117,6 @@ def plan(
                 break
             status = f"no exact solution ({res})"
             ss.clear()
-        else:
-            return None, status
         if not ss.haveExactSolutionPath():
             return None, status
         if simplify > 0:
@@ -117,11 +126,12 @@ def plan(
             path.interpolate()  # dense on the manifold: the executor interpolates linearly
         qs = [np.fromiter((path.getState(k)[i] for i in range(n)), float, n) for k in range(path.getStateCount())]
     finally:
-        del ss, start, goal, si, work, space, bounds, cons
+        del ss, start, goal, targets, si, space, bounds, cons
         gc.collect()
     out = qs[1:]
-    if not out or np.max(np.abs(out[-1] - np.asarray(q1, float))) > 1e-6:
-        out.append(np.asarray(q1, float))
+    reached = min(goals, key=lambda g: float(np.max(np.abs(g - qs[-1]))))
+    if not out or np.max(np.abs(out[-1] - reached)) > 1e-6:
+        out.append(reached)
     return out, None
 
 

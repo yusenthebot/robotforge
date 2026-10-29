@@ -46,6 +46,11 @@ HELD_TAG = "rf_plan_held"
 SPHERE_GROUP = 5  # never rendered (the viewer shows the visual group only)
 PLAN_BIT = 1 << 4  # contype / conaffinity bit of the planning pairs: robot sphere x scene
 HELD_IDLE = 1e-3  # m: radius of an unused held-object sphere (at the TCP, switched off)
+LEVEL_ITERS = 30  # Newton steps to level one waypoint
+LEVEL_TOL, LEVEL_POS_TOL = 1e-3, 1e-3  # rad (tilt), m (TCP held)
+LEVEL_JUMP = 0.2  # rad: largest joint change between two levelled waypoints 0.05 rad apart
+GOAL_SET = 4  # IK solutions a pose goal is planned to (distinct branches)
+GOAL_DISTINCT = 0.1  # rad: two goals closer than this (every joint) are the same branch
 SEGMENT_RES = 0.05  # rad: dense check spacing on a joint segment (upstream _segments_free)
 RANDOM_SEEDS = 28  # IK seeds beyond the 4 a query passes (cuRobo solves 32)
 EXTRA_SEEDS = 64  # one more batch when every solution collides
@@ -836,23 +841,43 @@ class MujocoMotion:
         return out, True
 
     # ------------------------------------------------------------- planning
-    def _plan_js(self, ctx, q0, q1):
-        """Collision-free joint path q0 -> q1 (waypoints after q0), or (None, status)."""
+    def _goal_set(self, ctx, p, R, seeds, first=None):
+        """Collision-free IK solutions of the pose (p, R), at most GOAL_SET on distinct branches:
+        ``first`` (or upstream's choice) leads.  cuRobo plans to a pose; a set of joint goals lets the
+        search reach it on whichever branch is open."""
+        goals = [] if first is None else [np.clip(np.asarray(first, float), ctx.lo, ctx.hi)]
+        if first is None:
+            q, ok = self._ik(ctx, p, R, seeds, True)
+            if not ok:
+                return []
+            goals.append(q)
+        Q, _, _ = self._solve(ctx, np.asarray(p, float), R, seeds, False)
+        free = Q[self._feasible(ctx, Q)] if len(Q) else Q
+        for c in free:
+            if all(np.max(np.abs(c - g)) > GOAL_DISTINCT for g in goals):
+                goals.append(c)
+        return goals[:GOAL_SET]
+
+    def _plan_js(self, ctx, q0, goals):
+        """Collision-free joint path from q0 to a goal (one joint vector, or a list: any of them), as
+        waypoints after q0 ending at the goal reached, or (None, status)."""
         U = _upstream()
-        q0, q1 = np.clip(q0, ctx.lo, ctx.hi), np.clip(q1, ctx.lo, ctx.hi)
+        q0 = np.clip(np.asarray(q0, float), ctx.lo, ctx.hi)
+        goals = [np.clip(np.asarray(g, float), ctx.lo, ctx.hi) for g in _as_goals(goals)]
         if not self._feasible(ctx, q0[None])[0]:
             return None, "start state in collision"
-        if not self._feasible(ctx, q1[None])[0]:
+        goals = [g for g, ok in zip(goals, self._feasible(ctx, np.array(goals)), strict=True) if ok]
+        if not goals:
             return None, "goal state in collision"
-        if self._segments_free(ctx, [q0, q1]):
-            return _dense(q0, q1, SEGMENT_RES), None
+        if self._segments_free(ctx, [q0, goals[0]]):
+            return _dense(q0, goals[0], SEGMENT_RES), None
         d = self.data
 
         def valid(q):
             return self._row(d, ctx, q, "feasible")
 
         self._set_margin(U.ACTIVATION)
-        qs, status = motion_plan.plan(q0, q1, ctx.lo, ctx.hi, valid, SEGMENT_RES, U.PLAN_TIMEOUT, U.PLAN_ATTEMPTS)
+        qs, status = motion_plan.plan(q0, goals, ctx.lo, ctx.hi, valid, SEGMENT_RES, U.PLAN_TIMEOUT, U.PLAN_ATTEMPTS)
         if qs is not None and not self._segments_free(ctx, [q0] + qs):
             return None, "planned path failed the dense check"
         return qs, status
@@ -873,21 +898,70 @@ class MujocoMotion:
 
         return motion_plan.Constraint(f, jac, 2)
 
-    def _plan_tilt(self, ctx, q0, q_goal, R_goal):
-        """Joint path q0 -> q_goal with the held object's tilt kept at R_goal's.  Both ends are first
-        projected onto that tilt (q0 may tilt up to CARRY_TILT away, an IK goal by its tolerance), a
-        short straight move each, and OMPL plans on the constraint manifold between them."""
+    def _level_path(self, ctx, q0, qs, R_goal):
+        """A free joint path with every dense waypoint moved onto R_goal's tilt, its TCP position held
+        (Newton steps on tilt and position, from the waypoint itself); None when a waypoint cannot be
+        levelled, the levelled path jumps, or it collides.  The path starts with the levelling of q0."""
+        kin = ctx.kin
+        v = np.asarray(R_goal, float).T @ np.array([0.0, 0.0, 1.0])
+        dense = [np.asarray(q0, float)]
+        for q in qs:
+            dense += _dense(dense[-1], np.asarray(q, float), SEGMENT_RES)
+        out, prev = [], None
+        for q in dense:
+            target = ctx.chain.tcp(q[None], kin.base_p, kin.base_R)[0][0]
+            x = q.copy()
+            for _ in range(LEVEL_ITERS):
+                tcp, R, J = ctx.chain.tcp_jac(x[None], kin.base_p, kin.base_R)
+                Rv = R[0] @ v
+                e = np.r_[Rv[:2], tcp[0] - target]
+                if np.linalg.norm(e[:2]) < LEVEL_TOL and np.linalg.norm(e[2:]) < LEVEL_POS_TOL:
+                    break
+                A = np.vstack([np.cross(J[0, 3:].T, Rv)[:, :2].T, J[0, :3]])
+                x = np.clip(x - np.linalg.pinv(A, rcond=1e-4) @ e, ctx.lo, ctx.hi)
+            else:
+                _count("level_fail_converge")
+                return None
+            if prev is not None and np.max(np.abs(x - prev)) > LEVEL_JUMP:
+                _count("level_fail_jump")
+                return None
+            out.append(x)
+            prev = x
+        goal = np.asarray(qs[-1], float)
+        if np.max(np.abs(out[-1] - goal)) <= LEVEL_JUMP:
+            out[-1] = goal  # end exactly where the free path ended (the goal, level within its IK tolerance)
+        if not self._segments_free(ctx, [np.asarray(q0, float)] + out):
+            _count("level_fail_collide")
+            return None
+        return out
+
+    def _plan_tilt(self, ctx, q0, goals, R_goal):
+        """Joint path from q0 to a goal (one joint vector or a list) with the held object's tilt kept at
+        R_goal's.  First a free path, levelled waypoint by waypoint (cuRobo, too, seeds its optimiser
+        with a free graph search); else OMPL on the constraint manifold, both ends projected onto
+        that tilt (q0 may tilt up to CARRY_TILT away, an IK goal by its tolerance)."""
         U = _upstream()
+        free, _ = self._plan_js(ctx, q0, goals)
+        if free is not None:
+            level = self._level_path(ctx, q0, free, R_goal)
+            if level is not None:
+                _count("plan_level")
+                return level, None
         cons = self._tilt_constraint(ctx, R_goal)
         q0 = np.clip(np.asarray(q0, float), ctx.lo, ctx.hi)
-        q_goal = np.clip(np.asarray(q_goal, float), ctx.lo, ctx.hi)
-        qa, qb = cons.project(q0, ctx.lo, ctx.hi), cons.project(q_goal, ctx.lo, ctx.hi)
-        if qa is None or qb is None:
-            return None, "could not level the start or goal onto the goal tilt"
+        qa = cons.project(q0, ctx.lo, ctx.hi)
+        if qa is None:
+            return None, "could not level the start onto the goal tilt"
         if not self._segments_free(ctx, [q0, qa]):
             return None, "levelling the start collides"
-        if not self._segments_free(ctx, [qb, q_goal]):
-            return None, "goal state in collision"
+        ends = []  # (goal on the manifold, the goal itself)
+        for g in _as_goals(goals):
+            g = np.clip(np.asarray(g, float), ctx.lo, ctx.hi)
+            qb = cons.project(g, ctx.lo, ctx.hi)
+            if qb is not None and self._segments_free(ctx, [qb, g]):
+                ends.append((qb, g))
+        if not ends:
+            return None, "no goal can be levelled onto the goal tilt without colliding"
         d = self.data
 
         def valid(q):
@@ -895,12 +969,21 @@ class MujocoMotion:
 
         self._set_margin(U.ACTIVATION)
         qs, status = motion_plan.plan(
-            qa, qb, ctx.lo, ctx.hi, valid, SEGMENT_RES, U.PLAN_TIMEOUT, U.PLAN_ATTEMPTS, constraint=cons
+            qa,
+            [qb for qb, _ in ends],
+            ctx.lo,
+            ctx.hi,
+            valid,
+            SEGMENT_RES,
+            U.PLAN_TIMEOUT,
+            U.PLAN_ATTEMPTS,
+            constraint=cons,
         )
         if qs is None:
             return None, status
-        if np.max(np.abs(qb - q_goal)) > 1e-9:
-            qs = qs + [q_goal]
+        qb, g = min(ends, key=lambda e: float(np.max(np.abs(e[0] - qs[-1]))))
+        if np.max(np.abs(qb - g)) > 1e-9:
+            qs = qs + [g]
         path = ([qa] if np.max(np.abs(qa - q0)) > 1e-6 else []) + qs
         if not self._segments_free(ctx, [q0] + path):
             return None, "tilt-held path failed the dense check"
@@ -952,7 +1035,8 @@ class MujocoMotion:
         R1 = kin.tcp(q1)[1]
         if carry and tilt(R0, R1) <= CARRY_TILT and (qs is None or max_tilt(kin, R0, qs) > CARRY_TILT):
             _count("plan_carry")
-            qc, sc = self._plan_tilt(ctx, q0, q1, R1)
+            goals = self._goal_set(ctx, kin.tcp(q1)[0], R1, [q1, q0], first=q1)
+            qc, sc = self._plan_tilt(ctx, q0, goals, R1)
             if qc is not None and max_tilt(kin, R0, qc) <= CARRY_TILT:
                 qs, status = qc, None
             else:
@@ -973,11 +1057,11 @@ class MujocoMotion:
         ctx = self._context(kin, other_q, coll_kw, [p0, p], True)
         R0 = kin.tcp(q0)[1]
         if carry and tilt(R0, R) <= CARRY_TILT:
-            q_goal, ok = self._ik(ctx, p, R, [q0], True)
-            if not ok:
+            goals = self._goal_set(ctx, p, R, [q0])
+            if not goals:
                 qs, status = None, "no collision-free IK at the goal"
             else:
-                qs, status = self._plan_tilt(ctx, q0, q_goal, R)
+                qs, status = self._plan_tilt(ctx, q0, goals, R)
             if qs is not None and max_tilt(kin, R0, qs) > CARRY_TILT + tilt(R0, R):
                 qs, status = None, "held object tilts on the planned leg"
         else:
@@ -987,15 +1071,18 @@ class MujocoMotion:
             if not (L > 1e-6 and abs(d[axis]) / L >= U.APPROACH_ALIGN):
                 return None, "leg follows no TCP axis: no constrained approach"
             p_pre = p - R[:, axis] * (float(d[axis]) * U.APPROACH_FRACTION)
-            q_pre, ok = self._ik(ctx, p_pre, R, [q0], True)
-            if not ok:
-                qs, status = None, "no collision-free IK at the approach start"
-            else:
-                leg1, status = self._plan_js(ctx, q0, q_pre)
-                qs = None
-                if leg1 is not None:
-                    leg2, ok2 = self._cart(ctx, leg1[-1], p, R, 0.01, True)
-                    qs, status = (leg1 + leg2, None) if ok2 else (None, "straight approach blocked")
+            goals = self._goal_set(ctx, p_pre, R, [q0])
+            qs, status = None, "no collision-free IK at the approach start"
+            while goals and qs is None:
+                leg1, status = self._plan_js(ctx, q0, goals)
+                if leg1 is None:
+                    break
+                leg2, ok2 = self._cart(ctx, leg1[-1], p, R, 0.01, True)
+                if ok2:
+                    qs, status = leg1 + leg2, None
+                else:  # that branch cannot go straight in: the next one
+                    status = "straight approach blocked"
+                    goals = [g for g in goals if np.max(np.abs(g - leg1[-1])) > 1e-9]
         _count("plan_to_ok", qs is not None)
         return qs, status
 
@@ -1024,6 +1111,12 @@ def _dense(qa, qb, res):
     """Waypoints after qa on the straight joint segment to qb, at most ``res`` apart per joint."""
     k = max(1, int(np.ceil(np.max(np.abs(qb - qa)) / res)))
     return [qa + (qb - qa) * u for u in np.linspace(0, 1, k + 1)[1:]]
+
+
+def _as_goals(goals):
+    """One joint vector, or a list of them, as a list."""
+    a = np.asarray(goals[0] if isinstance(goals, list | tuple) else goals, float)
+    return [np.asarray(g, float) for g in goals] if a.ndim == 1 and isinstance(goals, list | tuple) else [a]
 
 
 def _other(side):
