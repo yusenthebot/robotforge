@@ -1,5 +1,17 @@
 # progress
 
+## Batch robot part surfaces (2026-10-29)
+
+Explicit multi-selection reduces the same three-part surface design from three full compile/load transactions to one,with one Undo restoring the previous heterogeneous mapping.
+Legacy single-part defaults and body responses remain; bodies accepts1–64distinct eligible direct parts,all validated before compilation and within the existing saved64override cap.
+All-no-op keeps previous runtime/receipt;saved worlds retain finishes,not checkbox state;generation/world/socket changes clear selection.
+Frozen7ebb8412/770inputs:681viewer-default,322non-slow browser and9GPU cases pass,plus7canonical,source/fresh installed60-tool smoke and original11/11budgets.
+Native Malo,Chinese narrow-touch Go2 and builtin rover have six fully decoded movies/36root-viewed samples;poor initial Go2 framing remains preliminary,and the old-phone-select/fixture failures are fixed before freeze.
+24default main-canvas pairs and12workflow checkpoints match;444physical arrays/workflow and all10material fields outside exact selected geoms are guarded;13originalWIP preserved.
+Wheel+1828B,416source/wheel/installed files exact,31HTTP resources unchanged,cold bytes+5320;balanced cold mean−46.98/−14.37ms Malo/Go2 and mixed RSS observations do not imply universal speed or memory gains.
+[Report](docs/bench/2026-10-29-batch-part-surfaces.md).
+Broad visual/lightweight/creative-play goal remains active;single-action success tuning deferred.
+
 ## Shared tile grout baseline (2026-10-29)
 
 Two actual application paths retain the existing material: copied Panda world loaded through desk_lab, and builtin pool deck_south with default ROV.

@@ -213,8 +213,15 @@
       <button class="pill" id="robot-start" type="button" hidden data-i18n="robot_start">Set start / heading</button>
       <button class="pill" id="robot-surface" type="button" hidden aria-expanded="false" aria-controls="robot-surface-controls" data-i18n="robot_surface">Part surface</button>
       <div id="robot-surface-controls" hidden>
-        <p class="note" data-i18n="robot_surface_lead">Style one highlighted part, including all its visible surfaces. Base colours and physics stay the same. Applies at the current pose, resets motion and pauses.</p>
+        <p class="note" data-i18n="robot_surface_lead">Style highlighted parts, including their direct visible surfaces. Base colours and physics stay the same. Applies at the current pose, resets motion and pauses.</p>
         <label class="prop-material-control"><span data-i18n="robot_surface_body">Part</span><select id="robot-surface-body"></select></label>
+        <label class="check"><input type="checkbox" id="robot-surface-multiple"><span data-i18n="robot_surface_multiple">Select multiple parts</span></label>
+        <fieldset id="robot-surface-batch-controls" hidden>
+          <legend data-i18n="robot_surface_parts">Parts (up to 64)</legend>
+          <div id="robot-surface-part-list"></div>
+          <p class="note" id="robot-surface-count" aria-live="polite"></p>
+          <button class="pill" id="robot-surface-clear" type="button" data-i18n="robot_surface_clear">Clear selection</button>
+        </fieldset>
         <label class="prop-material-control"><span data-i18n="prop_surface">Surface</span><select id="robot-surface-material"><option value="" data-i18n="surface_original">Original</option><option value="plastic" data-i18n="material_plastic">Plastic</option><option value="wood" data-i18n="material_wood">Wood</option><option value="steel" data-i18n="material_steel">Steel</option></select></label>
         <button class="pill" id="robot-surface-apply" type="button" data-i18n="surface_apply">Apply and reset</button>
       </div>

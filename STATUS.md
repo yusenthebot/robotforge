@@ -1,5 +1,9 @@
 # STATUS
 
+- 2026-10-29 batch part surfaces: opt-in multi-selection applies existing Original/plastic/wood/steel to1–64eligible direct parts with one guarded rebuild and grouped Undo; legacy single-part UI/request/response remains compatible. No shader/material-quality or action-success tuning.
+  Frozen7ebb8412/770inputs:681viewer-default+322non-slow browser+9GPU=1012distinct pytest,7canonical,source/fresh offline60-tool smoke,installed batch/legacy Undo and original11/11budgets pass.24default main-canvas exact pairs plus12workflow checkpoints;444physical arrays/workflow,all10material fields outside exact selected geoms,paired final worlds/mesh retained.
+  Six final movies fully decode/36root samples; native Malo,phone-Chinese Go2 and template rover reduce3→1requests/compile/load pairs. Wheel3951703B(+1828),416product files and13originalWIP exact;31HTTP requests,cold bytes+5320; fresh-profile mean cold−46.98/−14.37ms Malo/Go2,not a universal speed claim. Report docs/bench/2026-10-29-batch-part-surfaces.md/.json; broad goal active.
+
 - 2026-10-29 tile grout screen: derived Panda desk_lab floor and builtin pool deck_south use the existing shared procedural tile.24 actual DPR1/2 two-light PNGs and four complete paused camera movies retain the declared views; raw continuity, material identity and full integration-state controls pass. Root inspected eight ordinary PNGs and24 decoded samples; no qualifying ordinary-distance two-path defect established, so no product candidate or shader/material change.
   Runtime b399c6c4/768 inputs retained;106 backend+20 existing browser tests, offline wheel and Ruff/format pass. Original13WIP and source worlds preserved; no new full-suite/budget/installed-smoke/performance or flicker-free claim. Report docs/bench/2026-10-29-tile-grout-screen.md/.json; broad visual/lightweight/playability goal active.
 

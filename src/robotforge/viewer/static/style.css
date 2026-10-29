@@ -827,6 +827,11 @@ canvas.inspecting { cursor: crosshair; }
 .placement-options .repeat-placement { margin: 0; min-height: 32px; }
 .prop-material-control { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .prop-material-control select { width: auto; min-height: 36px; padding: 5px 8px; }
+#robot-surface-batch-controls { min-width: 0; margin: 8px 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+#robot-surface-part-list { max-height: 180px; overflow-y: auto; overscroll-behavior: contain; }
+#robot-surface-part-list .check { min-height: 40px; margin: 0; align-items: center; }
+#robot-surface-part-list span { min-width: 0; overflow-wrap: anywhere; }
+#robot-surface-count { margin: 6px 0; }
 .placement-bar .placement-coordinates { flex: 1 1 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
 .placement-coordinate-readout { flex: 1 1 100%; min-width: 0; display: grid; grid-template-rows: 3em; font-size: 12px; line-height: 1.5; }
 .placement-coordinate-readout > * { grid-area: 1 / 1; min-width: 0; }
