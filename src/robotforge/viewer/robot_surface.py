@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 from uuid import uuid4
 
 import mujoco
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from robotforge.design import body_surfaces, layouts, menagerie
 from robotforge.design.world import RobotEntry, World, compile_world
@@ -25,8 +25,19 @@ if TYPE_CHECKING:
 
 
 class SetBodySurface(Selection):
-    body: str = Field(min_length=1, max_length=160)
+    body: str | None = Field(default=None, min_length=1, max_length=160)
+    bodies: list[Annotated[str, Field(min_length=1, max_length=160)]] | None = Field(
+        default=None, min_length=1, max_length=64
+    )
     surface_material: Literal["plastic", "wood", "steel"] | None
+
+    @model_validator(mode="after")
+    def select_parts(self) -> Self:
+        if len(self.model_fields_set & {"body", "bodies"}) != 1 or (self.body is None and self.bodies is None):
+            raise ValueError("give exactly one of body or bodies")
+        if self.bodies is not None and len(set(self.bodies)) != len(self.bodies):
+            raise ValueError("bodies must be unique")
+        return self
 
 
 @dataclass(frozen=True)
@@ -39,7 +50,8 @@ class RobotSurfaceEdit:
     before: RobotEntry
     after: RobotEntry
     index: int
-    body: str
+    bodies: tuple[str, ...]
+    batch: bool
 
 
 def metadata(pg: Playground) -> dict:
@@ -90,7 +102,13 @@ def handle(pg: Playground, message: dict) -> dict:
                     != (receipt.token, receipt.version, receipt.generation)
                 ):
                     raise PlaygroundError("that part surface edit is no longer available to undo")
-                before, after, index, body = receipt.after, receipt.before, receipt.index, receipt.body
+                before, after, index, bodies, batch = (
+                    receipt.after,
+                    receipt.before,
+                    receipt.index,
+                    receipt.bodies,
+                    receipt.batch,
+                )
                 guard = Selection(
                     name=before.name,
                     version=receipt.version,
@@ -106,23 +124,29 @@ def handle(pg: Playground, message: dict) -> dict:
                 index = next((i for i, entry in enumerate(world.robots) if entry.name == request.name), None)
                 if index is None:
                     raise PlaygroundError("select an existing robot part")
-                before, body = world.robots[index], request.body
-                if (
-                    before.mounts
-                    or not _eligible(pg.session.model, before.name)
-                    or body not in {p["body"] for p in body_surfaces.parts(pg.session.model, before.name)}
-                ):
+                before = world.robots[index]
+                batch = request.bodies is not None
+                if request.bodies is not None:
+                    bodies = tuple(request.bodies)
+                else:
+                    assert request.body is not None  # SetBodySurface enforces exactly one target form.
+                    bodies = (request.body,)
+                eligible = {p["body"] for p in body_surfaces.parts(pg.session.model, before.name)}
+                if before.mounts or not _eligible(pg.session.model, before.name) or not set(bodies) <= eligible:
                     raise PlaygroundError("select an opaque, untextured part of an unmounted rigid robot")
                 finishes = dict(before.body_surfaces)
-                if request.surface_material is None:
-                    finishes.pop(body, None)
-                else:
-                    finishes[body] = request.surface_material
+                for body in bodies:
+                    if request.surface_material is None:
+                        finishes.pop(body, None)
+                    else:
+                        finishes[body] = request.surface_material
+                if len(finishes) > 64:
+                    raise PlaygroundError("a robot can have at most 64 styled parts; restore other parts first")
                 after = RobotEntry.model_validate({**before.model_dump(), "body_surfaces": finishes})
                 if before == after:
                     return {
                         "robot": before.name,
-                        "body": body,
+                        **({"bodies": list(bodies)} if batch else {"body": bodies[0]}),
                         "version": pg.session.version,
                         "generation": pg.session.generation,
                         "unchanged": True,
@@ -154,7 +178,7 @@ def handle(pg: Playground, message: dict) -> dict:
                     pg._places = None
                     response = {
                         "robot": before.name,
-                        "body": body,
+                        **({"bodies": list(bodies)} if batch else {"body": bodies[0]}),
                         "version": pg.session.version,
                         "generation": pg.session.generation,
                         "paused": True,
@@ -170,7 +194,8 @@ def handle(pg: Playground, message: dict) -> dict:
                             before,
                             after,
                             index,
-                            body,
+                            bodies,
+                            batch,
                         )
                         pg._play_edit = receipt
                         response["undo_surface"] = {

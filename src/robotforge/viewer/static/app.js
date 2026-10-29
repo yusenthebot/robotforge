@@ -2538,14 +2538,18 @@ const robotSurface = initRobotSurface({
     const info = sceneDesc?.robot_surface;
     const entry = info && sceneDesc?.world && info.version === sceneDesc.version && !sceneDesc.lesson
       ? info.robots.find((r) => r.name === selected) : null;
-    return entry ? { ...entry, version: info.version, world_sha256: info.world_sha256 } : null;
+    return entry && ws?.readyState === WebSocket.OPEN
+      ? { ...entry, version: info.version, generation: stateGeneration, world_sha256: info.world_sha256 } : null;
   },
   ready: () => !busy && !creator.active() && !selectingObjects && !creationGesture.active()
     && sceneReadyToDraw() && renderedVersion === sceneDesc?.version && stateVersion === sceneDesc?.version
     && Number.isInteger(stateGeneration),
-  apply: async (entry, body, surface, button) => {
+  apply: async (entry, targets, surface, button) => {
     stopDriving(); endDrag();
-    await runChoice(button, { type: "world", action: "set_robot_surface", name: entry.name, body,
+    const batch = Array.isArray(targets);
+    let acknowledgement = null;
+    await runChoice(button, { type: "world", action: "set_robot_surface", name: entry.name,
+      ...(batch ? { bodies: targets } : { body: targets }),
       surface_material: surface, version: entry.version, generation: stateGeneration,
       world_sha256: entry.world_sha256 }, {
       done: async (data) => {
@@ -2554,6 +2558,7 @@ const robotSurface = initRobotSurface({
             lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
             throw new Error(t("create_scene_changed"));
           }
+          acknowledgement = { ...data, world_sha256: sceneDesc.robot_surface?.world_sha256 };
           toast(t("surface_unchanged")); return;
         }
         const receipt = data.undo_surface ? { ...data.undo_surface, kind: "robot_surface" } : null;
@@ -2563,9 +2568,12 @@ const robotSurface = initRobotSurface({
           lastObjectEdit = stateVersion === data.version && stateGeneration === data.generation ? receipt : null;
           updateUndo(); throw error;
         }
-        updateUndo(); toast(t("surface_saved", { name: `${entry.name} / ${body}` }));
+        acknowledgement = { ...data, world_sha256: sceneDesc.robot_surface?.world_sha256 };
+        updateUndo(); toast(batch ? t("robot_surface_saved", { name: entry.name, count: targets.length })
+          : t("surface_saved", { name: `${entry.name} / ${targets}` }));
       },
     });
+    return acknowledgement;
   },
 });
 let robotSurfaceHighlight = null;
