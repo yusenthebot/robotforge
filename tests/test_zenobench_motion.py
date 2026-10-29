@@ -189,7 +189,7 @@ def test_stand_in_on_a_real_kitchen_scene():
     assert not r["at_object_free"] and r["held_object_free"]  # a held object is no obstacle to its hand
     assert r["clearance_at_object"] == 0.0 and r["clearance_posture"] > 0.0
     assert r["tilt_plan_ok"] and r["tilt_max"] < 0.01
-    assert r.get("level_end_err") in (None, 0.0)  # a levelled path ends at the goal or is refused
+    assert r.get("level_end_err") is None or r["level_end_err"] < 1e-9  # ends at the goal or is refused
     assert r["held_attached"] == "wooden_block_a" and r["held_spheres"] > 0 and r["held_inside_box"]
     assert r["held_after_left_query"] == r["held_spheres"]  # the other arm's queries leave them on
     assert r["held_off"] == 0

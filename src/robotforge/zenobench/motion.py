@@ -45,6 +45,8 @@ SPHERE_TAG = "rf_plan_sphere"
 HELD_TAG = "rf_plan_held"
 SPHERE_GROUP = 5  # never rendered (the viewer shows the visual group only)
 PLAN_BIT = 1 << 4  # contype / conaffinity bit of the planning pairs: robot sphere x scene
+STATIC_BIT = 1 << 5  # fixed scene geometry (walls, furniture), which ignored fingers may still only graze
+FINGER_GRAZE = 0.01  # m: how deep ignored fingers may go into fixed geometry on a joint-space move
 HELD_IDLE = 1e-3  # m: radius of an unused held-object sphere (at the TCP, switched off)
 LEVEL_ITERS = 30  # Newton steps to level one waypoint
 LEVEL_TOL, LEVEL_POS_TOL = 1e-3, 1e-3  # rad (tilt), m (TCP held)
@@ -173,6 +175,7 @@ class _Query:
     hi: np.ndarray
     pairs: tuple  # (i, j, link pair of each) sphere pairs checked for self collision
     held_on: bool  # this arm's held-object spheres are attached
+    graze: np.ndarray | None = None  # per geom: an ignored finger checked against fixed geometry only
 
 
 class MujocoMotion:
@@ -225,7 +228,6 @@ class MujocoMotion:
         m.geom_conaffinity[:] = 0
         m.geom_margin[:] = 0.0
         m.geom_gap[:] = 0.0
-        m.geom_conaffinity[self.scene] = PLAN_BIT
         m.geom_contype[self.sph] = PLAN_BIT
         robot_body = np.array([n.startswith("/World/ZenoMalo") for n in body_name])
         m.body_contype[:] = np.where(robot_body, PLAN_BIT, 0)
@@ -243,6 +245,11 @@ class MujocoMotion:
             owner.append(next((own for pre, own in prefixes if path == pre or path.startswith(pre + "/")), "static"))
         self.scene_owner = np.array(owner, object)
         self.owner_geoms = {o: self.scene[self.scene_owner == o] for o in set(owner)}
+        self.scene_affinity = np.where(self.scene_owner == "static", PLAN_BIT | STATIC_BIT, PLAN_BIT)
+        m.geom_conaffinity[self.scene] = self.scene_affinity
+        static_bodies = np.unique(m.geom_bodyid[self.scene[self.scene_owner == "static"]])
+        m.body_contype[m.body_contype == PLAN_BIT] |= STATIC_BIT
+        m.body_conaffinity[static_bodies] |= STATIC_BIT
         # joints
         jname = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or "" for j in range(m.njnt)]
         short = {n.rsplit("/", 1)[-1]: j for j, n in enumerate(jname) if n.startswith(f"{ASSET}/joints/")}
@@ -546,7 +553,11 @@ class MujocoMotion:
             self._boxes = None
 
     # ------------------------------------------------------------- queries: context
-    def _context(self, kin, other_q, coll_kw, targets, collision, fingers_only=False):
+    def _context(self, kin, other_q, coll_kw, targets, collision, fingers_only=False, graze=False):
+        """Masks and limits for one query.  ``graze`` (joint-space moves): fingers that ``ignore_fingers``
+        switches off are still checked against fixed geometry and may go only FINGER_GRAZE into it.
+        Upstream ignores them entirely, so that they may touch what they grasp; on a long joint swing
+        that let them sweep through a wall, which jammed the arm (PhysX, too, collides fingers)."""
         U = _upstream()
         coll_kw = coll_kw or {}
         side = kin.side
@@ -568,23 +579,32 @@ class MujocoMotion:
         allow = self._targets_allow([np.asarray(p, float) for p in targets]) if collision and targets else set()
         excluded = frozenset(self.held[side] | allow)
         n_held = self._held_n[side]
-        key = (side, frozenset(off), excluded, n_held)
+        grazing = bool(graze and coll_kw.get("ignore_fingers") and not coll_kw.get("hand_touches_part"))
+        fingers = np.isin(self.sph_link, [f"{side}_{link}" for link in U.FINGER_LINKS]) if grazing else None
+        key = (side, frozenset(off), excluded, n_held, grazing)
         if key != self._mask_key:
             m = self.model
-            m.geom_conaffinity[self.scene] = PLAN_BIT
+            m.geom_conaffinity[self.scene] = self.scene_affinity
             for o in excluded:
                 m.geom_conaffinity[self.owner_geoms.get(o, [])] = 0
             on = ~np.isin(self.sph_link, list(off))
             m.geom_contype[self.sph] = np.where(on, PLAN_BIT, 0)
+            if grazing:
+                m.geom_contype[self.sph[fingers]] = STATIC_BIT
             for s in SIDES:  # only this hand's held object, and only the spheres it uses
                 m.geom_contype[self.held_geoms[s]] = 0
             m.geom_contype[self.held_geoms[side][:n_held]] = PLAN_BIT
             self._mask_key = key
-        on = self.model.geom_contype[self.sph] != 0
+        on = self.model.geom_contype[self.sph] == PLAN_BIT  # grazing fingers stay out of self collision
         i, j, lp = self.pairs[side]
         sel = on[i] & on[j]
         pairs = (i[sel], j[sel], lp[sel], *self.link_pairs[side])
-        return _Query(side, kin, self.chains[side], self._base_q(kin.base_p, yaw), lo, hi, pairs, n_held > 0)
+        graze_mask = None
+        if grazing:
+            graze_mask = np.zeros(self.model.ngeom, bool)
+            graze_mask[self.sph[fingers]] = True
+        base_q = self._base_q(kin.base_p, yaw)
+        return _Query(side, kin, self.chains[side], base_q, lo, hi, pairs, n_held > 0, graze_mask)
 
     def _set_margin(self, margin):
         if margin != self._margin:
@@ -628,7 +648,11 @@ class MujocoMotion:
         mujoco.mj_collision(self.model, d)
         n = d.ncon
         if mode == "feasible":
-            return n == 0
+            if n == 0 or ctx.graze is None:
+                return n == 0
+            g = d.contact.geom[:n]
+            grazes = ctx.graze[g[:, 0]] | ctx.graze[g[:, 1]]
+            return not bool(np.any(~grazes | (d.contact.dist[:n] < -FINGER_GRAZE)))
         dist = d.contact.dist[:n]
         if mode == "clearance":
             return float(dist.min()) if n else math.inf
@@ -693,7 +717,7 @@ class MujocoMotion:
 
     def _solve(self, ctx, p, R, seeds, local, extra=False):
         """Kinematic IK from every seed: (distinct self-collision-free solutions nearest the first seed
-        first, at most N_RETURN; the first seeds; the closest failed attempt)."""
+        first; the first seeds; the closest failed attempt)."""
         U = _upstream()
         first, S = self._seeds(ctx, seeds, local, extra)
         kin = ctx.kin
@@ -705,7 +729,7 @@ class MujocoMotion:
         Q = Q[ok]
         Q = K.distinct(Q[np.argsort(np.max(np.abs(Q - first[0]), axis=1))])
         free = np.array(self._eval(ctx, Q, "self"), bool)
-        return Q[free][: U.N_RETURN], first, best_fail
+        return Q[free], first, best_fail  # upstream's choice ranks every distinct solution
 
     def _pick(self, ctx, Q, first, local):
         U = _upstream()
@@ -1054,7 +1078,7 @@ class MujocoMotion:
     @_timed("check_s")
     def segment_free(self, kin, qa, qb, other_q=None, coll_kw=None):
         _count("check")
-        ctx = self._context(kin, other_q, coll_kw, (), True)
+        ctx = self._context(kin, other_q, coll_kw, (), True, graze=True)
         return self._segments_free(ctx, [np.asarray(qa, float), np.asarray(qb, float)])
 
     @_timed("plan_s")
@@ -1065,7 +1089,7 @@ class MujocoMotion:
 
         _count("plan")
         q0, q1 = np.asarray(q0, float), np.asarray(q1, float)
-        ctx = self._context(kin, other_q, coll_kw, (), True)
+        ctx = self._context(kin, other_q, coll_kw, (), True, graze=True)
         qs, status = self._plan_js(ctx, q0, q1)
         R0 = kin.tcp(q0)[1]
         R1 = kin.tcp(q1)[1]

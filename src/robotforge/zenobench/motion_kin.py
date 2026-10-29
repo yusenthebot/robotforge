@@ -15,6 +15,9 @@ from scipy.spatial.transform import Rotation
 W_ROT = 0.35  # rotation error weight against metres (ArmKin's old DLS used the same)
 STEP_MAX = 0.2  # rad: largest joint step per iteration (norm)
 TOL_P, TOL_R = 5e-4, 5e-3  # converge well inside cuRobo's 4 mm / 0.04 rad success thresholds
+LIMIT_ZONE = 0.15  # rad next to a joint limit the null space pushes arm joints out of (upstream LIMIT_CLEAR)
+ARM_FROM = 2  # joints before this (torso lift, waist) may sit at their limits
+POLISH_ITERS = 40  # null-space steps away from a limit after convergence
 
 
 class Chain:
@@ -96,14 +99,16 @@ def pose_error(chain, Q, base_p, base_R, p_t, R_t):
     return ep, er
 
 
-def solve(chain, base_p, base_R, p_t, R_t, seeds, lo, hi, retract=None, iters=120, null_gain=0.02):
+def solve(chain, base_p, base_R, p_t, R_t, seeds, lo, hi, retract=None, iters=120, null_gain=0.02, limit_gain=0.5):
     """Damped least squares on the TCP pose from every seed at once, joints kept inside [lo, hi].
 
     A joint at a limit that the step pushes further out drops out of that step (its Jacobian column
     zeroed), so the other joints take up the motion instead of the step stalling against the clamp:
     many solutions sit near a limit (a high top-down reach has the elbow at 3.07 of 3.11 rad).
     Returns (Q, pos_err, rot_err).  ``retract`` pulls the null space towards a posture (cuRobo's
-    retract config: the first seed)."""
+    retract config: the first seed); ``limit_gain`` pushes arm joints (not the torso lift and waist, which
+    floor picks need at their limits) out of the LIMIT_ZONE next to a limit, as cuRobo's bound cost and
+    upstream's choice (LIMIT_CLEAR) both prefer: a solution hugging two limits swung the fingers into a wall."""
     Q = np.clip(np.array(seeds, float, ndmin=2), lo, hi)
     p_t, R_t = np.asarray(p_t, float), np.asarray(R_t, float)
     W = np.array([1.0, 1.0, 1.0, W_ROT, W_ROT, W_ROT])
@@ -122,9 +127,13 @@ def solve(chain, base_p, base_R, p_t, R_t, seeds, lo, hi, retract=None, iters=12
         Jw = W[None, :, None] * J[idx]
         ew = W[None, :] * e[idx]
         lam = 0.01 if it < iters // 2 else 0.002
-        pull = None if retract is None or null_gain <= 0 else null_gain * (np.asarray(retract, float) - Q[idx])
-        step = _dls_step(Jw, ew, lam, pull)
         q = Q[idx]
+        pull = None if retract is None or null_gain <= 0 else null_gain * (np.asarray(retract, float) - q)
+        if limit_gain > 0:
+            away = np.maximum(0.0, LIMIT_ZONE - (q - lo)) - np.maximum(0.0, LIMIT_ZONE - (hi - q))
+            away[:, :ARM_FROM] = 0.0
+            pull = limit_gain * away if pull is None else pull + limit_gain * away
+        step = _dls_step(Jw, ew, lam, pull)
         blocked = ((q <= lo + 1e-9) & (step < 0)) | ((q >= hi - 1e-9) & (step > 0))
         rows = blocked.any(axis=1)
         if rows.any():
@@ -137,7 +146,32 @@ def solve(chain, base_p, base_R, p_t, R_t, seeds, lo, hi, retract=None, iters=12
         step *= np.minimum(1.0, STEP_MAX / np.maximum(norm, 1e-12))
         Q[idx] = np.clip(q + step, lo, hi)
     ep, er = pose_error(chain, Q, base_p, base_R, p_t, R_t)
+    if limit_gain > 0:
+        Qp = _polish(chain, base_p, base_R, p_t, R_t, Q.copy(), lo, hi, W, limit_gain)
+        ep2, er2 = pose_error(chain, Qp, base_p, base_R, p_t, R_t)
+        keep = (ep2 <= np.maximum(ep, TOL_P * 2)) & (er2 <= np.maximum(er, TOL_R * 2))  # never lose the pose
+        Q[keep], ep[keep], er[keep] = Qp[keep], ep2[keep], er2[keep]
     return Q, ep, er
+
+
+def _polish(chain, base_p, base_R, p_t, R_t, Q, lo, hi, W, gain, iters=POLISH_ITERS):
+    """Converged solutions with an arm joint inside LIMIT_ZONE: hold the pose and move through the null
+    space (torso, waist, the arm's redundancy) away from the limit.  A press posture with the elbow at
+    3.09 of 3.11 rad gave way under the button's push and missed it by 3.8 cm (upstream saw 4 cm)."""
+    for _ in range(iters):
+        tcp, R, J = chain.tcp_jac(Q, base_p, base_R)
+        e = np.concatenate([p_t - tcp, rotvec(R_t[None] @ R.transpose(0, 2, 1))], 1)
+        done = (np.linalg.norm(e[:, :3], axis=1) < TOL_P * 2) & (np.linalg.norm(e[:, 3:], axis=1) < TOL_R * 2)
+        margin = np.min(np.minimum(Q - lo, hi - Q)[:, ARM_FROM:], axis=1)
+        idx = np.nonzero(done & (margin < LIMIT_ZONE))[0]
+        if not len(idx):
+            break
+        q = Q[idx]
+        away = np.maximum(0.0, LIMIT_ZONE - (q - lo)) - np.maximum(0.0, LIMIT_ZONE - (hi - q))
+        away[:, :ARM_FROM] = 0.0
+        step = _dls_step(W[None, :, None] * J[idx], W[None, :] * e[idx], 0.002, gain * away)
+        Q[idx] = np.clip(q + step, lo, hi)
+    return Q
 
 
 def _dls_step(Jw, ew, lam, pull=None):
