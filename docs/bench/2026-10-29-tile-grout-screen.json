@@ -1,0 +1,158 @@
+{
+  "date": "2026-10-29",
+  "decision": "No qualifying ordinary-distance two-path grout defect established; no product candidate made or promoted.",
+  "evidence_directory": "../robotforge-evidence/2026-10-29-tile-grout-screen",
+  "plan_sha256": "1d3c41f460b7240ea57736f97ba7c51a2e1005ec50f3c3dc32dfe716f6c6500a",
+  "capture_source": {
+    "package": "robotforge",
+    "package_version": "0.0.1",
+    "python": "3.12.16",
+    "platform": "macOS-26.3.2-arm64-arm-64bit",
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "git_commit": "b46beb3436999a9c44b6b8d185b06796403b2436",
+    "git_dirty": false,
+    "active_source_sha256": "b399c6c405fedc612c92f0e8323529f5f238b42bd01a03bd2df2fdb768d490ae",
+    "plugins": [],
+    "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+  },
+  "validation_sha256": "ef1145b13ee106e221c273b28a082beab079cec2155c5104b7d28463290ad3fb",
+  "source_inputs_exact": 768,
+  "original_wip_exact": 13,
+  "capture": {
+    "stills": 24,
+    "movies": {
+      "v2/desk/arc-dpr1": {
+        "manifest_sha256": "d8c8737d8780ebc0da68a0f64f50fff864832b7042f854341d2808ee8d973296",
+        "frames": 372,
+        "first_timestamp": 1793242037.437358,
+        "last_timestamp": 1793242043.620425,
+        "span_seconds": 6.183067083358765,
+        "max_gap_seconds": 0.016668081283569336,
+        "motion_epoch_seconds": [
+          1793242038.0207,
+          1793242043.0205
+        ],
+        "dimensions": [
+          1280,
+          800
+        ],
+        "original_arrival_order_strict": true,
+        "all_raw_jpeg_decode": true,
+        "media_qa_sha256": "186d981d2164202d8ba60aed540017f52a1822bbe070f3213ef986967cb0b458",
+        "video_sha256": "d2b54d7514c106a293cfe06476eaf91b8503294d74a6157050385c4cb4628025",
+        "decoded_frame_count": 189
+      },
+      "v2/desk/arc-dpr2": {
+        "manifest_sha256": "744475e164bdad5df8dc7d2baddf909c1fe55dc183550cfbf6e8030da0115d07",
+        "frames": 372,
+        "first_timestamp": 1793242046.586964,
+        "last_timestamp": 1793242052.770031,
+        "span_seconds": 6.183067083358765,
+        "max_gap_seconds": 0.016668081283569336,
+        "motion_epoch_seconds": [
+          1793242047.1701999,
+          1793242052.17
+        ],
+        "dimensions": [
+          1280,
+          800
+        ],
+        "original_arrival_order_strict": true,
+        "all_raw_jpeg_decode": true,
+        "media_qa_sha256": "66aec03719009a8083918bbdfec9bec638ca5c353955ead687c2e0baee48c001",
+        "video_sha256": "b763ae6b63b079f4207ee7f903f2a23c4897165fe6777a57cc214f7d2f033433",
+        "decoded_frame_count": 189
+      },
+      "v2/pool/arc-dpr1": {
+        "manifest_sha256": "069754acfa43a9d8283daa5cc1a6b09914663f57f93bf1a21b49a0787b8b2a20",
+        "frames": 372,
+        "first_timestamp": 1793242057.276452,
+        "last_timestamp": 1793242063.459519,
+        "span_seconds": 6.1830668449401855,
+        "max_gap_seconds": 0.016668081283569336,
+        "motion_epoch_seconds": [
+          1793242057.8598,
+          1793242062.8596
+        ],
+        "dimensions": [
+          1280,
+          800
+        ],
+        "original_arrival_order_strict": true,
+        "all_raw_jpeg_decode": true,
+        "media_qa_sha256": "715aea1aee14d75b46551d381475f143a509d80a42ea29ee22e61c958e45bbcd",
+        "video_sha256": "ebb6cabb11a2d5758587af74643810c23532ae9e66769d2dfe23c57f7fdab576",
+        "decoded_frame_count": 189
+      },
+      "v2/pool/arc-dpr2": {
+        "manifest_sha256": "c6bac6aa4ecb3c0156d78f1b5d61d3730d62b1de36fc48ecd0e2a8f1ba95dfb2",
+        "frames": 372,
+        "first_timestamp": 1793242066.526053,
+        "last_timestamp": 1793242072.709121,
+        "span_seconds": 6.183068037033081,
+        "max_gap_seconds": 0.016668081283569336,
+        "motion_epoch_seconds": [
+          1793242067.1094,
+          1793242072.1093001
+        ],
+        "dimensions": [
+          1280,
+          800
+        ],
+        "original_arrival_order_strict": true,
+        "all_raw_jpeg_decode": true,
+        "media_qa_sha256": "645af7503044eba2cafc42fc7cd753b0e6ffe383090351557a5a3c0f0e9b470b",
+        "video_sha256": "2eea91dfb88219f0705bb1a3be55c9c64122c8a0ecdb5d81ed117dd40244341d",
+        "decoded_frame_count": 189
+      }
+    },
+    "model_array_fields_each_scene": {
+      "desk": 482,
+      "pool": 482
+    },
+    "integration_state_size": {
+      "desk": 489,
+      "pool": 228
+    },
+    "root_inspected_ordinary_pngs": 8,
+    "root_inspected_decoded_samples": 24
+  },
+  "tests": {
+    "backend": {
+      "tests": 106,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "build": {
+    "wheel_bytes": 3949875,
+    "wheel_sha256": "22297aa095c8f7d2120e14ef4d525b59c1d859a62c1655f3f5d101f571ba4101",
+    "source_package_files_exact": 416,
+    "installed_this_round": false
+  },
+  "optional_tools_available": {
+    "mypy": false,
+    "pyright": false,
+    "bandit": false,
+    "pip_audit": false
+  },
+  "limits": [
+    "Baseline only; no product/material/API/physics/dependency changes",
+    "No full-suite, installed-wheel smoke, budget, canonical, loading, FPS or memory rerun",
+    "Stills/contact sheets do not certify flicker-free or every-frame visual quality",
+    "Earlier helpers and incomplete receipts preserved separately",
+    "Initial package inventory failure counted ZIP directories; corrected explicit file-only parity",
+    "Existing normal diagnostics exclude tile grout edges",
+    "Native Chrome OS zoom completed in prior PR52; not rerun or relabeled here"
+  ],
+  "goal_status": "active",
+  "single_action_tuning": "deferred"
+}
