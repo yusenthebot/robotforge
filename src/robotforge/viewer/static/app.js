@@ -757,8 +757,10 @@ function applyPoses(buffer) {
   const f = new Float32Array(buffer);
   const nb = sceneDesc.nbody;
   if (f.length !== 1 + 7 * nb) return; // frame from a different model version
+  const firstPoses = posedVersion !== sceneDesc.version;
   const resetLights = f[0] < latestTime;
-  if (resetLights) { lastAddition = null; updateUndo(); }
+  // A new model starts at zero too; its late first pose must keep the matching committed Undo.
+  if (resetLights && !firstPoses) { lastAddition = null; updateUndo(); }
   latestTime = f[0];
   const qOff = 1 + 3 * nb;
   for (let b = 0; b < nb; b++) {
@@ -788,7 +790,6 @@ function applyPoses(buffer) {
     fitWhenPosed = null;
     pendingFit = null;
   }
-  const firstPoses = posedVersion !== sceneDesc.version;
   posedVersion = sceneDesc.version;
   if (firstPoses) renderLayouts();
   resolveCreatedRobot();
@@ -2819,15 +2820,15 @@ function resolveCreatedRobot() {
     wanted.reject(new Error(t("create_scene_changed"))); return;
   }
   if (wanted.rendered && renderedVersion !== wanted.version) return;
-  if (wanted.robot) select(wanted.robot, { focus: true });
+  if (wanted.robot) select(wanted.robot, { focus: wanted.focus });
   wanted.resolve();
 }
 
-function waitForCreation(data, rendered = false) {
+function waitForCreation(data, rendered = false, { focus = true } = {}) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => creationSelection?.reject(new Error(t("create_scene_changed"))), 15000);
     const finish = (callback, error) => { clearTimeout(timer); creationSelection = null; callback(error); };
-    creationSelection = { ...data, rendered, resolve: () => finish(resolve), reject: (error) => finish(reject, error) };
+    creationSelection = { ...data, rendered, focus, resolve: () => finish(resolve), reject: (error) => finish(reject, error) };
     resolveCreatedRobot();
   });
 }
@@ -2841,7 +2842,8 @@ async function placeEntity(item, pos) {
     }
   }
   pos = pos.slice();
-  if (creator.repeating() && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
+  const repeating = creator.repeating();
+  if (repeating && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
   if ((item.kind === "terrain" || item.kind === "terrain-edit") && (!Number.isInteger(placementGeneration) || !placementWorldSha)) { toast(t("loading_scene")); return; }
   const placementSession = creator.session();
   creationGesture.invalidate();
@@ -2856,7 +2858,7 @@ async function placeEntity(item, pos) {
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw,
         ...(item.material ? { material: item.material } : {}) };
   await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
-    frame: item.kind === "robot" || item.kind === "model",
+    frame: !repeating && (item.kind === "robot" || item.kind === "model"),
     progress: (event) => { if (placementSession === creator.session()) creator.progress(event.stage, event.fraction); },
     done: async (data) => {
       if (data.unchanged) {
@@ -2870,12 +2872,13 @@ async function placeEntity(item, pos) {
       if (item.kind === "terrain-edit") lastTerrainEdit = data.undo_terrain_edit || null;
       // A committed terrain edit remains undoable even if its first displayed geometry times out.
       if (item.kind === "terrain") lastAddition = data.undo || null;
-      if (creator.repeating() && !Number.isInteger(data.generation)) {
+      if (repeating && !Number.isInteger(data.generation)) {
+        lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
       if (item.kind === "model") creator.progress("display");
       try {
-        await waitForCreation(data, item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || creator.repeating() || item.kind === "edit" || item.kind === "copy" || item.kind === "start");
+        await waitForCreation(data, item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || repeating || item.kind === "edit" || item.kind === "copy" || item.kind === "start", { focus: !repeating });
       } catch (error) {
         if (item.kind === "terrain-edit") {
           lastTerrainEdit = stateVersion === data.version && stateGeneration === data.generation ? data.undo_terrain_edit || null : null;
@@ -2883,6 +2886,11 @@ async function placeEntity(item, pos) {
         }
         if (item.kind === "terrain") {
           lastAddition = stateVersion === data.version && stateGeneration === data.generation ? data.undo || null : null;
+          cancelCreation(true);
+        }
+        if (repeating && placementSession === creator.session()) {
+          lastAddition = stateVersion === data.version && stateGeneration === data.generation ? data.undo || null : null;
+          lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
           cancelCreation(true);
         }
         // A committed model stays undoable if only display completion timed out.
@@ -2894,7 +2902,13 @@ async function placeEntity(item, pos) {
         throw error;
       }
       if (placementSession !== creator.session()) return;
-      if (item.kind === "terrain" && creator.repeating()) {
+      if (repeating && (loadingScene || stateVersion !== data.version || stateGeneration !== data.generation
+          || sceneDesc?.version !== data.version || posedVersion !== data.version || renderedVersion !== data.version)) {
+        lastAddition = stateVersion === data.version && stateGeneration === data.generation ? data.undo || null : null;
+        lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
+        cancelCreation(true); throw new Error(t("create_scene_changed"));
+      }
+      if (item.kind === "terrain" && repeating) {
         const info = sceneDesc?.terrain_edit;
         const current = Number.isInteger(data.generation)
           && stateVersion === data.version && stateGeneration === data.generation;
@@ -2912,7 +2926,7 @@ async function placeEntity(item, pos) {
       lastRobotEdit = data.undo_robot_start || null;
       lastTerrainEdit = data.undo_terrain_edit || null;
       creationClickUntil = performance.now() + 500;
-      if (creator.repeating()) {
+      if (repeating) {
         if (item.kind === "copy" && (!editableObjects().some((o) => o.name === item.name) || !sceneDesc.object_edit.world_sha256)) {
           cancelCreation(true); throw new Error(t("create_scene_changed"));
         }

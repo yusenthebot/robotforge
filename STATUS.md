@@ -1,5 +1,12 @@
 # STATUS
 
+- 2026-10-29 continuous robot placement: Opt-in continuous placement covers templates, curated library models and saved designs; separate commits/fresh guards/latest Undo/default one-shot preserved, camera eye/aim retained.
+  Runtime1f984522/775inputs:685scoped default+356complete current non-slow browser+9GPU=1050distinct pytest,7canonical,source/fresh offline60-tool smoke and original11/11budgets pass.
+  Three paired native workflows yield6fully decoded movies/36root samples,12exact workflow and24exact original-world canvas pairs,2050model/state/workflow checks.
+  Wheel4031512B(+309),417package files and13originalWIP exact; no new asset/pass/dependency, mixed loading observations retained.
+  Sensor-panel projection avoidance remains; fixed-camera controls disable previews and normalize old one-shot clip planes via native Fit.
+  Initial product/QA failures retained; report docs/bench/2026-10-29-repeat-robots.md/.json; broad goal active, single-action success tuning deferred.
+
 - 2026-10-29 natural grass: shared floor/terrain/detailed chooser use a bounded 256-square local CC0 pair with authored tint/metric bump/physics and old wood APIs retained; independent 1,000 ms preparation/fallback, no dependency or action-success tuning.
   Runtime 74ae683d / 774 inputs: 685 viewer-default + 338 current browser (split same-product coverage) + 9 GPU = 1,032 distinct pytest, 7 canonical, source/fresh offline 60-tool smoke and original 11/11 budgets pass. Reset-generation test race reproduced on base and replaced by two actual-message orders; initial failures retained.
   24 default main-canvas exact pairs; production bridge 23/24 whole-window exact with one bounded clock label difference, 1,447 checks. Six fully decoded movies / 36 root samples include native Malo/touch Go2 grass/wood/grass, drive/release/reset/reload. Wheel 4,031,203 B (+79,500), 417 product files and 13 original WIP exact; mixed loading samples retained, no universal speed claim. Report docs/bench/2026-10-29-natural-grass.md/.json; broad goal active.
