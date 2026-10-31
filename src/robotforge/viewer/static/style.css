@@ -1717,3 +1717,7 @@ canvas.inspecting { cursor: crosshair; }
 #edit-object-section { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; }
 #edit-object-list { margin-top: 8px; }
 #edit-object-list button { max-width: 100%; overflow-wrap: anywhere; }
+#edit-object-list button[aria-pressed="true"], #select-object-group[aria-pressed="true"] {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}

@@ -1,0 +1,2649 @@
+{
+  "date": "2026-11-01",
+  "acceptance": true,
+  "broad_goal_status": "active",
+  "feature": "Opt-in 2..16 upright rigid prop group copy with common translation/yaw, full support/collision guards and latest group Undo.",
+  "source": {
+    "package": "robotforge",
+    "package_version": "0.0.1",
+    "python": "3.12.16",
+    "platform": "macOS-26.3.2-arm64-arm-64bit",
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "git_commit": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528",
+    "git_dirty": true,
+    "active_source_sha256": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441",
+    "plugins": [],
+    "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+  },
+  "frozen_input_count": 783,
+  "original_wip_exact": 13,
+  "base_commit": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528",
+  "tests": {
+    "final-default-v4": {
+      "passed": 4135,
+      "skipped": 129,
+      "failures": 0,
+      "xml_sha256": "412951e5dbf6d35f8dbf812a2f42b9766b9c88d5d7b51ded20e9a38e3bf93dd2"
+    },
+    "final-browser-v4": {
+      "passed": 362,
+      "skipped": 2,
+      "failures": 0,
+      "xml_sha256": "e41e9171284f02cbe36c159b448111d80222edfbeec1053f90eb206b83568f1a"
+    },
+    "final-gpu-v4": {
+      "passed": 9,
+      "skipped": 0,
+      "failures": 0,
+      "xml_sha256": "21ec08d8792fd88966a3758e9c6fac21a42be25db513533487d3de7304cdef63"
+    }
+  },
+  "distinct_final_pytest_passes": 4506,
+  "framework": {
+    "cases": 7,
+    "report": {
+      "issues": [],
+      "mode": "compare",
+      "source_changed": {
+        "active_source_sha256": {
+          "baseline": "258196f0c8df72d146af35b410c79bb0ec72e6fef6112e237572cee9fff0e7af",
+          "candidate": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441"
+        },
+        "git_commit": {
+          "baseline": "aae92839f5a8c91f4e143d4c90e893fa808309a2",
+          "candidate": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528"
+        }
+      },
+      "status": "pass"
+    },
+    "python": "3.12.13",
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4"
+  },
+  "source_and_installed_smoke": {
+    "tools": 60,
+    "source_receipt": "final-smoke-source-v4.receipt.json",
+    "installed_receipt": "final-smoke-installed-v4.receipt.json"
+  },
+  "installed_group_feature": {
+    "passed": true,
+    "installed_import": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-31-prop-group-copy/wheel-env-v4/lib/python3.12/site-packages/robotforge/__init__.py",
+    "source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.16",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": null,
+      "git_dirty": false,
+      "active_source_sha256": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "helper_sha256": "5abbacddba2e8023d79fce0604efcc77b0a97d1f1c520cef6ee31401344d7f34",
+    "layouts": [
+      {
+        "layout": "table",
+        "members": 3,
+        "occupied_same_token_retry": true,
+        "copy": {
+          "pipeline": 1,
+          "native": 2,
+          "load": 1
+        },
+        "rejection": {
+          "pipeline": 1,
+          "native": 2,
+          "load": 0
+        },
+        "undo": {
+          "pipeline": 1,
+          "native": 2,
+          "load": 1
+        },
+        "world_exactly_restored": true
+      },
+      {
+        "layout": "stack",
+        "members": 2,
+        "occupied_same_token_retry": true,
+        "copy": {
+          "pipeline": 1,
+          "native": 2,
+          "load": 1
+        },
+        "rejection": {
+          "pipeline": 1,
+          "native": 2,
+          "load": 0
+        },
+        "undo": {
+          "pipeline": 1,
+          "native": 2,
+          "load": 1
+        },
+        "world_exactly_restored": true
+      }
+    ],
+    "scope": "Actual installed backend preparation/occupied rejection/same-token retry/copy/Undo. No browser or source path imports."
+  },
+  "package": {
+    "bytes": 4069384,
+    "baseline_bytes": 4057944,
+    "delta_bytes": 11440,
+    "product_files": 421,
+    "wheel_sha256": "cee12b184b8b166d3f0f6bf36e8e6c2af574d49e3841071a5165ff7baf2edd59",
+    "source_wheel_installed_exact": true,
+    "new_assets": 0,
+    "new_dependencies": 0,
+    "new_product_files": [
+      "robotforge/viewer/object_group.py"
+    ],
+    "optional_tools_available": {
+      "mypy": false,
+      "pyright": false,
+      "bandit": false,
+      "pip_audit": false
+    }
+  },
+  "budget": {
+    "file": "budget-v4/2026-11-01-f031bc2-dirty-partial.json",
+    "sha256": "9bc444b39a9d605110c9491a7e78e4d5bda015bf682af3f19a12678fccbf9948",
+    "statuses": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "imports.robotforge_cpu_ms": "not run",
+      "imports.cli_cpu_ms": "not run",
+      "imports.mcp_server_cpu_ms": "not run",
+      "imports.robotforge_heavy": "not run",
+      "imports.cli_heavy": "not run",
+      "imports.mcp_server_heavy": "not run",
+      "physics.dog_idle.steps_per_s": "not run",
+      "physics.dog_idle.controllers_share": "not run",
+      "physics.dog_walk.steps_per_s": "not run",
+      "physics.go2_idle.steps_per_s": "not run",
+      "physics.go2_idle.controllers_share": "not run",
+      "physics.go2_walk.steps_per_s": "not run",
+      "physics.go2_rl_idle.steps_per_s": "not run",
+      "physics.go2_rl_idle.controllers_share": "not run",
+      "physics.humanoid_idle.steps_per_s": "not run",
+      "physics.humanoid_idle.controllers_share": "not run",
+      "physics.arm_pick.steps_per_s": "not run",
+      "physics.warehouse_nav.steps_per_s": "not run",
+      "physics.objects_20.steps_per_s": "not run",
+      "physics.machine.steps_per_s": "not run",
+      "physics.dog_idle.peak_mb": "not run",
+      "physics.go2_walk.peak_mb": "not run",
+      "physics.warehouse_nav.peak_mb": "not run",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok",
+      "mcp.start_s": "not run",
+      "mcp.new_world_ms": "not run",
+      "mcp.add_robot_ms": "not run",
+      "mcp.move_ms": "not run",
+      "mcp.observe_ms": "not run",
+      "mcp.server_rss_mb": "not run",
+      "mcp.idle_cpu_pct": "not run"
+    },
+    "executed_statuses": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3974.0078,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.8965,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.8
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5413,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.336
+        },
+        "fps": {
+          "value": 60.1149,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 1.6,
+          "unit": "ms",
+          "better": "lower",
+          "median": 1.5999999940395355,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1809,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 3.7,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.7000000178813934,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.2,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 559.7
+        },
+        "idle_cpu_pct": {
+          "value": 4.8,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "spec_sha256": "fa15d36e69aa2f9edd9b101d61b24a706021caf46a951d0cf9671031afb382a8",
+    "spec_unchanged": true
+  },
+  "idle_budget_diagnosis": {
+    "retained_formal_failures": [
+      {
+        "file": "budget-v3/2026-11-01-f031bc2-dirty-partial.json",
+        "idle_cpu_pct": 6.2
+      },
+      {
+        "file": "budget-v3-repeat/2026-11-01-f031bc2-dirty-partial.json",
+        "idle_cpu_pct": 6.6
+      }
+    ],
+    "original_limit_pct": 6.0,
+    "abba_old_source": {
+      "completed": true,
+      "source": {
+        "baseline": {
+          "package": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-31-prop-group-copy/baseline-source/src/robotforge/__init__.py",
+          "source": {
+            "package": "robotforge",
+            "package_version": "0.0.1",
+            "python": "3.12.16",
+            "platform": "macOS-26.3.2-arm64-arm-64bit",
+            "mujoco": "3.15.0",
+            "numpy": "2.5.4",
+            "git_commit": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528",
+            "git_dirty": false,
+            "active_source_sha256": "9f03a94afcc5fc5e5d7e0c7b039bbce6ae25974ba7df89db2169b719a1636d9b",
+            "plugins": [],
+            "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+          }
+        },
+        "candidate": {
+          "package": "/Users/yusenthebot/dev/robotforge-prop-materials/src/robotforge/__init__.py",
+          "source": {
+            "package": "robotforge",
+            "package_version": "0.0.1",
+            "python": "3.12.16",
+            "platform": "macOS-26.3.2-arm64-arm-64bit",
+            "mujoco": "3.15.0",
+            "numpy": "2.5.4",
+            "git_commit": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528",
+            "git_dirty": true,
+            "active_source_sha256": "67c352677c11429fa4757d7a345be2b6af491fb0ba6b76c6ef695707d6995ba2",
+            "plugins": [],
+            "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+          }
+        }
+      },
+      "order": [
+        "baseline",
+        "candidate",
+        "candidate",
+        "baseline",
+        "baseline",
+        "candidate",
+        "candidate",
+        "baseline"
+      ],
+      "rows": [
+        {
+          "index": 0,
+          "cohort": "baseline",
+          "served_s": 0.4029459170124028,
+          "first_frame_s": 0.6202962079842109,
+          "server_peak_mb": 134.1,
+          "idle_cpu": 6.8
+        },
+        {
+          "index": 1,
+          "cohort": "candidate",
+          "served_s": 0.32169925002381206,
+          "first_frame_s": 0.5284302090003621,
+          "server_peak_mb": 132.5,
+          "idle_cpu": 2.600000000000001
+        },
+        {
+          "index": 2,
+          "cohort": "candidate",
+          "served_s": 0.3249253329995554,
+          "first_frame_s": 0.5306837079988327,
+          "server_peak_mb": 133.3,
+          "idle_cpu": 4.200000000000001
+        },
+        {
+          "index": 3,
+          "cohort": "baseline",
+          "served_s": 0.36614983301842585,
+          "first_frame_s": 0.5804937500215601,
+          "server_peak_mb": 133.9,
+          "idle_cpu": 5.3999999999999995
+        },
+        {
+          "index": 4,
+          "cohort": "baseline",
+          "served_s": 0.3331578749930486,
+          "first_frame_s": 0.5413514169922564,
+          "server_peak_mb": 132.9,
+          "idle_cpu": 3.1999999999999997
+        },
+        {
+          "index": 5,
+          "cohort": "candidate",
+          "served_s": 0.3469722500012722,
+          "first_frame_s": 0.5634854590171017,
+          "server_peak_mb": 133.4,
+          "idle_cpu": 3.8
+        },
+        {
+          "index": 6,
+          "cohort": "candidate",
+          "served_s": 0.35750425001606345,
+          "first_frame_s": 0.5718649170012213,
+          "server_peak_mb": 134.0,
+          "idle_cpu": 6.8
+        },
+        {
+          "index": 7,
+          "cohort": "baseline",
+          "served_s": 0.33310154199716635,
+          "first_frame_s": 0.5345691670081578,
+          "server_peak_mb": 134.1,
+          "idle_cpu": 7.2
+        }
+      ],
+      "served_app_checks": [
+        {
+          "cohort": "baseline",
+          "sha256": "cf37645521bfc9a22449817eca0d7185d0b67aac981d9be7216c1d6a203fb712"
+        },
+        {
+          "cohort": "candidate",
+          "sha256": "c51413ac559429e89b1d09b24b4bd8b29e605bcf1b8b07357a2516c02b6ed88f"
+        },
+        {
+          "cohort": "candidate",
+          "sha256": "c51413ac559429e89b1d09b24b4bd8b29e605bcf1b8b07357a2516c02b6ed88f"
+        },
+        {
+          "cohort": "baseline",
+          "sha256": "cf37645521bfc9a22449817eca0d7185d0b67aac981d9be7216c1d6a203fb712"
+        },
+        {
+          "cohort": "baseline",
+          "sha256": "cf37645521bfc9a22449817eca0d7185d0b67aac981d9be7216c1d6a203fb712"
+        },
+        {
+          "cohort": "candidate",
+          "sha256": "c51413ac559429e89b1d09b24b4bd8b29e605bcf1b8b07357a2516c02b6ed88f"
+        },
+        {
+          "cohort": "candidate",
+          "sha256": "c51413ac559429e89b1d09b24b4bd8b29e605bcf1b8b07357a2516c02b6ed88f"
+        },
+        {
+          "cohort": "baseline",
+          "sha256": "cf37645521bfc9a22449817eca0d7185d0b67aac981d9be7216c1d6a203fb712"
+        }
+      ],
+      "world_sha256": "0a8eebacd88d433fe23f050c3d99bfa58fa81b40f2b9743a45c2094532061529",
+      "values": {
+        "baseline": [
+          6.8,
+          5.3999999999999995,
+          3.1999999999999997,
+          7.2
+        ],
+        "candidate": [
+          2.600000000000001,
+          4.200000000000001,
+          3.8,
+          6.8
+        ]
+      },
+      "median": {
+        "baseline": 6.1,
+        "candidate": 4.0
+      },
+      "scope": "Eight sequential original five-second _cold_start idle samples in ABBA order, same headless Chrome/helper/world. Diagnostics only; not a replacement budget certification and no threshold/method change."
+    },
+    "coarse_before": {
+      "completed": true,
+      "windows": [
+        {
+          "phase": "first-five",
+          "elapsed_seconds": 5.010866625,
+          "process_cpu_seconds": 0.326297,
+          "event_loop_cpu_seconds": 0.326299958,
+          "steps": 2511,
+          "simulation_seconds": 5.021999999999652,
+          "counters": {
+            "WorldStore.load": {
+              "calls": 15,
+              "inclusive_cpu_ns": 17443793
+            },
+            "hub.robot_stream": {
+              "calls": 5,
+              "inclusive_cpu_ns": 18925417
+            }
+          },
+          "protocol_delta": {
+            "received": 337,
+            "binary": 272,
+            "state": 19,
+            "seen": 272
+          }
+        },
+        {
+          "phase": "second-five",
+          "elapsed_seconds": 5.009589042,
+          "process_cpu_seconds": 0.173661,
+          "event_loop_cpu_seconds": 0.173658083,
+          "steps": 2502,
+          "simulation_seconds": 5.004000000000415,
+          "counters": {
+            "WorldStore.load": {
+              "calls": 15,
+              "inclusive_cpu_ns": 9178542
+            },
+            "hub.robot_stream": {
+              "calls": 5,
+              "inclusive_cpu_ns": 9984916
+            }
+          },
+          "protocol_delta": {
+            "received": 336,
+            "binary": 271,
+            "state": 20,
+            "seen": 271
+          }
+        }
+      ],
+      "coarse": {
+        "markers": [
+          {
+            "leaving": "startup",
+            "monotonic_ns": 245015359830833,
+            "process_cpu_ns": 461897000,
+            "event_loop_cpu_ns": 431829250,
+            "simulation_time": 0.1500000000000001,
+            "steps_taken": 75,
+            "counters": {
+              "startup": {
+                "WorldStore.load": {
+                  "calls": 9,
+                  "inclusive_cpu_ns": 4827833
+                },
+                "hub.robot_stream": {
+                  "calls": 1,
+                  "inclusive_cpu_ns": 2439750
+                }
+              }
+            }
+          },
+          {
+            "leaving": "first-five",
+            "monotonic_ns": 245020370697458,
+            "process_cpu_ns": 788194000,
+            "event_loop_cpu_ns": 758129208,
+            "simulation_time": 5.171999999999652,
+            "steps_taken": 2586,
+            "counters": {
+              "startup": {
+                "WorldStore.load": {
+                  "calls": 9,
+                  "inclusive_cpu_ns": 4827833
+                },
+                "hub.robot_stream": {
+                  "calls": 1,
+                  "inclusive_cpu_ns": 2439750
+                }
+              },
+              "first-five": {
+                "WorldStore.load": {
+                  "calls": 15,
+                  "inclusive_cpu_ns": 17443793
+                },
+                "hub.robot_stream": {
+                  "calls": 5,
+                  "inclusive_cpu_ns": 18925417
+                }
+              }
+            }
+          },
+          {
+            "leaving": "second-five",
+            "monotonic_ns": 245025380286500,
+            "process_cpu_ns": 961855000,
+            "event_loop_cpu_ns": 931787291,
+            "simulation_time": 10.176000000000068,
+            "steps_taken": 5088,
+            "counters": {
+              "startup": {
+                "WorldStore.load": {
+                  "calls": 9,
+                  "inclusive_cpu_ns": 4827833
+                },
+                "hub.robot_stream": {
+                  "calls": 1,
+                  "inclusive_cpu_ns": 2439750
+                }
+              },
+              "first-five": {
+                "WorldStore.load": {
+                  "calls": 15,
+                  "inclusive_cpu_ns": 17443793
+                },
+                "hub.robot_stream": {
+                  "calls": 5,
+                  "inclusive_cpu_ns": 18925417
+                }
+              },
+              "second-five": {
+                "WorldStore.load": {
+                  "calls": 15,
+                  "inclusive_cpu_ns": 9178542
+                },
+                "hub.robot_stream": {
+                  "calls": 5,
+                  "inclusive_cpu_ns": 9984916
+                }
+              }
+            }
+          }
+        ],
+        "counters": {
+          "startup": {
+            "WorldStore.load": {
+              "calls": 9,
+              "inclusive_cpu_ns": 4827833
+            },
+            "hub.robot_stream": {
+              "calls": 1,
+              "inclusive_cpu_ns": 2439750
+            }
+          },
+          "first-five": {
+            "WorldStore.load": {
+              "calls": 15,
+              "inclusive_cpu_ns": 17443793
+            },
+            "hub.robot_stream": {
+              "calls": 5,
+              "inclusive_cpu_ns": 18925417
+            }
+          },
+          "second-five": {
+            "WorldStore.load": {
+              "calls": 15,
+              "inclusive_cpu_ns": 9178542
+            },
+            "hub.robot_stream": {
+              "calls": 5,
+              "inclusive_cpu_ns": 9984916
+            }
+          }
+        },
+        "source": {
+          "package": "robotforge",
+          "package_version": "0.0.1",
+          "python": "3.12.16",
+          "platform": "macOS-26.3.2-arm64-arm-64bit",
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "git_commit": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528",
+          "git_dirty": true,
+          "active_source_sha256": "67c352677c11429fa4757d7a345be2b6af491fb0ba6b76c6ef695707d6995ba2",
+          "plugins": [],
+          "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+        }
+      },
+      "client_windows": [
+        {
+          "protocol": {
+            "received": 10,
+            "binary": 5,
+            "state": 2,
+            "seen": 5
+          },
+          "sim_time": 0.13199999928474426,
+          "process_cpu_seconds": 0.46,
+          "monotonic": 245015.359782916
+        },
+        {
+          "protocol": {
+            "received": 347,
+            "binary": 277,
+            "state": 21,
+            "seen": 277
+          },
+          "sim_time": 5.1539998054504395,
+          "process_cpu_seconds": 0.79,
+          "monotonic": 245020.370610416
+        },
+        {
+          "protocol": {
+            "received": 683,
+            "binary": 548,
+            "state": 41,
+            "seen": 548
+          },
+          "sim_time": 10.175999641418457,
+          "process_cpu_seconds": 0.96,
+          "monotonic": 245025.380244458
+        }
+      ],
+      "scope": "Two inclusive method timers only, sampled CPU/counters before diagnostic serialization; original first-frame and consecutive five-second windows. Inclusive robot_stream contains load CPU; do not sum. Diagnostics, not formal budget certification."
+    },
+    "coarse_after": {
+      "completed": true,
+      "windows": [
+        {
+          "phase": "first-five",
+          "elapsed_seconds": 5.005875875,
+          "process_cpu_seconds": 0.239076,
+          "event_loop_cpu_seconds": 0.239076209,
+          "steps": 2499,
+          "simulation_seconds": 4.997999999999656,
+          "counters": {
+            "WorldStore.load": {
+              "calls": 5,
+              "inclusive_cpu_ns": 5392127
+            },
+            "hub.robot_stream": {
+              "calls": 5,
+              "inclusive_cpu_ns": 6301915
+            }
+          },
+          "protocol_delta": {
+            "received": 338,
+            "binary": 273,
+            "state": 19,
+            "seen": 273
+          }
+        },
+        {
+          "phase": "second-five",
+          "elapsed_seconds": 5.010927417,
+          "process_cpu_seconds": 0.180328,
+          "event_loop_cpu_seconds": 0.180327916,
+          "steps": 2509,
+          "simulation_seconds": 5.018000000000408,
+          "counters": {
+            "WorldStore.load": {
+              "calls": 4,
+              "inclusive_cpu_ns": 3316251
+            },
+            "hub.robot_stream": {
+              "calls": 4,
+              "inclusive_cpu_ns": 3883876
+            }
+          },
+          "protocol_delta": {
+            "received": 336,
+            "binary": 271,
+            "state": 20,
+            "seen": 271
+          }
+        }
+      ],
+      "coarse": {
+        "markers": [
+          {
+            "leaving": "startup",
+            "monotonic_ns": 245625233544458,
+            "process_cpu_ns": 450939000,
+            "event_loop_cpu_ns": 423100041,
+            "simulation_time": 0.1480000000000001,
+            "steps_taken": 74,
+            "counters": {
+              "startup": {
+                "WorldStore.load": {
+                  "calls": 7,
+                  "inclusive_cpu_ns": 3180625
+                },
+                "hub.robot_stream": {
+                  "calls": 1,
+                  "inclusive_cpu_ns": 1290250
+                }
+              }
+            }
+          },
+          {
+            "leaving": "first-five",
+            "monotonic_ns": 245630239420333,
+            "process_cpu_ns": 690015000,
+            "event_loop_cpu_ns": 662176250,
+            "simulation_time": 5.145999999999655,
+            "steps_taken": 2573,
+            "counters": {
+              "startup": {
+                "WorldStore.load": {
+                  "calls": 7,
+                  "inclusive_cpu_ns": 3180625
+                },
+                "hub.robot_stream": {
+                  "calls": 1,
+                  "inclusive_cpu_ns": 1290250
+                }
+              },
+              "first-five": {
+                "WorldStore.load": {
+                  "calls": 5,
+                  "inclusive_cpu_ns": 5392127
+                },
+                "hub.robot_stream": {
+                  "calls": 5,
+                  "inclusive_cpu_ns": 6301915
+                }
+              }
+            }
+          },
+          {
+            "leaving": "second-five",
+            "monotonic_ns": 245635250347750,
+            "process_cpu_ns": 870343000,
+            "event_loop_cpu_ns": 842504166,
+            "simulation_time": 10.164000000000064,
+            "steps_taken": 5082,
+            "counters": {
+              "startup": {
+                "WorldStore.load": {
+                  "calls": 7,
+                  "inclusive_cpu_ns": 3180625
+                },
+                "hub.robot_stream": {
+                  "calls": 1,
+                  "inclusive_cpu_ns": 1290250
+                }
+              },
+              "first-five": {
+                "WorldStore.load": {
+                  "calls": 5,
+                  "inclusive_cpu_ns": 5392127
+                },
+                "hub.robot_stream": {
+                  "calls": 5,
+                  "inclusive_cpu_ns": 6301915
+                }
+              },
+              "second-five": {
+                "WorldStore.load": {
+                  "calls": 4,
+                  "inclusive_cpu_ns": 3316251
+                },
+                "hub.robot_stream": {
+                  "calls": 4,
+                  "inclusive_cpu_ns": 3883876
+                }
+              }
+            }
+          }
+        ],
+        "counters": {
+          "startup": {
+            "WorldStore.load": {
+              "calls": 7,
+              "inclusive_cpu_ns": 3180625
+            },
+            "hub.robot_stream": {
+              "calls": 1,
+              "inclusive_cpu_ns": 1290250
+            }
+          },
+          "first-five": {
+            "WorldStore.load": {
+              "calls": 5,
+              "inclusive_cpu_ns": 5392127
+            },
+            "hub.robot_stream": {
+              "calls": 5,
+              "inclusive_cpu_ns": 6301915
+            }
+          },
+          "second-five": {
+            "WorldStore.load": {
+              "calls": 4,
+              "inclusive_cpu_ns": 3316251
+            },
+            "hub.robot_stream": {
+              "calls": 4,
+              "inclusive_cpu_ns": 3883876
+            }
+          }
+        },
+        "source": {
+          "package": "robotforge",
+          "package_version": "0.0.1",
+          "python": "3.12.16",
+          "platform": "macOS-26.3.2-arm64-arm-64bit",
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "git_commit": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528",
+          "git_dirty": true,
+          "active_source_sha256": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441",
+          "plugins": [],
+          "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+        }
+      },
+      "client_windows": [
+        {
+          "protocol": {
+            "received": 10,
+            "binary": 5,
+            "state": 2,
+            "seen": 5
+          },
+          "sim_time": 0.12999999523162842,
+          "process_cpu_seconds": 0.45,
+          "monotonic": 245625.233489333
+        },
+        {
+          "protocol": {
+            "received": 348,
+            "binary": 278,
+            "state": 21,
+            "seen": 278
+          },
+          "sim_time": 5.145999908447266,
+          "process_cpu_seconds": 0.69,
+          "monotonic": 245630.239386333
+        },
+        {
+          "protocol": {
+            "received": 684,
+            "binary": 549,
+            "state": 41,
+            "seen": 549
+          },
+          "sim_time": 10.144000053405762,
+          "process_cpu_seconds": 0.87,
+          "monotonic": 245635.250302666
+        }
+      ],
+      "scope": "Two inclusive method timers only, sampled CPU/counters before diagnostic serialization; original first-frame and consecutive five-second windows. Inclusive robot_stream contains load CPU; do not sum. Diagnostics, not formal budget certification."
+    },
+    "fix": "One saved-world read per robot-update callback; explicit lesson acting world and saved task contracts. No cross-tick cache or physics/control/frequency/threshold change.",
+    "scope": "Duplicate parsing was measured waste, about 17.44ms of326.3ms first-window CPU; eliminating two reads cannot alone establish causation for total CPU variation. Both old cohorts cross6% in ABBA. One original-method formal budget on the actual new source passed4.8%; not a universal CPU improvement."
+  },
+  "original_pack_binding_correction": {
+    "source_unchanged": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441",
+    "failed_receipt": "final-original-comparison-v4.receipt.json",
+    "old_helper": "compare_original_worlds_v4.py",
+    "old_helper_sha256": "d2de7c21176d2414c6bbe510af3768b5910a966348c95df4ed5ecb8653e95e6f",
+    "corrected_helper": "compare_original_worlds_v4b.py",
+    "scope": "Only transient packObserved presence removed from cross-run exact keys; raw values retained, explicit own-binding restoration and all-three GL0 assertions strengthened. No capture/product/pixel/model/camera/material/budget changes. Asynchronous sensor readback exists, concrete cause of sampled scheduling difference not established. Independent acceptance_review scoped approval."
+  },
+  "workflows": {
+    "malo": {
+      "manifest_sha256": "39142dab9345b27862e296aded8393ec02a5ecfc0b0b521d9e354aeda29d36a7",
+      "source": {
+        "active_source_sha256": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441",
+        "git_commit": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528",
+        "git_dirty": true,
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+        "plugins": [],
+        "python": "3.12.16"
+      },
+      "occupied_rejection": {
+        "failed_attempt_counts": {
+          "compile_attempts": 2,
+          "compile_successes": 2,
+          "load_attempts": 0,
+          "load_successes": 0,
+          "pipeline_attempts": 1,
+          "pipeline_successes": 1
+        },
+        "prepare_and_reject_counts": {
+          "compile_attempts": 2,
+          "compile_successes": 2,
+          "load_attempts": 0,
+          "load_successes": 0,
+          "pipeline_attempts": 1,
+          "pipeline_successes": 1
+        },
+        "reply": {
+          "id": 4,
+          "message": "layout occupied: workbench_2 overlaps workbench; choose a clear spot",
+          "ok": false,
+          "time": 7007.299999982119,
+          "type": "reply"
+        },
+        "request": {
+          "action": "duplicate_object_group",
+          "generation": 2,
+          "id": 4,
+          "pos": [
+            1.1667,
+            -0.5,
+            0
+          ],
+          "time": 6768.299999982119,
+          "token": "41f2dd4f9d6240c7b1746f2b80ced40b",
+          "type": "world",
+          "version": 1,
+          "world_sha256": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+          "yaw": 90
+        },
+        "requested_floor_point": [
+          1.1666667,
+          -0.5,
+          0
+        ],
+        "retry_request": {
+          "action": "duplicate_object_group",
+          "generation": 2,
+          "id": 5,
+          "pos": [
+            -1.5,
+            1.4,
+            0
+          ],
+          "time": 10496.699999988079,
+          "token": "41f2dd4f9d6240c7b1746f2b80ced40b",
+          "type": "world",
+          "version": 1,
+          "world_sha256": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+          "yaw": 90
+        },
+        "same_preparation_object": true,
+        "same_token_retry_committed": true,
+        "screen_point": [
+          471.99999999999994,
+          241.70703124999991
+        ],
+        "token": "41f2dd4f9d6240c7b1746f2b80ced40b",
+        "world_model_version_pose_unchanged": true
+      },
+      "layout_journey": {
+        "bytes": 1951,
+        "counts": {
+          "compile_attempts": 4,
+          "compile_successes": 4,
+          "load_attempts": 2,
+          "load_successes": 2,
+          "pipeline_attempts": 2,
+          "pipeline_successes": 2
+        },
+        "empty_scene": {
+          "generation": 6,
+          "version": 5
+        },
+        "name": "Group copy malo layout",
+        "owned_file": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-31-prop-group-copy/workflow-complete-candidate-malo-v4/home/worlds/zeno_malo_workshop/.layouts/1ec9a223dc2c4414aed3f1ffe12ca9b7.json",
+        "reload_preserved_layout_bytes_and_row": true,
+        "restored_scene": {
+          "generation": 7,
+          "version": 6
+        },
+        "retained_file": "saved-layout.json",
+        "saved_layout_bytes_unchanged": true,
+        "saved_world_exactly_restored": true,
+        "sha256": "12ec3ffe657561dbd15ddf76a4eaddc35ab79221e313fc6204fff5debfdc7b8c"
+      },
+      "observed_copy_counts": [
+        {
+          "counts": {
+            "compile_attempts": 2,
+            "compile_successes": 2,
+            "load_attempts": 1,
+            "load_successes": 1,
+            "pipeline_attempts": 1,
+            "pipeline_successes": 1
+          },
+          "label": "01-copy-1",
+          "names": [
+            "workbench",
+            "parts",
+            "marker"
+          ]
+        },
+        {
+          "counts": {
+            "compile_attempts": 2,
+            "compile_successes": 2,
+            "load_attempts": 1,
+            "load_successes": 1,
+            "pipeline_attempts": 1,
+            "pipeline_successes": 1
+          },
+          "label": "03-redo",
+          "names": [
+            "workbench",
+            "parts",
+            "marker"
+          ]
+        }
+      ],
+      "undo": {
+        "counts": {
+          "compile_attempts": 2,
+          "compile_successes": 2,
+          "load_attempts": 1,
+          "load_successes": 1,
+          "pipeline_attempts": 1,
+          "pipeline_successes": 1
+        },
+        "scope": "all copied group members",
+        "version_delta": 1
+      },
+      "video": "workflow-complete-candidate-malo-v4/workflow.mp4",
+      "video_sha256": "28bac2f54f35aefebda2427c5aaba20304674b2876453577c615fc2b6b9e1a30",
+      "seconds": 32.5,
+      "decoded_frames": 975,
+      "trusted_inputs_before_reload": 120
+    },
+    "go2": {
+      "manifest_sha256": "25e1d174f8a46467164c48d0a67fc4c197752678c5db3bba1178d699811d986a",
+      "source": {
+        "active_source_sha256": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441",
+        "git_commit": "f031bc22c84ce66bee5ffb66f61b0ec7d10a9528",
+        "git_dirty": true,
+        "mujoco": "3.15.0",
+        "numpy": "2.5.4",
+        "package": "robotforge",
+        "package_version": "0.0.1",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+        "plugins": [],
+        "python": "3.12.16"
+      },
+      "occupied_rejection": {
+        "failed_attempt_counts": {
+          "compile_attempts": 2,
+          "compile_successes": 2,
+          "load_attempts": 0,
+          "load_successes": 0,
+          "pipeline_attempts": 1,
+          "pipeline_successes": 1
+        },
+        "prepare_and_reject_counts": {
+          "compile_attempts": 2,
+          "compile_successes": 2,
+          "load_attempts": 0,
+          "load_successes": 0,
+          "pipeline_attempts": 1,
+          "pipeline_successes": 1
+        },
+        "reply": {
+          "id": 4,
+          "message": "layout occupied: qa_stack_base_2 overlaps qa_stack_base; choose a clear spot",
+          "ok": false,
+          "time": 6726.399999976158,
+          "type": "reply"
+        },
+        "request": {
+          "action": "duplicate_object_group",
+          "generation": 4,
+          "id": 4,
+          "pos": [
+            3.2,
+            -3.9,
+            0
+          ],
+          "time": 6535.5999999940395,
+          "token": "3a800a45680440019ed169e1fec76d7a",
+          "type": "world",
+          "version": 3,
+          "world_sha256": "3b4de7ab8bf7abd8ffe61e8eec0b2b3afdfd3cfcd82c4eeafe2b8078032748a9",
+          "yaw": 90
+        },
+        "requested_floor_point": [
+          3.2,
+          -3.9,
+          0
+        ],
+        "retry_request": {
+          "action": "duplicate_object_group",
+          "generation": 4,
+          "id": 5,
+          "pos": [
+            1.8,
+            -3.4,
+            0
+          ],
+          "time": 10264.59999999404,
+          "token": "3a800a45680440019ed169e1fec76d7a",
+          "type": "world",
+          "version": 3,
+          "world_sha256": "3b4de7ab8bf7abd8ffe61e8eec0b2b3afdfd3cfcd82c4eeafe2b8078032748a9",
+          "yaw": 90
+        },
+        "same_preparation_object": true,
+        "same_token_retry_committed": true,
+        "screen_point": [
+          639.9999999999999,
+          241.70703124999963
+        ],
+        "token": "3a800a45680440019ed169e1fec76d7a",
+        "world_model_version_pose_unchanged": true
+      },
+      "layout_journey": {
+        "bytes": 10928,
+        "counts": {
+          "compile_attempts": 4,
+          "compile_successes": 4,
+          "load_attempts": 2,
+          "load_successes": 2,
+          "pipeline_attempts": 2,
+          "pipeline_successes": 2
+        },
+        "empty_scene": {
+          "generation": 8,
+          "version": 7
+        },
+        "name": "Group copy go2 layout",
+        "owned_file": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-31-prop-group-copy/workflow-complete-candidate-go2-v4/home/worlds/zeno_go2_warehouse/.layouts/981c916a61284b2fabd37017dabf6648.json",
+        "reload_preserved_layout_bytes_and_row": true,
+        "restored_scene": {
+          "generation": 9,
+          "version": 8
+        },
+        "retained_file": "saved-layout.json",
+        "saved_layout_bytes_unchanged": true,
+        "saved_world_exactly_restored": true,
+        "sha256": "0a47bf6d6ac7ef5f4ba2c5e57d157988ea6a4ada0c6df112519de1de8d6aa4ac"
+      },
+      "observed_copy_counts": [
+        {
+          "counts": {
+            "compile_attempts": 2,
+            "compile_successes": 2,
+            "load_attempts": 1,
+            "load_successes": 1,
+            "pipeline_attempts": 1,
+            "pipeline_successes": 1
+          },
+          "label": "01-copy-1",
+          "names": [
+            "qa_stack_base",
+            "qa_stack_top"
+          ]
+        },
+        {
+          "counts": {
+            "compile_attempts": 2,
+            "compile_successes": 2,
+            "load_attempts": 1,
+            "load_successes": 1,
+            "pipeline_attempts": 1,
+            "pipeline_successes": 1
+          },
+          "label": "03-redo",
+          "names": [
+            "qa_stack_base",
+            "qa_stack_top"
+          ]
+        }
+      ],
+      "undo": {
+        "counts": {
+          "compile_attempts": 2,
+          "compile_successes": 2,
+          "load_attempts": 1,
+          "load_successes": 1,
+          "pipeline_attempts": 1,
+          "pipeline_successes": 1
+        },
+        "scope": "all copied group members",
+        "version_delta": 1
+      },
+      "video": "workflow-complete-candidate-go2-v4/workflow.mp4",
+      "video_sha256": "6c1f80e0a8bec2414390ccb2c6973bee9e97cca22d6b8c89b2ed10d1209e4949",
+      "seconds": 30.166667,
+      "decoded_frames": 905,
+      "trusted_inputs_before_reload": 114
+    }
+  },
+  "lifecycle": {
+    "passed": true,
+    "scope": "Two final paused headed trusted-input native workflows; warmed original returns exactly after Undo, copy/redo/restore stable. renderer.info.memory counts, not VRAM bytes; helper markers persist until reload.",
+    "scenes": {
+      "malo": {
+        "warm_original": {
+          "geometries": 52,
+          "textures": 8
+        },
+        "copy": {
+          "geometries": 57,
+          "textures": 8
+        },
+        "undo": {
+          "geometries": 52,
+          "textures": 8
+        },
+        "redo": {
+          "geometries": 57,
+          "textures": 8
+        },
+        "layout_restored": {
+          "geometries": 57,
+          "textures": 8
+        },
+        "reload": {
+          "geometries": 55,
+          "textures": 8
+        },
+        "passed": true
+      },
+      "go2": {
+        "warm_original": {
+          "geometries": 141,
+          "textures": 6
+        },
+        "copy": {
+          "geometries": 143,
+          "textures": 6
+        },
+        "undo": {
+          "geometries": 141,
+          "textures": 6
+        },
+        "redo": {
+          "geometries": 143,
+          "textures": 6
+        },
+        "layout_restored": {
+          "geometries": 143,
+          "textures": 6
+        },
+        "reload": {
+          "geometries": 141,
+          "textures": 6
+        },
+        "passed": true
+      }
+    }
+  },
+  "manual_final_controls": {
+    "checks": 1242,
+    "scenes": {
+      "malo": {
+        "phases": {
+          "cold": {
+            "main_canvas_sha256": "05ddec658b30b9b991cafeaf54ad0a1e13c1a812537f876ffc57d22d509f73ff",
+            "synchronous_render_glfinish_median_ms": [
+              0.15000000596046448,
+              0.10000002384185791
+            ],
+            "http_transfer_bytes": [
+              48675661,
+              48688453
+            ],
+            "http_requests": [
+              32,
+              32
+            ],
+            "navigation_duration_ms": [
+              101.7000000178814,
+              108.40000000596046
+            ]
+          },
+          "warm": {
+            "main_canvas_sha256": "05ddec658b30b9b991cafeaf54ad0a1e13c1a812537f876ffc57d22d509f73ff",
+            "synchronous_render_glfinish_median_ms": [
+              0.15000000596046448,
+              0.15000000596046448
+            ],
+            "http_transfer_bytes": [
+              47322859,
+              47323125
+            ],
+            "http_requests": [
+              32,
+              32
+            ],
+            "navigation_duration_ms": [
+              52.60000002384186,
+              52.099999994039536
+            ]
+          }
+        },
+        "model_array_count": 486,
+        "expected_path_metadata": {
+          "hfield_pathadr": {
+            "equal": true,
+            "baseline": {
+              "dtype": "int32",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ]
+            },
+            "candidate": {
+              "dtype": "int32",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ]
+            }
+          },
+          "mesh_pathadr": {
+            "equal": false,
+            "baseline": {
+              "dtype": "int32",
+              "sha256": "7e2e4ab5f68833d9d51171e49dde9d336f79f5db137ece0038251ad66a5802b7",
+              "shape": [
+                45
+              ]
+            },
+            "candidate": {
+              "dtype": "int32",
+              "sha256": "401e8bdf9de69363c1060b53b5c20f24aec121f4c970156848015a057e7d81a5",
+              "shape": [
+                45
+              ]
+            }
+          },
+          "skin_pathadr": {
+            "equal": true,
+            "baseline": {
+              "dtype": "int32",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ]
+            },
+            "candidate": {
+              "dtype": "int32",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ]
+            }
+          },
+          "tex_pathadr": {
+            "equal": true,
+            "baseline": {
+              "dtype": "int32",
+              "sha256": "12a3ae445661ce5dee78d0650d33362dec29c4f82af05e7e57fb595bbbacf0ca",
+              "shape": [
+                2
+              ]
+            },
+            "candidate": {
+              "dtype": "int32",
+              "sha256": "12a3ae445661ce5dee78d0650d33362dec29c4f82af05e7e57fb595bbbacf0ca",
+              "shape": [
+                2
+              ]
+            }
+          },
+          "paths": {
+            "equal": false,
+            "baseline": {
+              "dtype": "uint8",
+              "sha256": "0a51edad468434d8f11a84db5609d4fe55c4a1cd3cef16dee082996b45693b28",
+              "shape": [
+                3888
+              ]
+            },
+            "candidate": {
+              "dtype": "uint8",
+              "sha256": "7d13b44b6ffd71e6d46d463c037be4e1f19a502badd6e0f3d69387e0a619db76",
+              "shape": [
+                3889
+              ]
+            }
+          }
+        },
+        "expected_path_scalars": {
+          "npaths": [
+            3888,
+            3889
+          ]
+        },
+        "normal_compile_load_seconds": [
+          1.7195919590012636,
+          1.697278917010408
+        ],
+        "passive_clone_diagnostics": [
+          [
+            {
+              "finite": true,
+              "name": "workbench_2",
+              "pose_reference": "body origin",
+              "position": [
+                -1.5,
+                1.4833333333333332,
+                0.0
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            },
+            {
+              "finite": true,
+              "name": "parts_2",
+              "pose_reference": "body origin",
+              "position": [
+                -1.5,
+                1.4833333333333332,
+                0.75
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            },
+            {
+              "finite": true,
+              "name": "marker_2",
+              "pose_reference": "body origin",
+              "position": [
+                -1.499999999988066,
+                1.2333333333360972,
+                0.8099275978301915
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            }
+          ],
+          [
+            {
+              "finite": true,
+              "name": "workbench_2",
+              "pose_reference": "body origin",
+              "position": [
+                -1.5,
+                1.4833333333333332,
+                0.0
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            },
+            {
+              "finite": true,
+              "name": "parts_2",
+              "pose_reference": "body origin",
+              "position": [
+                -1.5,
+                1.4833333333333332,
+                0.75
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            },
+            {
+              "finite": true,
+              "name": "marker_2",
+              "pose_reference": "body origin",
+              "position": [
+                -1.499999999988066,
+                1.2333333333360972,
+                0.8099275978301915
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            }
+          ]
+        ]
+      },
+      "go2": {
+        "phases": {
+          "cold": {
+            "main_canvas_sha256": "55b867646b2337517dbad35172ccd28119295d41c984dbf937cc9b91efc1aaa4",
+            "synchronous_render_glfinish_median_ms": [
+              0.4000000059604645,
+              0.4000000059604645
+            ],
+            "http_transfer_bytes": [
+              21799501,
+              21812293
+            ],
+            "http_requests": [
+              32,
+              32
+            ],
+            "navigation_duration_ms": [
+              103.2999999821186,
+              84.5
+            ]
+          },
+          "warm": {
+            "main_canvas_sha256": "55b867646b2337517dbad35172ccd28119295d41c984dbf937cc9b91efc1aaa4",
+            "synchronous_render_glfinish_median_ms": [
+              0.3999999761581421,
+              0.3999999910593033
+            ],
+            "http_transfer_bytes": [
+              20446699,
+              20446965
+            ],
+            "http_requests": [
+              32,
+              32
+            ],
+            "navigation_duration_ms": [
+              55.5,
+              61.5
+            ]
+          }
+        },
+        "model_array_count": 486,
+        "expected_path_metadata": {
+          "hfield_pathadr": {
+            "equal": true,
+            "baseline": {
+              "dtype": "int32",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ]
+            },
+            "candidate": {
+              "dtype": "int32",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ]
+            }
+          },
+          "mesh_pathadr": {
+            "equal": true,
+            "baseline": {
+              "dtype": "int32",
+              "sha256": "8bcdad21dac1aa7d822868cea81ccf8651fc1c6546a523c3e3e5f2ff9357d111",
+              "shape": [
+                130
+              ]
+            },
+            "candidate": {
+              "dtype": "int32",
+              "sha256": "8bcdad21dac1aa7d822868cea81ccf8651fc1c6546a523c3e3e5f2ff9357d111",
+              "shape": [
+                130
+              ]
+            }
+          },
+          "skin_pathadr": {
+            "equal": true,
+            "baseline": {
+              "dtype": "int32",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ]
+            },
+            "candidate": {
+              "dtype": "int32",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "shape": [
+                0
+              ]
+            }
+          },
+          "tex_pathadr": {
+            "equal": true,
+            "baseline": {
+              "dtype": "int32",
+              "sha256": "12a3ae445661ce5dee78d0650d33362dec29c4f82af05e7e57fb595bbbacf0ca",
+              "shape": [
+                2
+              ]
+            },
+            "candidate": {
+              "dtype": "int32",
+              "sha256": "12a3ae445661ce5dee78d0650d33362dec29c4f82af05e7e57fb595bbbacf0ca",
+              "shape": [
+                2
+              ]
+            }
+          },
+          "paths": {
+            "equal": true,
+            "baseline": {
+              "dtype": "uint8",
+              "sha256": "6173b0b67c85d38707b46f29227d7fa426adc4a4ede537e248210d5da357d7f1",
+              "shape": [
+                204
+              ]
+            },
+            "candidate": {
+              "dtype": "uint8",
+              "sha256": "6173b0b67c85d38707b46f29227d7fa426adc4a4ede537e248210d5da357d7f1",
+              "shape": [
+                204
+              ]
+            }
+          }
+        },
+        "expected_path_scalars": {
+          "npaths": [
+            204,
+            204
+          ]
+        },
+        "normal_compile_load_seconds": [
+          0.36977587500587106,
+          0.3779441659862641
+        ],
+        "passive_clone_diagnostics": [
+          [
+            {
+              "finite": true,
+              "name": "qa_stack_base_2",
+              "pose_reference": "named geom origin; a bin base center can differ from authored bottom",
+              "position": [
+                1.8,
+                -3.4,
+                0.15
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            },
+            {
+              "finite": true,
+              "name": "qa_stack_top_2",
+              "pose_reference": "body origin",
+              "position": [
+                1.800000000002935,
+                -3.400000000007752,
+                0.3998922445797841
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            }
+          ],
+          [
+            {
+              "finite": true,
+              "name": "qa_stack_base_2",
+              "pose_reference": "named geom origin; a bin base center can differ from authored bottom",
+              "position": [
+                1.8,
+                -3.4,
+                0.15
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            },
+            {
+              "finite": true,
+              "name": "qa_stack_top_2",
+              "pose_reference": "body origin",
+              "position": [
+                1.800000000002935,
+                -3.400000000007752,
+                0.3998922445797841
+              ],
+              "up_cosine": 1.0,
+              "upright_within_cosine_0_999": true
+            }
+          ]
+        ]
+      }
+    },
+    "limits": "Same manually authored final worlds, not a feature workflow. Sequential descriptive loading/render samples, not ABBA or a universal speed/VRAM claim. HTTP excludes WebSocket payload. One second passive physics is not driving/manipulation success."
+  },
+  "original_world_controls": {
+    "checks": 1446,
+    "scenes": {
+      "malo": {
+        "model_array_count": 486,
+        "raw_path_metadata": {
+          "hfield_pathadr": {
+            "equal": true,
+            "baseline_shape": [
+              0
+            ],
+            "candidate_shape": [
+              0
+            ],
+            "baseline_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "candidate_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "mesh_pathadr": {
+            "equal": false,
+            "baseline_shape": [
+              40
+            ],
+            "candidate_shape": [
+              40
+            ],
+            "baseline_sha256": "7ffece4bda33c83ee0a003bcdcfb23c9d73db1811f7818585a675e3593147768",
+            "candidate_sha256": "956a17694fa9e3dc67e7f822c4b8f3b11d092725e8017af091eb7ee78d54429f"
+          },
+          "skin_pathadr": {
+            "equal": true,
+            "baseline_shape": [
+              0
+            ],
+            "candidate_shape": [
+              0
+            ],
+            "baseline_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "candidate_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "tex_pathadr": {
+            "equal": true,
+            "baseline_shape": [
+              2
+            ],
+            "candidate_shape": [
+              2
+            ],
+            "baseline_sha256": "12a3ae445661ce5dee78d0650d33362dec29c4f82af05e7e57fb595bbbacf0ca",
+            "candidate_sha256": "12a3ae445661ce5dee78d0650d33362dec29c4f82af05e7e57fb595bbbacf0ca"
+          },
+          "paths": {
+            "equal": false,
+            "baseline_shape": [
+              3875
+            ],
+            "candidate_shape": [
+              3876
+            ],
+            "baseline_sha256": "021c40e4298af1a09934a6b77ee97dea4102d2ced7ba90182d4a7d5ab8b13f14",
+            "candidate_sha256": "a71985ee0f700aa412ab277ef5923b3d2e1a74722073965bee2118adf54840ee"
+          }
+        },
+        "npaths": [
+          3875,
+          3876
+        ],
+        "stills": {
+          "dpr1-studio-front.png": {
+            "main_rgba_sha256": "67b23b89312d7e95edc3238117798787d499e4c98fc0755d3817329c840cb448",
+            "sensor_canvases": [
+              {
+                "sha256": "322e01d598c2e68f09a3b0be0cd014ade728fb02f53c70583d049ba80f92d952",
+                "size": [
+                  160,
+                  120
+                ]
+              }
+            ],
+            "raw_pack_binding_observed": [
+              true,
+              false
+            ]
+          },
+          "dpr1-studio-oblique.png": {
+            "main_rgba_sha256": "5beabf9df9c3f14e60bc551d55c438e4c0b972d7d573054653c8c620d94ed3aa",
+            "sensor_canvases": [
+              {
+                "sha256": "322e01d598c2e68f09a3b0be0cd014ade728fb02f53c70583d049ba80f92d952",
+                "size": [
+                  160,
+                  120
+                ]
+              }
+            ],
+            "raw_pack_binding_observed": [
+              false,
+              false
+            ]
+          },
+          "dpr2-studio-front.png": {
+            "main_rgba_sha256": "ff413f8cd642f8b852435cc3f7e44d556f1b5192716bd1856f9de11e0918aeba",
+            "sensor_canvases": [
+              {
+                "sha256": "322e01d598c2e68f09a3b0be0cd014ade728fb02f53c70583d049ba80f92d952",
+                "size": [
+                  160,
+                  120
+                ]
+              }
+            ],
+            "raw_pack_binding_observed": [
+              false,
+              true
+            ]
+          },
+          "dpr2-studio-oblique.png": {
+            "main_rgba_sha256": "48f40805f1d29c63fa631d86f27ba0ae87fe59d6923d60424f096fe84d7fe5d9",
+            "sensor_canvases": [
+              {
+                "sha256": "322e01d598c2e68f09a3b0be0cd014ade728fb02f53c70583d049ba80f92d952",
+                "size": [
+                  160,
+                  120
+                ]
+              }
+            ],
+            "raw_pack_binding_observed": [
+              false,
+              false
+            ]
+          }
+        }
+      },
+      "go2": {
+        "model_array_count": 486,
+        "raw_path_metadata": {
+          "hfield_pathadr": {
+            "equal": true,
+            "baseline_shape": [
+              0
+            ],
+            "candidate_shape": [
+              0
+            ],
+            "baseline_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "candidate_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "mesh_pathadr": {
+            "equal": true,
+            "baseline_shape": [
+              126
+            ],
+            "candidate_shape": [
+              126
+            ],
+            "baseline_sha256": "3ba660e1da6a5c38239eb1cf7759e2600222e40758c560090f34405471b1af07",
+            "candidate_sha256": "3ba660e1da6a5c38239eb1cf7759e2600222e40758c560090f34405471b1af07"
+          },
+          "skin_pathadr": {
+            "equal": true,
+            "baseline_shape": [
+              0
+            ],
+            "candidate_shape": [
+              0
+            ],
+            "baseline_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "candidate_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "tex_pathadr": {
+            "equal": true,
+            "baseline_shape": [
+              2
+            ],
+            "candidate_shape": [
+              2
+            ],
+            "baseline_sha256": "12a3ae445661ce5dee78d0650d33362dec29c4f82af05e7e57fb595bbbacf0ca",
+            "candidate_sha256": "12a3ae445661ce5dee78d0650d33362dec29c4f82af05e7e57fb595bbbacf0ca"
+          },
+          "paths": {
+            "equal": true,
+            "baseline_shape": [
+              204
+            ],
+            "candidate_shape": [
+              204
+            ],
+            "baseline_sha256": "6173b0b67c85d38707b46f29227d7fa426adc4a4ede537e248210d5da357d7f1",
+            "candidate_sha256": "6173b0b67c85d38707b46f29227d7fa426adc4a4ede537e248210d5da357d7f1"
+          }
+        },
+        "npaths": [
+          204,
+          204
+        ],
+        "stills": {
+          "dpr1-studio-front.png": {
+            "main_rgba_sha256": "b587c86777aeeaf55c3b8aa9cfde15d2d8fe30bde02e3900c3422b30e290f3aa",
+            "sensor_canvases": [],
+            "raw_pack_binding_observed": [
+              false,
+              false
+            ]
+          },
+          "dpr1-studio-oblique.png": {
+            "main_rgba_sha256": "838f113834cca62ad7120ad82d6d7b9902539f60cc3e1d7cae9f4591ba272086",
+            "sensor_canvases": [],
+            "raw_pack_binding_observed": [
+              false,
+              false
+            ]
+          },
+          "dpr2-studio-front.png": {
+            "main_rgba_sha256": "322f918aa4a9743e06103d22ea579672a4fe6def0cd4842c3da871e20a363bf4",
+            "sensor_canvases": [],
+            "raw_pack_binding_observed": [
+              false,
+              false
+            ]
+          },
+          "dpr2-studio-oblique.png": {
+            "main_rgba_sha256": "fb6197ecc77ca782767c1f77cd0c1126ea39a3f5a9048e2fc1c6ca28a40e0ece",
+            "sensor_canvases": [],
+            "raw_pack_binding_observed": [
+              false,
+              false
+            ]
+          }
+        }
+      }
+    },
+    "limits": "Eight original-world main RGBA pairs and saved model/state controls. Camera tolerance 1e-10. Raw path metadata retained separately; no all-source-assets claim. Process UUID/numeric object identities excluded only from recorded material/sampler comparison. Instantaneous pre-probe pixel-pack binding presence is retained per pair, not a cross-run equality gate. Both runs must restore their own original binding and remain GL-error-free. The concrete scheduling cause of the presence difference is not established. FPS, frame and sensor picture counters/timing are not matched controls. These headless fixed scenes are distinct from trusted-input headed feature movies."
+  },
+  "media_review": {
+    "scope": "Root viewed the two final decoded contact sheets, six sampled frames each, showing occupied refusal, Undo, copied arrangement, map change and restored layout. Complete decode is not every-frame visual inspection. Baseline core review separate.",
+    "sampled_frames": 12,
+    "movies": [
+      {
+        "folder": "workflow-complete-candidate-malo-v4",
+        "sheet_sha256": "2071d08540c999b900af3ca5f295dd43c9743dcb26df70865b3aed79792586c7",
+        "video_sha256": "28bac2f54f35aefebda2427c5aaba20304674b2876453577c615fc2b6b9e1a30",
+        "seconds": 32.5,
+        "decoded_frames": 975,
+        "full_decode_exit_code": 0,
+        "viewed_samples": 6
+      },
+      {
+        "folder": "workflow-complete-candidate-go2-v4",
+        "sheet_sha256": "b10c1cc88fe581d12474f98ec435ff6ba6f7c905313af941dca5767f2008536f",
+        "video_sha256": "6c1f80e0a8bec2414390ccb2c6973bee9e97cca22d6b8c89b2ed10d1209e4949",
+        "seconds": 30.166667,
+        "decoded_frames": 905,
+        "full_decode_exit_code": 0,
+        "viewed_samples": 6
+      }
+    ]
+  },
+  "normalized_native_comparison": {
+    "passed": true,
+    "checks": [
+      "malo/workbench_2: source/name/authored exact, native origins .003m/yaw .01degree",
+      "malo/parts_2: source/name/authored exact, native origins .003m/yaw .01degree",
+      "malo/marker_2: source/name/authored exact, native origins .003m/yaw .01degree",
+      "malo: raw initial world exact",
+      "go2/qa_stack_base_2: source/name/authored exact, native origins .003m/yaw .01degree",
+      "go2/qa_stack_top_2: source/name/authored exact, native origins .003m/yaw .01degree",
+      "go2: raw initial world exact"
+    ],
+    "scenes": {
+      "malo": {
+        "deltas": [
+          {
+            "name": "workbench_2",
+            "position_difference_m": [
+              0.0,
+              3.333333333310762e-05,
+              0.0
+            ],
+            "yaw_difference_degrees": 0.0
+          },
+          {
+            "name": "parts_2",
+            "position_difference_m": [
+              0.0,
+              3.333333333310762e-05,
+              0.0
+            ],
+            "yaw_difference_degrees": 0.0
+          },
+          {
+            "name": "marker_2",
+            "position_difference_m": [
+              0.0,
+              3.333333333310762e-05,
+              0.0
+            ],
+            "yaw_difference_degrees": 0.0
+          }
+        ],
+        "final_resources": [
+          {
+            "geometries": 56,
+            "textures": 8
+          },
+          {
+            "geometries": 57,
+            "textures": 8
+          }
+        ],
+        "final_draw_counts": [
+          {
+            "calls": 61,
+            "lines": 8,
+            "points": 0,
+            "triangles": 694012
+          },
+          {
+            "calls": 61,
+            "lines": 8,
+            "points": 0,
+            "triangles": 694012
+          }
+        ],
+        "first_copy_counts": [
+          [
+            {
+              "counts": {
+                "compile_attempts": 4,
+                "compile_successes": 4,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 2,
+                "pipeline_successes": 2
+              },
+              "label": "01-copy-1",
+              "names": [
+                "workbench"
+              ]
+            },
+            {
+              "counts": {
+                "compile_attempts": 4,
+                "compile_successes": 4,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 2,
+                "pipeline_successes": 2
+              },
+              "label": "01-copy-2",
+              "names": [
+                "parts"
+              ]
+            },
+            {
+              "counts": {
+                "compile_attempts": 4,
+                "compile_successes": 4,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 2,
+                "pipeline_successes": 2
+              },
+              "label": "01-copy-3",
+              "names": [
+                "marker"
+              ]
+            },
+            {
+              "counts": {
+                "compile_attempts": 4,
+                "compile_successes": 4,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 2,
+                "pipeline_successes": 2
+              },
+              "label": "03-redo",
+              "names": [
+                "marker"
+              ]
+            }
+          ],
+          [
+            {
+              "counts": {
+                "compile_attempts": 2,
+                "compile_successes": 2,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 1,
+                "pipeline_successes": 1
+              },
+              "label": "01-copy-1",
+              "names": [
+                "workbench",
+                "parts",
+                "marker"
+              ]
+            },
+            {
+              "counts": {
+                "compile_attempts": 2,
+                "compile_successes": 2,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 1,
+                "pipeline_successes": 1
+              },
+              "label": "03-redo",
+              "names": [
+                "workbench",
+                "parts",
+                "marker"
+              ]
+            }
+          ]
+        ],
+        "scope": "Baseline legacy core chain versus candidate complete chain. Normalized native origins have declared tolerance, not raw-YAML or pixel equality. Final warmed helpers differ by one geometry. Exact manual-world controls separate."
+      },
+      "go2": {
+        "deltas": [
+          {
+            "name": "qa_stack_base_2",
+            "position_difference_m": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "yaw_difference_degrees": 0.0
+          },
+          {
+            "name": "qa_stack_top_2",
+            "position_difference_m": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "yaw_difference_degrees": 0.0
+          }
+        ],
+        "final_resources": [
+          {
+            "geometries": 142,
+            "textures": 6
+          },
+          {
+            "geometries": 143,
+            "textures": 6
+          }
+        ],
+        "final_draw_counts": [
+          {
+            "calls": 160,
+            "lines": 20,
+            "points": 20,
+            "triangles": 485638
+          },
+          {
+            "calls": 160,
+            "lines": 20,
+            "points": 20,
+            "triangles": 485638
+          }
+        ],
+        "first_copy_counts": [
+          [
+            {
+              "counts": {
+                "compile_attempts": 4,
+                "compile_successes": 4,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 2,
+                "pipeline_successes": 2
+              },
+              "label": "01-copy-1",
+              "names": [
+                "qa_stack_base"
+              ]
+            },
+            {
+              "counts": {
+                "compile_attempts": 4,
+                "compile_successes": 4,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 2,
+                "pipeline_successes": 2
+              },
+              "label": "01-copy-2",
+              "names": [
+                "qa_stack_top"
+              ]
+            },
+            {
+              "counts": {
+                "compile_attempts": 4,
+                "compile_successes": 4,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 2,
+                "pipeline_successes": 2
+              },
+              "label": "03-redo",
+              "names": [
+                "qa_stack_top"
+              ]
+            }
+          ],
+          [
+            {
+              "counts": {
+                "compile_attempts": 2,
+                "compile_successes": 2,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 1,
+                "pipeline_successes": 1
+              },
+              "label": "01-copy-1",
+              "names": [
+                "qa_stack_base",
+                "qa_stack_top"
+              ]
+            },
+            {
+              "counts": {
+                "compile_attempts": 2,
+                "compile_successes": 2,
+                "load_attempts": 1,
+                "load_successes": 1,
+                "pipeline_attempts": 1,
+                "pipeline_successes": 1
+              },
+              "label": "03-redo",
+              "names": [
+                "qa_stack_base",
+                "qa_stack_top"
+              ]
+            }
+          ]
+        ],
+        "scope": "Baseline legacy core chain versus candidate complete chain. Normalized native origins have declared tolerance, not raw-YAML or pixel equality. Final warmed helpers differ by one geometry. Exact manual-world controls separate."
+      }
+    }
+  },
+  "original_media_review": {
+    "scope": "Root viewed four current candidate decoded arc sheets (24 sampled decoded frames) and two current manual-final cold PNGs. Baseline four sheets/24samples reviewed earlier in baseline-root-visual-review.json. Not every-frame inspection or a new material-quality gain claim.",
+    "candidate_sampled_frames": 24,
+    "candidate_sheets": [
+      {
+        "folder": "candidate-malo-v4/arc-dpr1",
+        "sheet_sha256": "3c95a638707541540768794ca37101c50b20b310bb92c57803af8ac3bee7e0d5",
+        "video_sha256": "b87731ecffa12430e25488be95a7c3568dbcd4655174528a615e98babb6b5de7",
+        "seconds": 5.833333,
+        "decoded_frames": 175,
+        "full_decode_exit_code": 0,
+        "viewed_samples": 6
+      },
+      {
+        "folder": "candidate-malo-v4/arc-dpr2",
+        "sheet_sha256": "07b55b550409e791964267fd8c1b9e43efe0473cd37740288508dcb0abbabe17",
+        "video_sha256": "aca845acfa62edc0f84a5972ed36dfc2c8b4a54cb4372c4e9b230196e4d401fe",
+        "seconds": 5.833333,
+        "decoded_frames": 175,
+        "full_decode_exit_code": 0,
+        "viewed_samples": 6
+      },
+      {
+        "folder": "candidate-go2-v4/arc-dpr1",
+        "sheet_sha256": "e88bb90193768fed1405d6c4bfe87f454393e3ac515860c5a19856b8fb79d5e9",
+        "video_sha256": "2c2d2e324200d87d85795ef3c47fb71b39c18a6149435333056ed03ccbc5a5fe",
+        "seconds": 5.866667,
+        "decoded_frames": 176,
+        "full_decode_exit_code": 0,
+        "viewed_samples": 6
+      },
+      {
+        "folder": "candidate-go2-v4/arc-dpr2",
+        "sheet_sha256": "3e8732d1ac681461ef866f9c8ff1a8e8699448896e63f24a565dedf1292d6f44",
+        "video_sha256": "7d69e769384b9b7031e829c9068918b463e75d10c3781732ae42a03a94e18653",
+        "seconds": 5.833333,
+        "decoded_frames": 175,
+        "full_decode_exit_code": 0,
+        "viewed_samples": 6
+      }
+    ],
+    "manual_cold_pngs": [
+      {
+        "file": "manual-final-candidate-malo-v4/cold.png",
+        "sha256": "60854ed029428090a544dceca3fe65684501c26956094d72a16eaf86916da22d",
+        "root_viewed": true
+      },
+      {
+        "file": "manual-final-candidate-go2-v4/cold.png",
+        "sha256": "45b7201054a7a24cc52c5d90a9da735b6f6ac92bc1e046ff4ae3f577a0aef46d",
+        "root_viewed": true
+      }
+    ],
+    "baseline_review": "baseline-root-visual-review.json"
+  },
+  "receipts": {
+    "final-budget-v4": {
+      "sha256": "f9534dbf7340d84804adc3c952a7d5ed9e48cea223abdbf76f0a7895f5a71176",
+      "seconds": 25.66407345799962,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-lint-v4": {
+      "sha256": "eb6ed90d97a68efba33e7606f819255e9c9ea75dd165cf161694c6f4e68c7852",
+      "seconds": 0.06222525000339374,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-format-v4": {
+      "sha256": "809a3a794854072bc2a922e15abe021f537b716a6ae045601f10eac4f7e35730",
+      "seconds": 0.06382641699747182,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-build-v4": {
+      "sha256": "aa668e7111b80429891dda4039fa63e40eada9c3ecd843017b942e85bddd4488",
+      "seconds": 0.1442667499941308,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-inventory-v4": {
+      "sha256": "7ff14b2c90c29c7ada5b1cb2fe8c16bf8b9a8249e49c464b324a5caa79998f2e",
+      "seconds": 0.20464545802678913,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-framework-v4": {
+      "sha256": "1d095395edcdad312e671356c069790f2e717963a34b765f715f7fac168c70ed",
+      "seconds": 1.6214380000019446,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-complete-malo-v4-setup-fix": {
+      "sha256": "c8d12a350b71551005281e15473f65189a7de40962c06ad170f247f2f6f62f67",
+      "seconds": 39.06079787501949,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-encode-complete-malo-v4": {
+      "sha256": "d6afd5cb7f1164c845ee4fd1ce15a605d1a414e381c4a13c9a0cb0bdb4a456ee",
+      "seconds": 6.642298291990301,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-complete-go2-v4": {
+      "sha256": "292390f05f5ab30f0d48efd274affcb3906286f24e7370bed428217d64e0e24e",
+      "seconds": 35.66338233300485,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-encode-complete-go2-v4": {
+      "sha256": "adf2be8bbdfb22ce15a18b4e16173fc55e915c737dcc553d97d9a1cc7ac81b34",
+      "seconds": 6.266570583014982,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-default-v4": {
+      "sha256": "3a0c63daa5d1bd484ec56a63fd949b51b0209216a7dfc311c984e54240605583",
+      "seconds": 1193.4214454999892,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-browser-v4": {
+      "sha256": "f6325f8366e9452966d16cbd4c6e346925d45d05555723ccf7bf4b58bd09530b",
+      "seconds": 1756.6775450829882,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-gpu-v4": {
+      "sha256": "da0b783b90dae2b4d25b8ea2ad03c094a62f1337f1ab6031e6b4737a9712e9f4",
+      "seconds": 39.084946334012784,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-smoke-source-v4": {
+      "sha256": "30c9bc4dee7e965f066294f50b22cd798f036c9b94697840ac60b229f6abdcb4",
+      "seconds": 4.038516083004652,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-install-v4": {
+      "sha256": "3478e0eeb3c68691ab95c83a5b6420dd928aab4bc83eb5534aec0e0df15805f4",
+      "seconds": 0.42547104199184105,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-package-v4": {
+      "sha256": "1c78239fe63fafa46e7b5f2c55d704b5dc512e05a7f616ff9541eaec85db64b2",
+      "seconds": 0.7270200409984682,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-smoke-installed-v4": {
+      "sha256": "13689cb4d358568674474163a306f3dc0df848bc8cd6431ac22052f4c8eb7130",
+      "seconds": 18.40798933399492,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-js-parse-v4": {
+      "sha256": "bad370c6fd7c6a2f2de95bba93e5a50dfbb300c369ef5b97927bcafbe4d46cb0",
+      "seconds": 0.5943040419952013,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-original-candidate-malo-v4": {
+      "sha256": "7736a73746e7cb1ba7ccf7a831dd345f95735a553d09bda9ad67f6589ab6c61a",
+      "seconds": 25.904552083986346,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-encode-original-malo-dpr1-v4": {
+      "sha256": "8ce28fab6423c353436624b64d0f9eb623a999ebfe9906d7ba5389e2d8d5693b",
+      "seconds": 2.83254320800188,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-encode-original-malo-dpr2-v4": {
+      "sha256": "1756f8f164c1fb4a62da198f7caad56467fa93d6647fd4956c477a7220d25a8d",
+      "seconds": 2.6825394579791464,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-manual-candidate-malo-v4": {
+      "sha256": "f535ce48b70ab68cfb96978d9c55fb194044bda4f180978b9f5364ad90a50805",
+      "seconds": 10.962068957975134,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-original-candidate-go2-v4": {
+      "sha256": "5136812c06cc764077f4060198f28ab5eb5446dc981172a7b969721632a402b8",
+      "seconds": 22.02822925001965,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-encode-original-go2-dpr1-v4": {
+      "sha256": "3abedc7e8531b6a3f3a076146ed021b10f726f60b0a5b48b95e16c888de30f0a",
+      "seconds": 3.0925726249988656,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-encode-original-go2-dpr2-v4": {
+      "sha256": "1394f22a48635dc9571a3e644bf4181a4017357fce46cb88157168ddb1769bcf",
+      "seconds": 2.91967745902366,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-manual-candidate-go2-v4": {
+      "sha256": "b8fb5dd4f6827e370fbb498106db28bbddefab246a59e6358d44e23de29de75f",
+      "seconds": 8.233980040997267,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-manual-comparison-v4": {
+      "sha256": "ae4d7a9554ba9e3a23a9bf4d44510ff5d2e4398bd01eacafbd4cd04b8da0ae75",
+      "seconds": 0.6840927920129616,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-original-comparison-v4-correction": {
+      "sha256": "6f4d5f7926ba520a2e0c62cd12d56047b870f01eff3ed41669acf54e613af940",
+      "seconds": 0.6634266669861972,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-installed-group-v4": {
+      "sha256": "51f6bc85b70a718b67827b1a82f5ebc9a82812f029c737324f04f6d81c9f7d24",
+      "seconds": 0.7892766250006389,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-metadata-v4": {
+      "sha256": "1e07640c80dfacb9c35f2b134ead4fa77d3ba550ace83a383817bb8870a0f12e",
+      "seconds": 15.7304097909946,
+      "returncode": 0,
+      "inputs_unchanged": true
+    },
+    "final-idle-coarse-v4": {
+      "sha256": "7d994f65d9f32244358b890621c2a3374f310ccef11f809303b959f927760838",
+      "seconds": 12.629827999975532,
+      "returncode": 0,
+      "inputs_unchanged": true
+    }
+  },
+  "retained_failures": [
+    "dev enum classification/format failures",
+    "interrupted v1 default and v2 browser (not acceptance)",
+    "v4 original packObserved cross-run equality assertion corrected; raw values retained",
+    "v4 queue old output-tag setup failure before runtime startup",
+    "Go2 derivative on existing dock",
+    "baseline headless label correction",
+    "pipeline vs native stage counter correction",
+    "covered QA click correction",
+    "v2 actual borrowed preview geometry accumulation",
+    "lifecycle red deselection then selected real failure",
+    "two old-source formal idle failures6.2/6.6%; diagnostic coarse-helper shutdown serialization failure retained; measured snapshot fix and original-method new-source4.8% pass"
+  ],
+  "limits": [
+    "Paused editor scenes; no manipulation/navigation/action success claim.",
+    "Horizontal primitive support certification and upright rigid props only; no saved welded group library.",
+    "Headed trusted-input workflow differs from headless fixed original/manual scene controls.",
+    "One second passive exact physics does not certify long-term support or driving.",
+    "Synchronous gl.finish samples are not RAF FPS; navigation event duration is not first interaction.",
+    "Original/static/manual model paths retained separately, not all source-asset identity certification.",
+    "No new material/shader quality gain claimed; prior rejected visual screens stay rejected.",
+    "No paid GitHub Actions, Windows or physical phone validation."
+  ],
+  "raw_evidence": "../robotforge-evidence/2026-10-31-prop-group-copy/"
+}

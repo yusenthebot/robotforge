@@ -183,6 +183,7 @@
       <section id="edit-object-section" hidden>
         <h3 data-i18n="existing_props">Existing props</h3>
         <button class="pill" id="edit-objects" type="button" data-i18n="select_prop">Select in scene</button>
+        <button class="pill" id="select-object-group" type="button" data-i18n="select_prop_group">Select a group</button>
         <div class="chips" id="edit-object-list"></div>
       </section>
       <p class="note" id="objects-note" hidden data-i18n="objects_need_world">Pick a map first to build with objects.</p>
@@ -318,11 +319,12 @@
     <button class="pill" id="place-cancel" type="button" data-i18n="cancel_place">Cancel</button>
   </div>
   <div class="placement-bar" id="object-edit-bar" hidden>
-    <div><strong id="object-edit-title"></strong><p class="note" data-i18n="edit_prop_hint">Tap a prop or choose its name. Drag or pinch to look around.</p></div>
+    <div><strong id="object-edit-title"></strong><p class="note" id="object-edit-hint" data-i18n="edit_prop_hint">Tap a prop or choose its name. Drag or pinch to look around.</p></div>
     <button class="pill" id="object-focus" type="button" data-i18n="camera_focus">Focus</button>
     <button class="pill" id="object-surface" type="button" aria-expanded="false" aria-controls="object-surface-controls" data-i18n="prop_surface" hidden>Surface</button>
     <button class="pill" id="object-move" type="button" data-i18n="move_prop">Move / rotate</button>
     <button class="pill" id="object-copy" type="button" data-i18n="copy_prop">Duplicate</button>
+    <button class="pill" id="object-group-copy" type="button" data-i18n="copy_prop_group" hidden>Copy this group</button>
     <button class="pill" id="object-remove" type="button" data-i18n="remove_prop">Remove</button>
     <button class="pill" id="object-edit-done" type="button" data-i18n="done_placing">Done</button>
     <div class="placement-options" id="object-surface-controls" hidden>

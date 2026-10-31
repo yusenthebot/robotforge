@@ -514,6 +514,11 @@ class BehaviorManager:
                 if version == self.session.version:
                     return self._describe_robots(world)
 
+    def robot_snapshot(self, world: World | None) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+        """Robot metadata from an already-read acting world, without another world/lesson read."""
+        with self.session.lock:
+            return self._describe_robots(world), self._learned_walkers(world)
+
     def _describe_robots(self, world: World | None) -> list[dict[str, Any]]:
         from robotforge import capabilities
 

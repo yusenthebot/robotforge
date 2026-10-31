@@ -1,5 +1,16 @@
 # progress
 
+## Prop group copy and arrangement reuse (2026-11-01)
+
+Opt-in paused 2-16 prop selection keeps relative position/height/yaw and authored parameters, with full support/collision guards, one world pipeline/load/version and latest group Undo.
+The existing compiler still performs two native stages per pipeline; occupied rejection compiles without model installation.
+Frozen3cb6f450/783inputs: 4135default+362browser+9GPU=4506distinct passes;7canonical,source/fresh offline60-tool smoke,421exact files and original11/11budgets pass.
+Actual borrowed-ghost resource accumulation is retained as a failing three-cycle regression, then fixed by detaching/releasing old buffers before owner disposal without canceling the successful request.
+Final native Malo/Go2 complete chains and separate original/manual fixed-world controls pass; full media decode and sampled root review retain their distinct scope.
+Wheel4069384B(+11440),no new assets/dependencies,13originalWIP exact.
+[Report](docs/bench/2026-11-01-prop-group-copy.md).
+Continue shared ordinary-view visual quality and low-cost free creation; rejected visual screens remain rejected and single-action tuning stays deferred.
+
 ## Fixed-composition light direction screen (2026-10-31)
 
 A single fixed +90 degree sun/environment rotation reuses the existing light/environment/shadow objects and restores zero exactly, but does not establish two-path ordinary-view utility.

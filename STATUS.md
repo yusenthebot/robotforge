@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-01 prop group copy: Pause and select 2-16 upright rigid props to copy a common translated/rotated layout, preserving heights/authored parameters, strict full support/collision guards and latest group Undo.
+  Frozen3cb6f450/783inputs: 4135default+362non-slow browser+9GPU=4506distinct passes;7canonical,source/fresh offline60-tool smoke,421exact package files and original11/11budgets pass.
+  Actual borrowed-ghost resource accumulation was reproduced and fixed before landing;three-cycle regression and final headed Malo/Go2 occupied-retry/copy/Undo/layout/reset/reload chains pass with bounded counts.
+  Wheel4069384B(+11440),no new assets/dependencies;8exact original-world pixel pairs,4exact manual-final pairs,retained path/timing limits and13originalWIP exact.
+  Report: docs/bench/2026-11-01-prop-group-copy.md/.json; no new material/shader quality or action-success claim,broad goal active.
+
 - 2026-10-31 light direction screen: A fixed external +90 degree sun/environment rotation is not admitted; Malo frontal shape/occlusion cues improve, but Go2 ordinary-view utility remains inconclusive.
   26 lighting/texture tests, offline build and Ruff/format pass; 5,074 stored integrity checks, 8 exact main-canvas restores, 8 decoded movies and 48 inspected samples retain 486 model/state arrays per scene, 780 inputs and 13 original WIP files.
   Actual Malo sensor preview hashes change under rotation and recover at zero; no sensor isolation, product implementation, new full-suite, formal performance or budget claim. Report: docs/bench/2026-10-31-light-direction-screen.md/.json; broad goal active.

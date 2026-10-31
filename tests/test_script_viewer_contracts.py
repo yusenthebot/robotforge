@@ -8,6 +8,7 @@ import hashlib
 import json
 import textwrap
 import threading
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import numpy as np
@@ -16,6 +17,7 @@ import pytest
 from robotforge.control.runtime import contract_catalog, start_control
 from robotforge.control.tasks.reach import Reach
 from robotforge.design.tasks.spec import TaskEntry
+from robotforge.design.world import RobotEntry, World, compile_world
 from robotforge.extend import REGISTRY, algorithm, task
 from robotforge.playground import Playground
 from robotforge.script_runner import ScriptRunner
@@ -86,6 +88,120 @@ def test_unchanged_robot_poll_does_not_copy_the_task_catalog(pg, monkeypatch):
     monkeypatch.setattr(copy, "deepcopy", inspect)
     assert hub.robot_stream() is None
     assert not catalog_copies
+
+
+def test_robot_poll_reads_saved_world_once_per_callback(pg, monkeypatch):
+    hub = attach(pg)
+    load = Mock(wraps=pg.store.load)
+    monkeypatch.setattr(pg.store, "load", load)
+    first = hub.robot_stream()
+    assert first["robots"][0]["name"] == "arm"
+    assert load.call_count == 1
+    for _ in range(3):
+        load.reset_mock()
+        assert hub.robot_stream() is None
+        assert load.call_count == 1
+
+
+def test_lesson_robot_poll_uses_lesson_rows_and_saved_task_catalog(pg, monkeypatch):
+    saved = pg.current_world()
+    saved.tasks.append(TaskEntry(name="saved_press", kind="press", robot="arm", object="button"))
+    pg.store.file.write_text(saved.to_yaml(), encoding="utf-8")
+    lesson_world = World(
+        name="lesson",
+        robots=[RobotEntry(name="lesson_dog", template="quadruped")],
+        tasks=[TaskEntry(name="lesson_press", kind="press", robot="lesson_dog", object="button")],
+    )
+    pg.lessons.lesson = SimpleNamespace(world=lesson_world)
+    pg.session.load_model(compile_world(lesson_world).model, "lesson")
+    policy = SimpleNamespace(spec=SimpleNamespace(name="lesson_walk", commands=SimpleNamespace(lin_vel_x=[0, 0.4])))
+    monkeypatch.setattr("robotforge.bridge.policies.for_robot", lambda _: policy)
+    hub = attach(pg)
+    load = Mock(wraps=pg.store.load)
+    monkeypatch.setattr(pg.store, "load", load)
+    message = hub.robot_stream()
+    assert load.call_count == 1
+    assert [row["name"] for row in message["robots"]] == ["lesson_dog"]
+    assert message["learned"] == {"lesson_dog": {"policy": "lesson_walk", "max_speed": 0.4, "active": False}}
+    assert "learned" in message["modes"]["lesson_dog"]
+    assert message["task_contracts"] == contract_catalog(saved)
+    assert "saved_press" in rows(message["task_contracts"])
+    assert "lesson_press" not in rows(message["task_contracts"])
+    load.reset_mock()
+    assert hub.robot_stream() is None
+    assert load.call_count == 1
+
+
+def test_robot_poll_without_saved_world_keeps_model_prefix_discovery(pg, monkeypatch):
+    pg.store = None
+    expected = pg.behaviors.robots()
+    hub = attach(pg)
+    monkeypatch.setattr(pg.behaviors, "_world", Mock(side_effect=AssertionError("unexpected world reread")))
+    message = hub.robot_stream()
+    assert message["robots"] == expected
+    assert message["learned"] == {}
+    assert hub.robot_stream() is None
+
+
+@pytest.mark.parametrize("phase", ["world_read", "inspection", "message_copy"])
+def test_robot_poll_drops_replaced_model_and_retries_next_callback(pg, monkeypatch, phase):
+    hub = attach(pg)
+    hub.robot_stream()
+    replacement = pg.current_world()
+    replacement.robots = [RobotEntry(name="replacement_arm", template="arm")]
+    compiled = compile_world(replacement)
+    replaced = False
+
+    def replace_once():
+        nonlocal replaced
+        if not replaced:
+            replaced = True
+            pg.store.file.write_text(replacement.to_yaml(), encoding="utf-8")
+            pg.session.load_model(compiled.model, "replacement")
+
+    describe = Mock(wraps=pg.behaviors._describe_robots)
+    monkeypatch.setattr(pg.behaviors, "_describe_robots", describe)
+    if phase == "world_read":
+        load = pg.store.load
+
+        def read_then_replace():
+            world = load()
+            replace_once()
+            return world
+
+        monkeypatch.setattr(pg.store, "load", read_then_replace)
+    elif phase == "inspection":
+
+        def describe_then_replace(world):
+            result = describe(world)
+            replace_once()
+            return result
+
+        monkeypatch.setattr(pg.behaviors, "_describe_robots", describe_then_replace)
+    else:
+        deepcopy = copy.deepcopy
+
+        def copy_then_replace(value, *args, **kwargs):
+            result = deepcopy(value, *args, **kwargs)
+            if isinstance(value, dict) and value.get("type") == "robot_info":
+                replace_once()
+            return result
+
+        # Make an emission pending even though the model has not changed yet.
+        pending = pg.current_world()
+        pending.tasks.append(TaskEntry(name="new_press", kind="press", robot="arm", object="button"))
+        pg.store.file.write_text(pending.to_yaml(), encoding="utf-8")
+        monkeypatch.setattr(copy, "deepcopy", copy_then_replace)
+
+    assert hub.robot_stream() is None
+    assert replaced
+    if phase == "world_read":
+        assert not describe.called  # stale world rows must never inspect the replacement model
+    message = hub.robot_stream()
+    assert message["version"] == pg.session.version
+    assert [row["name"] for row in message["robots"]] == ["replacement_arm"]
+    assert "replacement_arm" in message["modes"] and "arm" not in message["modes"]
+    assert hub.robot_stream() is None
 
 
 def test_viewer_messages_do_not_expose_private_broadcast_snapshot(pg):
@@ -224,19 +340,24 @@ def test_viewer_task_command_attaches_without_taking_clock_and_refuses_active_ru
     assert not pg.session.execution._commands
 
 
-def test_saved_world_task_metadata_changes_refresh_without_recompile(pg):
+def test_saved_world_task_metadata_changes_refresh_without_recompile(pg, monkeypatch):
     hub = attach(pg)
     hub.robot_stream()
     version = pg.session.version
     world = pg.current_world()
+    load = Mock(wraps=pg.store.load)
+    monkeypatch.setattr(pg.store, "load", load)
     world.tasks.append(TaskEntry(name="press_button", kind="press", robot="arm", object="button"))
     pg.store.file.write_text(world.to_yaml())
     catalog = hub.robot_stream()["task_contracts"]
+    assert load.call_count == 1
     assert rows(catalog)["press_button"]["source"] == "world"
     assert catalog == ScriptRunner(pg, lambda: False)._op_task_catalog({})
     world.tasks[0].object = "new_button"
     pg.store.file.write_text(world.to_yaml())
+    load.reset_mock()
     assert "new_button" in rows(hub.robot_stream()["task_contracts"])["press_button"]["summary"]
+    assert load.call_count == 1
     assert pg.session.version == version
 
 
