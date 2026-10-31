@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-01 material namespace prerequisite: Actual Malo has no name-prefixed fallback geometry;8still/4pair subset is exact and planned Go2 is stopped,so no renderer/provenance candidate is promoted.
+  4112stored controls,486top-level arrays plus opt/vis/stat,43targeted tests(5actual Chrome),Ruff and offline wheel pass;421files/4069384B/hash match prior package,783inputs/13WIP exact.
+  Four causal saved-YAML guard digests require validated comparison normalization;first failure and corrected receipt retained.
+  No new movie/full-suite/installed/performance/budget claim;report docs/bench/2026-11-01-material-namespace.md/.json; broad goal active,action-success tuning deferred.
+
 - 2026-11-01 prop group copy: Pause and select 2-16 upright rigid props to copy a common translated/rotated layout, preserving heights/authored parameters, strict full support/collision guards and latest group Undo.
   Frozen3cb6f450/783inputs: 4135default+362non-slow browser+9GPU=4506distinct passes;7canonical,source/fresh offline60-tool smoke,421exact package files and original11/11budgets pass.
   Actual borrowed-ghost resource accumulation was reproduced and fixed before landing;three-cycle regression and final headed Malo/Go2 occupied-retry/copy/Undo/layout/reset/reload chains pass with bounded counts.

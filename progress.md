@@ -1,5 +1,16 @@
 # progress
 
+## Actual material namespace prerequisite (2026-11-01)
+
+Malo import has anonymous body materials and explicit RF sensor dressing,with no name-prefixed fallback geometry to reproduce the proposed naming defect.
+Stop the planned two-asset screen after the actual Malo prerequisite fails:8root-reviewed stills/4exact main-canvas pairs,Go2 not run,no material/provenance implementation.
+4112stored controls,486top-level arrays plus opt/vis/stat,43targeted material tests(5actual Chrome),Ruff/format/offline wheel pass;421package files/4069384B/hash unchanged,783inputs/13WIP exact.
+Retain initial comparator failure on four causal saved-YAML guard hashes and validated v2 normalization,plus directory-entry wheel-count correction.
+No new video,full-suite,installed-smoke,formal performance or budget claim.
+[Report](docs/bench/2026-11-01-material-namespace.md).
+Next plan guarded group move/rotation for rearranging existing scenes;inventory actual material paths before proposing another shared visual candidate.
+Broad visual/lightweight/creative-play goal remains active;single-action success tuning deferred.
+
 ## Prop group copy and arrangement reuse (2026-11-01)
 
 Opt-in paused 2-16 prop selection keeps relative position/height/yaw and authored parameters, with full support/collision guards, one world pipeline/load/version and latest group Undo.
