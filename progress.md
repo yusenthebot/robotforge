@@ -1,5 +1,17 @@
 # progress
 
+## Shared metric shadow-footprint screen (2026-11-01)
+
+The external fixed 20mm light-plane radius/cap16/vendored 17-position PCF candidate is not promoted; two independent blinded reviewers prefer four Malo Studio comparisons and mark the other twelve neutral, while root also finds no useful Go2 ordinary-view gain.
+Two original worlds, two old views, Studio/Daylight and actual DPR1/2 complete 16 pairs and 64 baseline/OFF/ON/restore frames; all eight baseline views precede prototype installation in each owned browser.
+32,947 stored controls, 16 whole-RGBA OFF frames plus 16 restores, 486 arrays plus opt/vis/stat, native assets/world/depth bytes/actual RT references and fresh Malo RGB remain controlled; ten toggles add no depth draws/programs/textures/geometries/scans/compiles.
+Reviewed eye-only postcapture atol1e-12 m normalization retains all 64 raw delta receipts (maximum 7.106e-14 m); target/projection/pixels stay exact and no bitwise eye claim is made.
+38 scoped tests (17 actual Chrome), Ruff/format/offline wheel pass; 421 source/package files and 4,071,055 B/hash match accepted PR61, with 786 inputs/13 original WIP files exact.
+Retain failed proxied/accidentally overlapped baseline readiness attempts, DPR screen, RT UUID metadata assumption and initial bitwise eye comparator; successful captures are strictly serial and candidate parameters never retuned.
+No new movie, motion/product integration/full-suite/installed/performance/budget claim.
+[Report](docs/bench/2026-11-01-metric-shadow-screen.md).
+The broad visual/lightweight/creative-play goal stays active; before another candidate establish a visible ordinary-view deficit and shared mechanism in two actual asset paths, without retuning this filter or substituting an unrelated UI addition for shared material gain.
+
 ## Prop group move and scene rearrangement (2026-11-01)
 
 Paused2-16 upright rigid props move/rotate as one existing layout while preserving names/order/authored nonpose parameters,complete support and source/target guards,and latest exact authored/live-pose Undo.

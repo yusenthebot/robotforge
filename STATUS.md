@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-01 metric shadow screen: fixed external 20mm/cap16/PCF17 fails shared ordinary-view admission; two independent blinded reviews prefer only four Malo Studio pairs, with the other twelve neutral; root also marks Go2 neutral.
+  Frozen 990c32a6/786 inputs: 16 pairs/64 phase frames/32,947 stored controls, 16 OFF plus 16 restores with exact main RGBA, 486 arrays/context/native files/depth bytes and fresh Malo RGB controlled; ten toggles add no resources, compiles or depth draws.
+  38 scoped tests (17 actual Chrome), Ruff/format/offline wheel pass; 421 package files/4,071,055 B/hash unchanged and 13 original WIP files exact.
+  Eye-only postcapture 1e-12 m numeric amendment retains raw delta <=7.106e-14 m; target/projection/pixels remain exact; startup/DPR/RT metadata/comparator failures retained.
+  No product shader change, new video, motion/full-suite/installed/performance/budget claim; report docs/bench/2026-11-01-metric-shadow-screen.md/.json; broad goal active, action-success tuning deferred.
+
 - 2026-11-01 prop group move: paused2-16 rigidprops can move/rotate together with same names/order/nonpose parameters, saved/live source-load/task/support/collision guards and latest exact-author/live-pose Undo;legacycopy default remains.
   Frozen990c32a6/786inputs:4160default+373non-slow browser+9actualGL=4542distinct pytest,7canonical,source/fresh offline60-tool smoke,421exact package files,installed actualMalo/Go2 and original11/11install/viewer budgets pass.
   Four complete native before/after films decode with24root samples;16exact fixed-world pairs/20613stored checks and2/16backend cost observations pass;relativeGo2 assetpaths strictly bind originalMJCF declarations/namedmesh/files,rawmetadata retained.

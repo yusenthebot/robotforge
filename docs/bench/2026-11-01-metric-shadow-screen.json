@@ -1,0 +1,748 @@
+{
+  "schema_version": 1,
+  "milestone": "2026-11-01 shared metric shadow-footprint screen",
+  "decision": "rejected at stills-first shared visual admission gate",
+  "product_promoted": false,
+  "product_code_changed": false,
+  "broad_goal_active": true,
+  "single_action_success_tuning": false,
+  "base_commit": "267d16fb8ed3176142391a90c6be785bbe4505b2",
+  "runtime_sha256": "990c32a64519e2f205d891ee13af543249ec83aa025d1d94139fab2eb5df44de",
+  "source_input_count": 786,
+  "environment": {
+    "active_source_sha256": "990c32a64519e2f205d891ee13af543249ec83aa025d1d94139fab2eb5df44de",
+    "git_commit": "267d16fb8ed3176142391a90c6be785bbe4505b2",
+    "git_dirty": false,
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "package": "robotforge",
+    "package_version": "0.0.1",
+    "platform": "macOS-26.3.2-arm64-arm-64bit",
+    "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+    "plugins": [],
+    "python": "3.12.16"
+  },
+  "evidence_root": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline",
+  "candidate": {
+    "radius_light_plane_m": 0.02,
+    "uv_radius": "min(vec2(0.020/fit.width,0.020/fit.height),vec2(16)/shadowMapSize)",
+    "max_source_texels_each_axis": 16,
+    "kernel": "exactvendored17-position PCF comparison expression; onlySun directional callwrapper; untouchedPCFSoft16 OFF/sensors",
+    "new_render_passes": 0,
+    "new_targets": 0,
+    "new_images_or_models": 0,
+    "no_global_chunk_or_vendor_mutation": true,
+    "uniform_main_camera_gate": true,
+    "per_render_traversal": false
+  },
+  "controls": {
+    "passed": true,
+    "stored_checks": 32947,
+    "visual_pairs": 16,
+    "phase_frames": 64,
+    "whole_main_off_byte_exact": 16,
+    "whole_main_restore_byte_exact": 16,
+    "model_state_ndarrays_per_world": 486,
+    "additional_context": [
+      "opt",
+      "vis",
+      "stat"
+    ],
+    "native_assets_world_transport_exact": true,
+    "actual_shadow_target_texture_refs_and_depth_bytes_exact": true,
+    "additional_depth_draws_after_baseline_calibration": 0,
+    "actual_malo_rgb_sensor_raw_exact_and_fresh": true,
+    "unreadable_gpu_environment_image": "metadata only; independent image pixels unavailable",
+    "camera_comparison_amendment": {
+      "post_capture": true,
+      "eye_only_absolute_m": 1e-12,
+      "relative_tolerance": 0,
+      "maximum_observed_delta_m": 7.105427357601002e-14,
+      "all_64_raw_delta_receipts_retained": true,
+      "target_projection_other_controls": "exact"
+    },
+    "warmed_toggle_cycles_each_world": 10,
+    "no_warmed_program_geometry_texture_scan_compile_growth": true,
+    "all_owned_chrome_and_servers_stopped": true
+  },
+  "blinded_admission": {
+    "admitted": false,
+    "product_promoted": false,
+    "stage": "stills-first shared gain gate",
+    "gate": "Eachworld/light requires >=3 of4 preferredcandidate comparisons; others neutral and no clear regressions. Twoindependent reviewers plusroot.",
+    "reviews": {
+      "a": {
+        "sha256": "c509632baeff7ff39674bb153347dfaa78aef82de72f7e9a7ea5f5be4a17592e",
+        "groups": {
+          "malo/studio": {
+            "candidate_preferred": 4,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 0,
+            "pairs": [
+              {
+                "id": "pair01",
+                "preference": "A",
+                "candidate_side": "A",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair02",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair03",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair04",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              }
+            ]
+          },
+          "malo/daylight": {
+            "candidate_preferred": 0,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 4,
+            "pairs": [
+              {
+                "id": "pair05",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair06",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair07",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair08",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              }
+            ]
+          },
+          "go2/studio": {
+            "candidate_preferred": 0,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 4,
+            "pairs": [
+              {
+                "id": "pair09",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair10",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair11",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair12",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              }
+            ]
+          },
+          "go2/daylight": {
+            "candidate_preferred": 0,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 4,
+            "pairs": [
+              {
+                "id": "pair13",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair14",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair15",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair16",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              }
+            ]
+          }
+        }
+      },
+      "b": {
+        "sha256": "1da7aa219535f8261c6d958c2ad642f9bce99a36d9d60c68ce900416efcab501",
+        "groups": {
+          "malo/studio": {
+            "candidate_preferred": 4,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 0,
+            "pairs": [
+              {
+                "id": "pair01",
+                "preference": "A",
+                "candidate_side": "A",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair02",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair03",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair04",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              }
+            ]
+          },
+          "malo/daylight": {
+            "candidate_preferred": 0,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 4,
+            "pairs": [
+              {
+                "id": "pair05",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair06",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair07",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair08",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              }
+            ]
+          },
+          "go2/studio": {
+            "candidate_preferred": 0,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 4,
+            "pairs": [
+              {
+                "id": "pair09",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair10",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair11",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair12",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              }
+            ]
+          },
+          "go2/daylight": {
+            "candidate_preferred": 0,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 4,
+            "pairs": [
+              {
+                "id": "pair13",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair14",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair15",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair16",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              }
+            ]
+          }
+        }
+      },
+      "root": {
+        "sha256": "b0d53eb99dfd25dcd971d40ccbd816cf513871e545927fe13a405297bbe9dc3b",
+        "groups": {
+          "malo/studio": {
+            "candidate_preferred": 4,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 0,
+            "pairs": [
+              {
+                "id": "pair01",
+                "preference": "A",
+                "candidate_side": "A",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair02",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair03",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair04",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              }
+            ]
+          },
+          "malo/daylight": {
+            "candidate_preferred": 4,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 0,
+            "pairs": [
+              {
+                "id": "pair05",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair06",
+                "preference": "A",
+                "candidate_side": "A",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair07",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              },
+              {
+                "id": "pair08",
+                "preference": "B",
+                "candidate_side": "B",
+                "mapped_result": "candidate_preferred"
+              }
+            ]
+          },
+          "go2/studio": {
+            "candidate_preferred": 0,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 4,
+            "pairs": [
+              {
+                "id": "pair09",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair10",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair11",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair12",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              }
+            ]
+          },
+          "go2/daylight": {
+            "candidate_preferred": 0,
+            "baseline_preferred": 0,
+            "neutral_or_unclear": 4,
+            "pairs": [
+              {
+                "id": "pair13",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair14",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair15",
+                "preference": "neutral",
+                "candidate_side": "B",
+                "mapped_result": "neutral_or_unclear"
+              },
+              {
+                "id": "pair16",
+                "preference": "neutral",
+                "candidate_side": "A",
+                "mapped_result": "neutral_or_unclear"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "outcome": "Only Malo Studio is independently preferred. Shared bothworlds/bothlights gate fails. No motion/performance stage, parameterretuning orproductchanges."
+  },
+  "scoped_verification": {
+    "default_passed": 21,
+    "actual_chrome_passed": 17,
+    "distinct_passed": 38,
+    "skipped": 0,
+    "ruff_check": true,
+    "ruff_format_check": true,
+    "offline_wheel": true,
+    "unchanged_product_sensor_tests_do_not_extend_candidate_sensor_claims": true
+  },
+  "package": {
+    "wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/wheel-v1/robotforge-0.0.1-py3-none-any.whl",
+    "sha256": "d6dabbb01eba6c2f03708408d2701d3efa28b9225ebe1e22c7a57c66408658f4",
+    "bytes": 4071055,
+    "prior_accepted_wheel_bytes": 4071055,
+    "delta_bytes": 0,
+    "source_and_prior_package_byte_exact": true,
+    "optional_tools_available": {
+      "mypy": false,
+      "pyright": false,
+      "bandit": false,
+      "pip_audit": false
+    }
+  },
+  "package_file_count": 421,
+  "original_wip": {
+    "count": 13,
+    "byte_exact": true,
+    "original_head": "ce2199f0e56f716c5046e7d86ad0b5651e599c75"
+  },
+  "not_run_for_this_milestone": [
+    "new_movie",
+    "candidate_motion_or_moving_casters",
+    "product_integration",
+    "full_default_suite",
+    "full_browser_suite",
+    "fresh_installed_smoke",
+    "GPU_suite",
+    "formal_performance_or_budget_run"
+  ],
+  "failures_retained": [
+    "initial proxy502 readiness attempts and accidental overlap before Chrome",
+    "first Malo screen before prototype DPR setup assertion",
+    "second Malo complete-frame attempt with final unsupported RT uuid metadata key",
+    "first comparator bitwise eye equality"
+  ],
+  "artifacts": {
+    "baseline-plan-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/baseline-plan-v1.json",
+      "sha256": "0cb59dd8c5061079d23837e532effe114f7e6c908899dc3ad307a29c2ca19fa2",
+      "bytes": 612
+    },
+    "baseline-footprint-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/baseline-footprint-v1.json",
+      "sha256": "0da14ac760d02999803053d5d8c4b3980ad6afd473dcf1a3556df05b5301aa57",
+      "bytes": 16758
+    },
+    "baseline-v1-failures.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/baseline-v1-failures.json",
+      "sha256": "311961e784d486932e4344088d59f3202362578e3ab6f8375e048995be398a7e",
+      "bytes": 439
+    },
+    "baseline-malo-v2.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/baseline-malo-v2.receipt.json",
+      "sha256": "281062d4b75c4bb493d81c9ca1d5810b5f507ae32c4a2398687966795ba980a5",
+      "bytes": 87866
+    },
+    "baseline-go2-v2.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/baseline-go2-v2.receipt.json",
+      "sha256": "44731a893761ba2413f2b670c4ec85be9696e070f97d52e47f8378e0736e0a0a",
+      "bytes": 87864
+    },
+    "candidate-freeze-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/candidate-freeze-v1.json",
+      "sha256": "30fbb0ff0dbfec478a1a2d8e83134c9ac5fc9a267ac3d6d041d3a94a30d453b5",
+      "bytes": 2718
+    },
+    "prototype-freeze-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/prototype-freeze-v1.json",
+      "sha256": "1e1354b84bec75c00ed59c2b81de11de1603f500a991c5bd774282bcaaa491da",
+      "bytes": 599
+    },
+    "capture-source-freeze-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/capture-source-freeze-v1.json",
+      "sha256": "32930e3f0991c7f43ed9aff07b178be9f7a2f79a2ce9c25a90769f64d57d3ddb",
+      "bytes": 739
+    },
+    "capture-source-freeze-v2.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/capture-source-freeze-v2.json",
+      "sha256": "0bfa94fb8e0aa9126520ca40ea77c65250c3c2e1391fa422f6cbd1355ce93325",
+      "bytes": 786
+    },
+    "capture-source-freeze-v3.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/capture-source-freeze-v3.json",
+      "sha256": "3ee6b532b2873e56e6e5e8a9e72e2ccb801a3c19d5dc146cecc0c720bcc255d5",
+      "bytes": 741
+    },
+    "comparison-source-freeze-v4.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/comparison-source-freeze-v4.json",
+      "sha256": "486fdc0b95951c780aeb823e3babb4f4e504d1c066ac124aba1df8c1ff7c21de",
+      "bytes": 574
+    },
+    "pre-execution-review-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/pre-execution-review-v1.json",
+      "sha256": "243573c34b6b6e4ccea661b2fa9e9865abd3e25da95a7137765fe5d8806ecd65",
+      "bytes": 722
+    },
+    "pre-execution-review-v2.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/pre-execution-review-v2.json",
+      "sha256": "c5591705b4f508324fe8472643af2be180e6d16afce220d97754916d4e91cd39",
+      "bytes": 330
+    },
+    "pre-execution-review-v3.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/pre-execution-review-v3.json",
+      "sha256": "9c89eb7aa30899fd15cda9a575d29c40bb1df5dbb6c501ccebbb6f4363cfd656",
+      "bytes": 282
+    },
+    "capture-dependencies-frozen-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/capture-dependencies-frozen-v1.json",
+      "sha256": "8dc6a3faefeca712e615c3b1e865a6e7ac3d3636bc9ab0bf0477a5f1714b2d78",
+      "bytes": 1210
+    },
+    "shadow-filter-prototype.js": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-filter-prototype.js",
+      "sha256": "067c7ef306d018560515930d6093145014fada38a58f4d9298c10c319f93d441",
+      "bytes": 32223
+    },
+    "shadow_capture.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow_capture.py",
+      "sha256": "dbc55d6b7a9cb2ef0c0a477e565fddd62ceaa1d76771d2679cd244031f829c0e",
+      "bytes": 40487
+    },
+    "shadow_compare.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow_compare.py",
+      "sha256": "92bd3cb7caaf64ed8242ebc961c903dc8f9d3e83d5c3e7e0b979881ddaa1c752",
+      "bytes": 25061
+    },
+    "shadow_compare_retained_v3.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow_compare_retained_v3.py",
+      "sha256": "f386e2bcf2a4dac223324698a7a0c366465d33777bacb042989ce0cfc9e07c3b",
+      "bytes": 22926
+    },
+    "build_blind.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/build_blind.py",
+      "sha256": "c89044279d01f12c424f4e4074a8a48cf8eed18f0a949305c85d268dfa6d2421",
+      "bytes": 3514
+    },
+    "shadow-v1-failure-receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-v1-failure-receipt.json",
+      "sha256": "a8e7fc1a6860830c448c71e298f26f59537421b2ac3352f48e0c0b1a10f4884c",
+      "bytes": 1271
+    },
+    "shadow-v2-failure-receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-v2-failure-receipt.json",
+      "sha256": "449fc8f3b91416d63c0429ed4f9d4260518008a8a7791888b8e156acebb55532",
+      "bytes": 1862
+    },
+    "comparison-v3-failure-receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/comparison-v3-failure-receipt.json",
+      "sha256": "9154d191fa11acfb58ba2ed11c576dbb2ee93890acc9a4c70deccdbeb49c31dc",
+      "bytes": 653
+    },
+    "shadow-malo-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-malo-v1.receipt.json",
+      "sha256": "a34ff0143f940e8c083db6b670e6c825244f83f5626f3fcb2d5bc971514ff062",
+      "bytes": 88142
+    },
+    "shadow-malo-v2.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-malo-v2.receipt.json",
+      "sha256": "9f1e65aadeb7e4d25e546a877b39f9506fd8d5cb182c727cd02d4a9aa8ae94cb",
+      "bytes": 88141
+    },
+    "shadow-malo-v3.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-malo-v3.receipt.json",
+      "sha256": "c73e76a67b9b09b4d9107b0d857c6c8c85d111493d7c0c4e715b5327fd1e8d42",
+      "bytes": 88141
+    },
+    "shadow-go2-v3.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-go2-v3.receipt.json",
+      "sha256": "f9698feecb6a5389337d46876a1f2a9bef613ca1ac25f38a1c456707a90392ae",
+      "bytes": 88139
+    },
+    "shadow-compare-v3.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-compare-v3.receipt.json",
+      "sha256": "a04a6c509e6e3abf2ac8f0b4f76122458c7d344aca12810c046eea2dff1775a7",
+      "bytes": 87881
+    },
+    "shadow-compare-v4.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-compare-v4.receipt.json",
+      "sha256": "84380a3e1e5b7042ccbae5229163e95e6379ba1ccd2fa545a7438c7de263dee6",
+      "bytes": 87913
+    },
+    "shadow-comparison-v4.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-comparison-v4.json",
+      "sha256": "9f3eff7b6c450de53eaa214bd76e8b29d11cbcc4280135ef3cc4339caabea77b",
+      "bytes": 3037122
+    },
+    "blind-allocation-frozen-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/blind-allocation-frozen-v1.json",
+      "sha256": "b6c775550a0786fbf35da90c80be30a21e303a4df2f4a379c0f0b9f8a7ca62eb",
+      "bytes": 2764
+    },
+    "blind-build-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/blind-build-v1.receipt.json",
+      "sha256": "792e5cdf050b2af65194c129e42f9cdc0aa13b024486a7a1704fe2d695204307",
+      "bytes": 87670
+    },
+    "blind-prep-proof-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/blind-prep-proof-v1.json",
+      "sha256": "5034f6595a8f745d014c4bedda33fdd3ac199bdbd3634040f31a7aac644cc9fe",
+      "bytes": 11519
+    },
+    "blind-review-a-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/blind-review-a-v1.json",
+      "sha256": "c509632baeff7ff39674bb153347dfaa78aef82de72f7e9a7ea5f5be4a17592e",
+      "bytes": 13086
+    },
+    "blind-review-b-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/blind-review-b-v1.json",
+      "sha256": "1da7aa219535f8261c6d958c2ad642f9bce99a36d9d60c68ce900416efcab501",
+      "bytes": 10710
+    },
+    "blind-review-root-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/blind-review-root-v1.json",
+      "sha256": "b0d53eb99dfd25dcd971d40ccbd816cf513871e545927fe13a405297bbe9dc3b",
+      "bytes": 9914
+    },
+    "visual-admission-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/visual-admission-v1.json",
+      "sha256": "0ecccb49be3e59543b4b79b85fd63c34bde194f07e911dc082103e605511fedd",
+      "bytes": 11811
+    },
+    "scoped-default-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/scoped-default-v1.receipt.json",
+      "sha256": "4333bbc144e2b2d7fe6f897ce280087e27df57afee374727d38d99974dba7462",
+      "bytes": 87775
+    },
+    "scoped-browser-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/scoped-browser-v1.receipt.json",
+      "sha256": "46abbd840d3d4ffd737b9b206e3fef9007c06a5efa93489d5bfdd7a8c8bffda9",
+      "bytes": 87864
+    },
+    "scoped-default-v1.xml": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/scoped-default-v1.xml",
+      "sha256": "d40eb3369df88c5ca809455d3c0faf1c81c2a3c5d97bb3395cddabe63dd2021c",
+      "bytes": 3382
+    },
+    "scoped-browser-v1.xml": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/scoped-browser-v1.xml",
+      "sha256": "e802803f819f43f64535bff8e13e720ff0e42fb93ba75d00fcfa80c1b73a2b87",
+      "bytes": 2952
+    },
+    "ruff-check-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/ruff-check-v1.receipt.json",
+      "sha256": "f93497984ad22b333c7d95dbb6c82c44593b70aa6e6f6ec9086be29c5f9d7f8c",
+      "bytes": 87592
+    },
+    "ruff-format-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/ruff-format-v1.receipt.json",
+      "sha256": "3b87cde84fd2b053405cca25b23f5abbadc39060de6d5ea7c2ca03cbd3b79a1b",
+      "bytes": 87608
+    },
+    "offline-wheel-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/offline-wheel-v1.receipt.json",
+      "sha256": "07465039c9c2b69e834b35d8ef6b7fc34d3071e26cc897bf1b138ea843b120f3",
+      "bytes": 87702
+    },
+    "package-and-tests-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/package-and-tests-v1.json",
+      "sha256": "b2d3cf591b8bf998386d367dc50dac8ec0e2636de572da19dc1e8e88f2293434",
+      "bytes": 46094
+    },
+    "shadow-malo-v3/report.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-malo-v3/report.json",
+      "sha256": "457b9196242ab45210875ee8aac105ea937ad3871270402eae481e356f37fe95",
+      "bytes": 9409735
+    },
+    "shadow-go2-v3/report.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-go2-v3/report.json",
+      "sha256": "4a7da9914cbedb128eb105d184b5eb780340b1c46e8d36736ca8c00c8be514c5",
+      "bytes": 30817687
+    }
+  },
+  "next_step": "Establish a visible ordinary-view deficit and shared mechanism in two actual asset paths before a new renderer candidate; no retuning this filter or claiming an unrelated UI change as shared material gain."
+}
