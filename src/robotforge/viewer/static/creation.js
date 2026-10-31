@@ -72,9 +72,13 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
   repeat.addEventListener("change", syncRepeat);
   const scales = { small: 0.75, normal: 1, large: 1.5 };
   const send = () => {
-    if (point && !sending && item) submit({ ...item, scale: size, yaw,
+    if (!point || sending || !item) return;
+    const entry = { ...item, scale: size, yaw,
       ...(item.kind === "terrain-edit" ? { yaw_delta: yawDelta } : {}),
-      ...(item.kind === "object" && item.name !== "table" && material.value ? { material: material.value } : {}) }, point);
+      ...(item.kind === "object" && item.name !== "table" && material.value ? { material: material.value } : {}) };
+    // Render buffers belong only to the preview, never the asynchronous request.
+    delete entry.previewParts;
+    submit(entry, point);
   };
   const setOpen = (open) => {
     $("create-options").hidden = !open;
@@ -112,13 +116,14 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     repeat.checked = false; syncRepeat();
     material.value = "";
     $("prop-material-control").hidden = kind !== "object" || entry.name === "table";
-    $("placement-hint").textContent = t(kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
+    $("placement-hint").textContent = t(kind === "group-copy" ? "prop_group_place_hint" : kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     showHeading();
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
-    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
+    for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = kind === "group-copy" || kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
     $("placement-bar").querySelector(".repeat-placement").hidden = !canRepeat(kind);
-    $("placement-title").textContent = t(kind === "terrain-edit" ? "move_named_terrain" : kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
+    $("placement-title").textContent = kind === "group-copy" ? t("copy_named_prop_group", { count: entry.members.length })
+      : t(kind === "terrain-edit" ? "move_named_terrain" : kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
     start();
@@ -148,9 +153,10 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     edit: (entry) => begin(entry, "edit", entry.name),
     editTerrain: (entry) => begin(entry, "terrain-edit", entry.name),
     repositionRobot: (entry) => begin(entry, "start", entry.name),
-    heading: () => item?.kind === "start" || item?.kind === "terrain" || item?.kind === "terrain-edit" ? yaw : null,
+    heading: () => item?.kind === "group-copy" || item?.kind === "start" || item?.kind === "terrain" || item?.kind === "terrain-edit" ? yaw : null,
     placingTerrain: () => item?.kind === "terrain" || item?.kind === "terrain-edit",
     duplicate: (entry) => begin(entry, "copy", entry.name),
+    duplicateGroup: (entry) => begin(entry, "group-copy", ""),
     session: () => session,
     spacing: () => spacing.value,
     repeating: () => canRepeat(item?.kind) && repeat.checked,
@@ -159,7 +165,9 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
       point = null; coordinates(null); $("place-here").disabled = true;
       $("placement-hint").textContent = t(item.kind === "terrain" ? "terrain_next_hint" : "place_next_hint");
     },
-    preview: () => item?.kind === "terrain" || item?.kind === "terrain-edit" ? { boxes: item.boxes, yaw }
+    releasePreview() { if (item?.kind === "group-copy") item.previewParts = null; },
+    preview: () => item?.kind === "group-copy" ? (item.previewParts ? { parts: item.previewParts, key: item.token, yaw } : null)
+      : item?.kind === "terrain" || item?.kind === "terrain-edit" ? { boxes: item.boxes, yaw }
       : item && item.kind !== "robot" && item.kind !== "start" && item.kind !== "model" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
     open() { setOpen(true); $("model-list").querySelector("button")?.focus(); },
     render(entries, editable, busy, objects = [], models = [], terrains = []) {

@@ -12,6 +12,7 @@ import os
 import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from robotforge.design.world import CompiledWorld, World, compile_world
@@ -19,6 +20,23 @@ from robotforge.extend import load_world_plugins
 
 HISTORY_LIMIT = 50
 _SAFE = re.compile(r"[^a-z0-9_]+")
+
+
+def _directory_identity(path: Path) -> tuple[int, int, int] | None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    return info.st_dev, info.st_ino, info.st_mode
+
+
+@dataclass
+class ApplyArtifacts:
+    """Internal receipt of exact history mutations, for a failed runtime installation."""
+
+    created_history: dict[Path, bytes] = field(default_factory=dict)
+    pruned_history: dict[Path, bytes] = field(default_factory=dict)
+    created_directories: dict[Path, tuple[int, int, int]] = field(default_factory=dict)
 
 
 def worlds_home() -> Path:
@@ -105,7 +123,14 @@ class WorldStore:
     def compile(self) -> CompiledWorld:
         return compile_world(self.load(), self.dir)
 
-    def apply(self, change: Callable[[World], None], snapshot: bool = True) -> tuple[World, CompiledWorld]:
+    def apply(
+        self,
+        change: Callable[[World], None],
+        snapshot: bool = True,
+        *,
+        post_compile: Callable[[World, CompiledWorld], None] | None = None,
+        artifacts: ApplyArtifacts | None = None,
+    ) -> tuple[World, CompiledWorld]:
         """Run `change` on a copy, validate and compile it, then save. Raises without saving on error. snapshot=False
         saves no undo step: the change finishes the one before it (undo takes back both)."""
         original = self.file.read_bytes()
@@ -116,9 +141,21 @@ class WorldStore:
         compiled = compile_world(candidate, self.dir)
         if self.file.read_bytes() != original:
             raise ValueError("world.yaml changed during compilation; reload the world and retry")
+        if post_compile is not None:
+            post_compile(candidate, compiled)
+            # The internal validator may inspect live poses; neither it nor another writer
+            # may replace the authoritative input before the first history/write operation.
+            if self.file.read_bytes() != original:
+                raise ValueError("world.yaml changed during validation; reload the world and retry")
         if snapshot:
-            self._snapshot()
-        self._write(candidate, compiled)
+            if artifacts is None:
+                self._snapshot()
+            else:
+                self._snapshot(artifacts=artifacts)
+        if artifacts is None:
+            self._write(candidate, compiled)
+        else:
+            self._write(candidate, compiled, artifacts=artifacts)
         return candidate, compiled
 
     def undo(self) -> World:
@@ -132,18 +169,39 @@ class WorldStore:
         last.unlink()
         return world
 
-    def _snapshot(self) -> None:
+    def _snapshot(self, *, artifacts: ApplyArtifacts | None = None) -> None:
+        existed = self.history.exists()
         self.history.mkdir(exist_ok=True)
+        if artifacts is not None and not existed:
+            identity = _directory_identity(self.history)
+            if identity is None:
+                raise FileNotFoundError("history directory disappeared during edit")
+            artifacts.created_directories[self.history] = identity
         taken = [int(p.stem) for p in self.history.glob("*.yaml") if p.stem.isdigit()]
         # The Windows clock ticks every ~15 ms, so two quick edits can read the same time; keep names increasing.
         stamp = max(time.time_ns(), max(taken, default=0) + 1)
-        _write_text(self.history / f"{stamp}.yaml", self.file.read_text(encoding="utf-8"))
+        path = self.history / f"{stamp}.yaml"
+        contents = self.file.read_text(encoding="utf-8")
+        _write_text(path, contents)
+        if artifacts is not None:
+            artifacts.created_history[path] = contents.encode("utf-8")
         for old in sorted(self.history.glob("*.yaml"))[:-HISTORY_LIMIT]:
-            old.unlink()
+            if artifacts is None:
+                old.unlink()
+            else:
+                contents = old.read_bytes()
+                old.unlink()
+                artifacts.pruned_history[old] = contents
 
-    def _write(self, world: World, compiled: CompiledWorld) -> None:
+    def _write(self, world: World, compiled: CompiledWorld, *, artifacts: ApplyArtifacts | None = None) -> None:
         _write_text(self.file, world.to_yaml())
+        existed = self.build_dir.exists()
         self.build_dir.mkdir(exist_ok=True)
+        if artifacts is not None and not existed:
+            identity = _directory_identity(self.build_dir)
+            if identity is None:
+                raise FileNotFoundError("build directory disappeared during edit")
+            artifacts.created_directories[self.build_dir] = identity
         _write_text(self.build_dir / "world.xml", compiled.to_xml())
 
 

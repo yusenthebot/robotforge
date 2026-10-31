@@ -57,8 +57,10 @@ from robotforge.viewer.server import ViewerHub
 
 if TYPE_CHECKING:
     from robotforge.design import generator
+    from robotforge.design.store import ApplyArtifacts
     from robotforge.viewer.creation import Addition
     from robotforge.viewer.object_edit import Edit
+    from robotforge.viewer.object_group import GroupCopy, PreparedGroup
     from robotforge.viewer.object_surface import SurfaceEdit
     from robotforge.viewer.robot_edit import RobotEdit
     from robotforge.viewer.robot_surface import RobotSurfaceEdit
@@ -99,7 +101,14 @@ def _one_edit_at_a_time(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         with self._edit_lock:
-            return method(self, *args, **kwargs)
+            preparation = self._play_group
+            try:
+                return method(self, *args, **kwargs)
+            except BaseException:
+                # Existing rollback participants own the receipts; transient preparations
+                # must also survive a failed rebuild by any edit entry point.
+                self._play_group = preparation if self._play_world_sha256 is not None else None
+                raise
 
     return wrapper
 
@@ -129,7 +138,8 @@ class Playground:
     _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
     _play_addition: Addition | TerrainAddition | None = field(default=None, init=False, repr=False)
-    _play_edit: Edit | SurfaceEdit | RobotSurfaceEdit | None = field(default=None, init=False, repr=False)
+    _play_edit: Edit | SurfaceEdit | RobotSurfaceEdit | GroupCopy | None = field(default=None, init=False, repr=False)
+    _play_group: PreparedGroup | None = field(default=None, init=False, repr=False)
     _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
     _play_terrain_edit: TerrainEdit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
@@ -305,7 +315,15 @@ class Playground:
                 return self.edit_terrain_for_play(msg)
             if action in {"edit_robot_start", "undo_robot_start"}:
                 return self.edit_robot_start_for_play(msg)
-            if action in {"edit_object", "remove_object", "undo_object_edit", "duplicate_object", "set_object_surface"}:
+            if action in {
+                "edit_object",
+                "remove_object",
+                "undo_object_edit",
+                "duplicate_object",
+                "set_object_surface",
+                "prepare_object_group",
+                "duplicate_object_group",
+            }:
                 return self.edit_object_for_play(msg)
             if action in {"add_object", "undo_add"}:
                 return self.object_for_play(msg)
@@ -360,14 +378,22 @@ class Playground:
             # Called only by the broadcast loop: a joining client's welcome must
             # never consume an update intended for the other viewers.
             version = self.session.version
-            rows = self.behaviors.robots()
+            # Read world/lesson state before the simulation lock, once per callback.
+            saved_world = self.current_world()
+            lesson = self.lessons.lesson
+            acting_world = getattr(lesson, "world", None)
+            if acting_world is None:
+                acting_world = saved_world
+            with self.session.lock:
+                if self.session.version != version:
+                    return None
+                rows, learned = self.behaviors.robot_snapshot(acting_world)
             rows = [{k: v for k, v in r.items() if k not in ("flight", "balance")} for r in rows]
-            learned = self.behaviors.learned_walkers()
             description = {
                 "type": "robot_info",
                 "version": version,
                 "robots": rows,
-                "task_contracts": task_contracts(self.current_world(), copy_result=False),
+                "task_contracts": task_contracts(saved_world, copy_result=False),
                 "learned": learned,
                 "modes": {r["name"]: modes.available(self, r, r["name"] in learned) for r in rows},
             }
@@ -375,8 +401,11 @@ class Playground:
                 return None
             # Keep the cached catalog private, but copy only a message we actually send.
             emitted = copy.deepcopy(description)
-            last_description = description
-            return emitted
+            with self.session.lock:
+                if self.session.version != version:
+                    return None
+                last_description = description
+                return emitted
 
         hub.robot_stream = robot_update
         hub.state_extras = lambda: {"mode": modes.current(self), **self.demonstrations.viewer_state()}
@@ -540,10 +569,16 @@ class Playground:
     def edit_object_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
         """Reposition/copy/remove an exact existing rigid prop, or undo that one edit."""
         from robotforge.viewer.object_edit import duplicate, edit, undo
+        from robotforge.viewer.object_group import GroupCopy
+        from robotforge.viewer.object_group import handle as group
         from robotforge.viewer.object_surface import SurfaceEdit
         from robotforge.viewer.object_surface import handle as surface
 
         action = message.get("action")
+        if action in {"prepare_object_group", "duplicate_object_group"} or (
+            action == "undo_object_edit" and isinstance(self._play_edit, GroupCopy)
+        ):
+            return group(self, message)
         if action == "set_object_surface" or (
             action == "undo_object_edit" and isinstance(self._play_edit, SurfaceEdit)
         ):
@@ -1174,7 +1209,15 @@ class Playground:
         store = self.store
         return {"world_dir": str(store.dir), "world_yaml": store.file.read_text(encoding="utf-8")}
 
-    def _edit(self, change, snapshot: bool = True, *, exact_carry: bool = False) -> dict[str, Any]:
+    def _edit(
+        self,
+        change,
+        snapshot: bool = True,
+        *,
+        exact_carry: bool = False,
+        post_compile: Callable[[World, CompiledWorld], None] | None = None,
+        artifacts: ApplyArtifacts | None = None,
+    ) -> dict[str, Any]:
         """Apply `change` to the open world and load it; snapshot=False finishes the edit before it (one undo)."""
         store = self._require_store()
         before = store.load()
@@ -1182,7 +1225,10 @@ class Playground:
             live = carry.take(self.session.model, self.session.data)
             hands_off = self.behaviors.hands_off()
         try:
-            after, compiled = store.apply(change, snapshot=snapshot)
+            if post_compile is None and artifacts is None:
+                after, compiled = store.apply(change, snapshot=snapshot)
+            else:
+                after, compiled = store.apply(change, snapshot=snapshot, post_compile=post_compile, artifacts=artifacts)
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
         result = self._load_world(compiled)
@@ -1250,6 +1296,7 @@ class Playground:
         self._play_world_sha256 = hashlib.sha256(raw).hexdigest() if descriptor == compiled.world_sha256 else None
         self.session.load_model(compiled.model, str(store.file))
         self._play_addition = self._play_edit = self._play_robot_edit = self._play_terrain_edit = None
+        self._play_group = None
         self.last_doctor = compiled.doctor
         world = store.load()
         summary = self.describe()

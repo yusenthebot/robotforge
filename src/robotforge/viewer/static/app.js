@@ -368,6 +368,7 @@ function buildMeshGeometries(desc, buffer) {
 }
 
 function disposeWorld() {
+  releaseCreationPreview();
   if (!worldRoot) return;
   const textures = new Set();
   worldRoot.traverse((o) => {
@@ -394,6 +395,7 @@ async function applyScene(desc) {
   screenDrive?.clear(false); // the server already replaced the old scene; never stop its new controllers
   const request = ++sceneRequest;
   loadingScene = true;
+  releaseCreationPreview();
   follow = null;
   if (driveCameraIntent === "follow") driveCameraIntent = "auto";
   renderScreenDrive();
@@ -1646,6 +1648,7 @@ function applyState(s) {
     resolveCreatedRobot();
   }
   paused = s.paused;
+  if (selectingObjectGroup) renderObjectSelectionControls();
   renderScreenDrive();
   renderRobotStart();
   rtf = s.rtf;
@@ -2362,7 +2365,7 @@ function setPanelBusy(on) {
   renderLayouts();
   renderScreenDrive();
   renderRobotStart();
-  for (const id of ["object-focus", "object-move", "object-copy", "object-remove", "object-edit-done", "object-surface", "object-surface-apply", "object-surface-material"]) $(id).disabled = on || (id !== "object-edit-done" && !objectSelection);
+  renderObjectSelectionControls();
   const surface = surfaceReselect;
   surfaceReselect = null;
   if (!on && surface && surface.version === sceneDesc?.version && surface.version === stateVersion
@@ -2378,6 +2381,8 @@ let placementVersion = 0, placementGeneration = null, placementWorldSha = null, 
 let lastAddition = null, creationSurface = null, creationAnchor = null;
 const supportRay = new THREE.Raycaster();
 let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null, lastRobotEdit = null, lastTerrainEdit = null;
+let selectingObjectGroup = false, objectGroupEpoch = 0;
+const objectGroupSelection = new Map(), objectGroupHighlights = new Map();
 let surfaceReselect = null;
 let terrainHighlight = null, terrainListKey = null;
 const creationMarker = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.1, 32), accentMaterial({ opacity: 0.85, side: THREE.DoubleSide }));
@@ -2510,10 +2515,19 @@ function creationPoint(e) {
 }
 
 function updateCreationPreview() {
+  if (loadingScene) { placementPreview.clear(); creationHeading.visible = false; return; }
   placementPreview.update(creator.preview(), creationSurface);
   const heading = creator.heading();
   creationHeading.visible = heading !== null;
   creationMarker.rotation.z = THREE.MathUtils.degToRad(heading ?? 0);
+}
+
+function releaseCreationPreview() {
+  // Detach borrowers before their world's buffers are disposed, while leaving the
+  // active request/session intact so its new posed and rendered scene can complete.
+  placementPreview.clear();
+  creator.releasePreview();
+  clearCreationPoint();
 }
 
 function editableRobotStart() {
@@ -2648,22 +2662,80 @@ function renderEditableObjects() {
   const entries = editableObjects();
   $("edit-object-section").hidden = !entries.length;
   $("edit-objects").disabled = busy;
+  $("select-object-group").disabled = busy || entries.length < 2;
+  $("select-object-group").setAttribute("aria-pressed", String(selectingObjectGroup));
   $("edit-object-list").replaceChildren(...entries.map((entry) => {
     const b = document.createElement("button"); b.type = "button"; b.className = "pill";
     b.textContent = entry.name; b.dataset.editObject = entry.name; b.disabled = busy;
-    b.addEventListener("click", () => beginObjectSelection(entry));
+    if (selectingObjectGroup) b.setAttribute("aria-pressed", String(objectGroupSelection.has(entry.name)));
+    b.addEventListener("click", () => selectingObjectGroup ? toggleObjectGroupMember(entry) : beginObjectSelection(entry));
     return b;
   }));
 }
 
 function clearObjectSelection() {
   selectingObjects = false; objectSelection = null;
+  selectingObjectGroup = false; objectGroupEpoch++; objectGroupSelection.clear();
+  for (const highlight of objectGroupHighlights.values()) {
+    scene3.remove(highlight); highlight.geometry.dispose(); highlight.material.dispose();
+  }
+  objectGroupHighlights.clear();
   $("object-edit-bar").hidden = true;
   showObjectSurface(false);
   creationGesture.invalidate();
   if (objectHighlight) {
     scene3.remove(objectHighlight); objectHighlight.geometry.dispose(); objectHighlight.material.dispose(); objectHighlight = null;
   }
+  renderEditableObjects();
+}
+
+function objectSelectionCurrent() {
+  return sceneReadyToDraw() && renderedVersion === sceneDesc?.version && posedVersion === sceneDesc?.version
+    && stateVersion === sceneDesc?.version && placementVersion === sceneDesc?.version
+    && Number.isInteger(stateGeneration) && placementGeneration === stateGeneration;
+}
+
+function renderObjectSelectionControls() {
+  const group = selectingObjectGroup;
+  for (const id of ["object-focus", "object-move", "object-copy", "object-remove"]) {
+    $(id).hidden = group;
+    $(id).disabled = busy || !objectSelection;
+  }
+  $("object-surface").hidden = group || !objectSelection || !Object.hasOwn(objectSelection, "surface_material");
+  for (const id of ["object-surface", "object-surface-apply", "object-surface-material"]) $(id).disabled = busy || !objectSelection;
+  $("object-edit-done").disabled = busy;
+  $("object-group-copy").hidden = !group;
+  $("object-group-copy").disabled = busy || !paused || objectGroupSelection.size < 2 || !objectSelectionCurrent();
+  if (group) {
+    $("object-edit-title").textContent = t("prop_group_count", { count: objectGroupSelection.size });
+    $("object-edit-hint").textContent = t(paused ? "prop_group_hint" : "prop_group_pause_hint");
+  } else $("object-edit-hint").textContent = t("edit_prop_hint");
+}
+
+function beginObjectGroupSelection() {
+  if (busy || editableObjects().length < 2) return;
+  beginObjectSelection();
+  if (!selectingObjects) return;
+  selectingObjectGroup = true; objectGroupEpoch++;
+  renderEditableObjects(); renderObjectSelectionControls();
+}
+
+function toggleObjectGroupMember(entry) {
+  if (busy || !selectingObjectGroup || !objectSelectionCurrent()) return;
+  creationGesture.invalidate(); objectGroupEpoch++;
+  if (objectGroupSelection.has(entry.name)) {
+    objectGroupSelection.delete(entry.name);
+    const highlight = objectGroupHighlights.get(entry.name);
+    if (highlight) { scene3.remove(highlight); highlight.geometry.dispose(); highlight.material.dispose(); }
+    objectGroupHighlights.delete(entry.name);
+  } else {
+    if (objectGroupSelection.size >= 16) { toast(t("prop_group_limit")); return; }
+    objectGroupSelection.set(entry.name, entry);
+    const highlight = new THREE.Box3Helper(new THREE.Box3(), theme.amber);
+    highlight.name = "object-group-member-highlight"; highlight.material.depthTest = false;
+    scene3.add(highlight); objectGroupHighlights.set(entry.name, highlight);
+  }
+  updateObjectHighlight(); renderEditableObjects(); renderObjectSelectionControls();
 }
 
 function beginObjectSelection(entry = null) {
@@ -2686,14 +2758,26 @@ function beginObjectSelection(entry = null) {
     objectHighlight.name = "object-edit-highlight"; objectHighlight.material.depthTest = false;
     scene3.add(objectHighlight); updateObjectHighlight();
   }
+  renderObjectSelectionControls();
   updateEmpty(); updateUndo(); renderDrive();
 }
 
 function updateObjectHighlight() {
-  if (!objectHighlight || !objectSelection || !worldRoot) return;
-  worldRoot.updateMatrixWorld(); objectHighlight.box.makeEmpty();
-  worldRoot.traverse((o) => { if (o.isMesh && o.visible && objectSelection.geoms.includes(o.userData.geom)) objectHighlight.box.expandByObject(o); });
-  objectHighlight.visible = !objectHighlight.box.isEmpty();
+  if (!worldRoot || (!objectHighlight && !objectGroupHighlights.size)) return;
+  worldRoot.updateMatrixWorld();
+  const selections = selectingObjectGroup ? [...objectGroupSelection.values()] : objectSelection ? [objectSelection] : [];
+  const byGeom = new Map();
+  for (const entry of selections) {
+    const highlight = selectingObjectGroup ? objectGroupHighlights.get(entry.name) : objectHighlight;
+    if (!highlight) continue;
+    highlight.box.makeEmpty();
+    for (const geom of entry.geoms) byGeom.set(geom, highlight);
+  }
+  worldRoot.traverse((node) => {
+    const highlight = byGeom.get(node.userData.geom);
+    if (highlight && node.isMesh && node.visible) highlight.box.expandByObject(node);
+  });
+  for (const highlight of new Set(byGeom.values())) highlight.visible = !highlight.box.isEmpty();
 }
 
 function focusObject() {
@@ -2721,10 +2805,59 @@ function pickObjectForEdit(point) {
   setPointer(point);
   const hit = worldRoot && raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
   const entry = hit && editableObjects().find((o) => o.geoms.includes(hit.object.userData.geom));
-  if (entry) beginObjectSelection(entry);
+  if (entry) {
+    if (selectingObjectGroup) toggleObjectGroupMember(entry);
+    else beginObjectSelection(entry);
+  }
 }
 
 $("edit-objects").addEventListener("click", () => beginObjectSelection());
+$("select-object-group").addEventListener("click", beginObjectGroupSelection);
+$("object-group-copy").addEventListener("click", async () => {
+  if (busy || !selectingObjectGroup || !paused || creationGesture.active()
+      || objectGroupSelection.size < 2 || !objectSelectionCurrent()) return;
+  const names = [...objectGroupSelection.keys()];
+  const guard = { version: placementVersion, generation: placementGeneration, world_sha256: sceneDesc.object_edit.world_sha256 };
+  creationGesture.invalidate();
+  const epoch = objectGroupEpoch, pointerEpoch = creationGesture.epoch();
+  stopDriving(); endDrag();
+  await runChoice($("object-group-copy"), { type: "world", action: "prepare_object_group", names, ...guard }, {
+    done: (data) => {
+      if (!selectingObjectGroup || objectGroupEpoch !== epoch || creationGesture.epoch() !== pointerEpoch
+          || creationGesture.active() || !paused || !objectSelectionCurrent()
+          || data.version !== guard.version || data.generation !== guard.generation
+          || data.world_sha256 !== guard.world_sha256 || sceneDesc.object_edit?.world_sha256 !== guard.world_sha256
+          || !/^[0-9a-f]{32}$/.test(data.token || "") || !/^[0-9a-f]{64}$/.test(data.pose_sha256 || "")
+          || !Array.isArray(data.anchor) || data.anchor.length !== 3 || !data.anchor.every(Number.isFinite)
+          || !Array.isArray(data.members) || data.members.length !== names.length
+          || new Set(data.members.map((member) => member.name)).size !== names.length
+          || data.members.some((member) => !names.includes(member.name) || !Array.isArray(member.geoms)
+            || !member.geoms.length || !member.geoms.every(Number.isInteger))) throw new Error(t("create_scene_changed"));
+      // Freeze the rendered parts in anchor coordinates, including every table leg and bin wall.
+      // Their buffers are borrowed read-only and must never be disposed by the ghost.
+      worldRoot.updateMatrixWorld(true);
+      const previewParts = [], found = new Set();
+      const sceneGeoms = new Map(sceneDesc.geoms.map((geom) => [geom.id, geom]));
+      const visibleMembers = data.members.map((member) => member.geoms.filter((id) => {
+        const geom = sceneGeoms.get(id);
+        if (!geom) throw new Error(t("create_scene_changed"));
+        // Covered collision primitives remain owned by the prop but have no drawn surface.
+        // Include the complete visual meshes, even when debug collision display is enabled.
+        return geom.group < sceneDesc.visibleGroupLimit && geom.rgba[3] > 0;
+      }));
+      if (visibleMembers.some((geoms) => !geoms.length)) throw new Error(t("create_scene_changed"));
+      const geoms = new Set(visibleMembers.flat());
+      const origin = new THREE.Matrix4().makeTranslation(...data.anchor.map((v) => -v));
+      worldRoot.traverse((node) => {
+        if (!node.isMesh || !node.visible || !geoms.has(node.userData.geom)) return;
+        previewParts.push({ geometry: node.geometry, matrix: origin.clone().multiply(node.matrixWorld).toArray() });
+        found.add(node.userData.geom);
+      });
+      if (!previewParts.length || [...geoms].some((geom) => !found.has(geom))) throw new Error(t("create_scene_changed"));
+      creator.duplicateGroup({ ...data, previewParts });
+    },
+  });
+});
 function finishObjectSelection() {
   if (busy) return;
   clearObjectSelection(); updateUndo(); updateEmpty(); renderDrive(); canvas.focus();
@@ -2795,7 +2928,7 @@ $("undo-edit").addEventListener("click", async () => {
   await runChoice($("undo-edit"), { type: "world", action: terrainEdit ? "undo_terrain_edit" : robotStart ? "undo_robot_start" : robotFinish ? "undo_robot_surface" : "undo_object_edit", ...receipt }, {
     done: async (data) => {
       await waitForCreation(data, true); lastObjectEdit = lastRobotEdit = lastTerrainEdit = null; updateUndo();
-      toast(t(terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : robotFinish ? "robot_surface_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed })); canvas.focus();
+      toast(t(Array.isArray(data.removed) ? "prop_group_removed" : terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : robotFinish ? "robot_surface_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed, count: data.removed?.length })); canvas.focus();
     },
   });
 });
@@ -2808,15 +2941,21 @@ function objectInScene(name) {
 function resolveCreatedRobot() {
   const wanted = creationSelection;
   if (!wanted || posedVersion !== sceneDesc?.version) return;
+  if (stateVersion !== wanted.version) {
+    if (stateVersion > wanted.version) wanted.reject(new Error(t("create_scene_changed")));
+    return;
+  }
   if (Number.isInteger(wanted.generation) && stateGeneration !== wanted.generation) {
     if (stateGeneration > wanted.generation) wanted.reject(new Error(t("create_scene_changed")));
     return;
   }
   if (sceneDesc.version < wanted.version) return;
+  const removed = Array.isArray(wanted.removed) ? wanted.removed : wanted.removed ? [wanted.removed] : [];
   if (sceneDesc.version !== wanted.version || (wanted.robot && !robotByName(wanted.robot))
       || (wanted.object && !objectInScene(wanted.object))
+      || (wanted.objects && (!Array.isArray(wanted.objects) || wanted.objects.some((name) => !objectInScene(name))))
       || (wanted.terrain && !objectInScene(wanted.terrain))
-      || (wanted.removed && (robotByName(wanted.removed) || objectInScene(wanted.removed)))) {
+      || removed.some((name) => robotByName(name) || objectInScene(name))) {
     wanted.reject(new Error(t("create_scene_changed"))); return;
   }
   if (wanted.rendered && renderedVersion !== wanted.version) return;
@@ -2826,11 +2965,21 @@ function resolveCreatedRobot() {
 
 function waitForCreation(data, rendered = false, { focus = true } = {}) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => creationSelection?.reject(new Error(t("create_scene_changed"))), 15000);
+    const timer = setTimeout(() => {
+      const error = new Error(t("create_scene_changed"));
+      error.displayTimeout = true;
+      creationSelection?.reject(error);
+    }, 15000);
     const finish = (callback, error) => { clearTimeout(timer); creationSelection = null; callback(error); };
     creationSelection = { ...data, rendered, focus, resolve: () => finish(resolve), reject: (error) => finish(reject, error) };
     resolveCreatedRobot();
   });
+}
+
+function groupCopyUndo(data) {
+  const receipt = data.undo_edit;
+  return receipt?.version === data.version && receipt.generation === data.generation
+    && /^[0-9a-f]{32}$/.test(receipt.token || "") ? { ...receipt, kind: "group-copy" } : null;
 }
 
 async function placeEntity(item, pos) {
@@ -2843,6 +2992,9 @@ async function placeEntity(item, pos) {
   }
   pos = pos.slice();
   const repeating = creator.repeating();
+  if (item.kind === "group-copy" && (!paused || !objectSelectionCurrent()
+      || item.version !== placementVersion || item.generation !== placementGeneration
+      || item.world_sha256 !== sceneDesc.object_edit?.world_sha256)) { toast(t("create_scene_changed")); return; }
   if (repeating && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
   if ((item.kind === "terrain" || item.kind === "terrain-edit") && (!Number.isInteger(placementGeneration) || !placementWorldSha)) { toast(t("loading_scene")); return; }
   const placementSession = creator.session();
@@ -2853,6 +3005,7 @@ async function placeEntity(item, pos) {
     : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
+    : item.kind === "group-copy" ? { action: "duplicate_object_group", token: item.token, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "terrain-edit" ? { action: "edit_terrain", name: item.name, yaw_delta: item.yaw_delta, world_sha256: item.world_sha256 }
     : item.kind === "terrain" ? { action: "add_terrain", preset: item.name, yaw: item.yaw, world_sha256: placementWorldSha }
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw,
@@ -2861,6 +3014,12 @@ async function placeEntity(item, pos) {
     frame: !repeating && (item.kind === "robot" || item.kind === "model"),
     progress: (event) => { if (placementSession === creator.session()) creator.progress(event.stage, event.fraction); },
     done: async (data) => {
+      if (item.kind === "group-copy" && (!Array.isArray(data.objects) || data.objects.length !== item.members.length
+          || data.objects.some((name) => typeof name !== "string" || !name)
+          || new Set(data.objects).size !== item.members.length || !Number.isInteger(data.generation))) {
+        lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
+        cancelCreation(true); throw new Error(t("create_scene_changed"));
+      }
       if (data.unchanged) {
         if (placementSession !== creator.session()) return;
         if (stateVersion !== data.version || stateGeneration !== data.generation) {
@@ -2878,8 +3037,14 @@ async function placeEntity(item, pos) {
       }
       if (item.kind === "model") creator.progress("display");
       try {
-        await waitForCreation(data, item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || repeating || item.kind === "edit" || item.kind === "copy" || item.kind === "start", { focus: !repeating });
+        await waitForCreation(data, item.kind === "group-copy" || item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || repeating || item.kind === "edit" || item.kind === "copy" || item.kind === "start", { focus: !repeating });
       } catch (error) {
+        if (item.kind === "group-copy") {
+          lastObjectEdit = error.displayTimeout && stateVersion === data.version && stateGeneration === data.generation
+            ? groupCopyUndo(data) : null;
+          lastAddition = lastRobotEdit = lastTerrainEdit = null;
+          cancelCreation(true);
+        }
         if (item.kind === "terrain-edit") {
           lastTerrainEdit = stateVersion === data.version && stateGeneration === data.generation ? data.undo_terrain_edit || null : null;
           cancelCreation(true);
@@ -2922,7 +3087,7 @@ async function placeEntity(item, pos) {
         placementWorldSha = info.world_sha256;
       }
       lastAddition = data.undo || null;
-      lastObjectEdit = data.undo_edit || null;
+      lastObjectEdit = item.kind === "group-copy" ? groupCopyUndo(data) : data.undo_edit || null;
       lastRobotEdit = data.undo_robot_start || null;
       lastTerrainEdit = data.undo_terrain_edit || null;
       creationClickUntil = performance.now() + 500;
@@ -2935,7 +3100,7 @@ async function placeEntity(item, pos) {
         creator.next(item.kind === "copy" ? { world_sha256: sceneDesc.object_edit.world_sha256 } : {});
         creationSurface = creationAnchor = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
-      toast(t(item.kind === "terrain-edit" ? "terrain_edited" : item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain }));
+      toast(t(item.kind === "group-copy" ? "prop_group_copied" : item.kind === "terrain-edit" ? "terrain_edited" : item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain, count: data.objects?.length }));
       canvas.focus();
     },
   });
@@ -2947,7 +3112,7 @@ async function placeEntity(item, pos) {
 function updateUndo() {
   $("undo-add").hidden = !lastAddition || creator.active() || selectingObjects || !!sceneDesc?.lesson;
   $("undo-edit").hidden = (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit) || creator.active() || selectingObjects || !!sceneDesc?.lesson;
-  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : "undo_object_edit");
+  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : lastObjectEdit?.kind === "group-copy" ? "undo_prop_group" : "undo_object_edit");
   $("undo-edit").disabled = busy;
   $("undo-add").disabled = busy;
   $("undo-add").title = lastAddition?.name || "";
