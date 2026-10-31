@@ -1,0 +1,117 @@
+{
+  "decision": "Not admitted: two-path ordinary-view utility remains inconclusive. Malo frontal shade/occlusion cues are useful, oblique sometimes flatter; Go2 mostly wall brightness and moved pallet shadows, no clear leg/underside readability gain. Do not retune angle or frozen views.",
+  "base_commit": "fa3cc3a902110354bd9a1495cc66f84fe10e8a45",
+  "source": {
+    "package": "robotforge",
+    "package_version": "0.0.1",
+    "python": "3.12.16",
+    "platform": "macOS-26.3.2-arm64-arm-64bit",
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "git_commit": "fa3cc3a902110354bd9a1495cc66f84fe10e8a45",
+    "git_dirty": false,
+    "active_source_sha256": "9f03a94afcc5fc5e5d7e0c7b039bbce6ae25974ba7df89db2169b719a1636d9b",
+    "plugins": [],
+    "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+  },
+  "plan_sha256": "7ae059db56ae06fca68b79598f6e64e916cafbd28fda54cdc3b3a0ff8879c237",
+  "verification_sha256": "747ce158154e69b52ce5148f09034f7f3f29b79e48cb553955cc16c1e51d665a",
+  "checks": 5074,
+  "all_controls_passed": true,
+  "physical_arrays_per_scene": 486,
+  "source_inputs_exact": 780,
+  "original_wip_exact": 13,
+  "original_png_count": 24,
+  "root_ordinary_dpr1_png_views": 8,
+  "root_decoded_samples": 48,
+  "candidate_still_pairs": 8,
+  "exact_main_canvas_restores": 8,
+  "movies": [
+    {
+      "folder": "screen-malo-v1/arc-dpr1-baseline",
+      "video_sha256": "efc80620fac38a5e65f8264a7b0ccff47554eaa2191676d2daff4e23c361e88c",
+      "video_bytes": 781158,
+      "raw_frame_count": 345,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "decode_exit_code": 0
+    },
+    {
+      "folder": "screen-malo-v1/arc-dpr1-plus90",
+      "video_sha256": "e89cea7be30a1d2c67a14e4a4ebd3ac67253c7aa39feba312010d6f9086bfcf7",
+      "video_bytes": 784468,
+      "raw_frame_count": 345,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "decode_exit_code": 0
+    },
+    {
+      "folder": "screen-malo-v1/arc-dpr2-baseline",
+      "video_sha256": "0f61efac10da78771b31469d495ac3ba650208d2646ba13b899ecd2fa74e8c7a",
+      "video_bytes": 768019,
+      "raw_frame_count": 345,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "decode_exit_code": 0
+    },
+    {
+      "folder": "screen-malo-v1/arc-dpr2-plus90",
+      "video_sha256": "3ba5e31cf9beffdffe0640c23cea9ffd87dc257e8233948621ca049c09acc513",
+      "video_bytes": 764597,
+      "raw_frame_count": 345,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "decode_exit_code": 0
+    },
+    {
+      "folder": "screen-go2-v1/arc-dpr1-baseline",
+      "video_sha256": "3777578da20bc5b0a37ed2f10fed55e6e7c0a544eea9b1306086f5cd1455af09",
+      "video_bytes": 1305059,
+      "raw_frame_count": 345,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "decode_exit_code": 0
+    },
+    {
+      "folder": "screen-go2-v1/arc-dpr1-plus90",
+      "video_sha256": "2571c53c63df2faf8ba62daf00ae0dc09ff7565a7d811512f6a3429eabafdce4",
+      "video_bytes": 1366357,
+      "raw_frame_count": 345,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "decode_exit_code": 0
+    },
+    {
+      "folder": "screen-go2-v1/arc-dpr2-baseline",
+      "video_sha256": "664bf28461c2df6df4a2c275be924263fbb60ca57f7bd36b182c151391f0a4ef",
+      "video_bytes": 994201,
+      "raw_frame_count": 345,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "decode_exit_code": 0
+    },
+    {
+      "folder": "screen-go2-v1/arc-dpr2-plus90",
+      "video_sha256": "2c1f0854fe293f4a8be472899ac1187636d604393d9223f41bbac31eda5499a4",
+      "video_bytes": 1024892,
+      "raw_frame_count": 345,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "decode_exit_code": 0
+    }
+  ],
+  "selected_pytest": 26,
+  "sensor_evidence": {
+    "Malo_camera_changes_at_plus90": true,
+    "four_Malo_baseline_restore_PiP_pairs_exact": true,
+    "claim": "Actual captured camera hashes change at+90, with renderer sharing the rotated shadow. Sensor isolation is NOT achieved."
+  },
+  "architecture_limits": [
+    "Existing sensor uses previous main shadow; zeroing the sun without independent depth does not preserve previews.",
+    "Outside a live renderer.render context, direct shadowMap.render reads a null internal render state in bundled Three.",
+    "A controlled main onAfterRender may allow baseline depth update but is unimplemented/unverified, has clipping/state/cost boundaries."
+  ],
+  "product_changed": false,
+  "new_full_suite_performance_installed_budget_claim": false,
+  "next": "Prioritize creative scene arrangement reuse; preserve this frozen result rather than retune for a pass."
+}

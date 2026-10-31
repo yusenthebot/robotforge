@@ -1,5 +1,14 @@
 # progress
 
+## Fixed-composition light direction screen (2026-10-31)
+
+A single fixed +90 degree sun/environment rotation reuses the existing light/environment/shadow objects and restores zero exactly, but does not establish two-path ordinary-view utility.
+Malo frontal column/shoulder and robot/table shadow relations are useful; oblique shading can flatten and Go2 mainly changes wall brightness and shadow position.
+26 lighting/texture tests, offline build and Ruff/format pass; 5,074 stored integrity checks, 8 exact canvas restores, 8 decoded movies and 48 root samples preserve 486 model/state arrays per scene, 780 inputs and 13 original WIP files.
+Actual Malo camera hashes change at +90 and restore exactly; sensor isolation and dual-cache ownership/cost remain unimplemented, so no product promotion or new full-suite/performance/installed/budget certification.
+[Report](docs/bench/2026-10-31-light-direction-screen.md).
+Preserve the frozen result without angle/view retuning; prioritize practical scene arrangement reuse while keeping the broad goal active.
+
 ## Natural dirt image screen (2026-10-31)
 
 One fixed 49,063 B external 256-square CC0 pair preserves mean color/height/roughness and sampler/shader/UV, but ordinary-view Malo rough hfield and Go2 floor show smoother brown patches without sufficient soil structure gain.

@@ -1,5 +1,9 @@
 # STATUS
 
+- 2026-10-31 light direction screen: A fixed external +90 degree sun/environment rotation is not admitted; Malo frontal shape/occlusion cues improve, but Go2 ordinary-view utility remains inconclusive.
+  26 lighting/texture tests, offline build and Ruff/format pass; 5,074 stored integrity checks, 8 exact main-canvas restores, 8 decoded movies and 48 inspected samples retain 486 model/state arrays per scene, 780 inputs and 13 original WIP files.
+  Actual Malo sensor preview hashes change under rotation and recover at zero; no sensor isolation, product implementation, new full-suite, formal performance or budget claim. Report: docs/bench/2026-10-31-light-direction-screen.md/.json; broad goal active.
+
 - 2026-10-31 natural dirt screen: The fixed external 256-square CC0 color/detail pair (49,063 B) is rejected before product promotion; smoother brown patches do not establish ordinary-view soil structure gain in both paths.
   Derived Malo rough hfield and Go2 dirt plane retain world, mesh, material, sampler, UV, camera and state controls: 1,262 checks, 8 static pairs, 8 fully decoded movies, 48 root-viewed samples and 486 stored arrays per scene.
   64 terrain/texture tests, offline build and Ruff/format pass; 780 inputs and 13 original WIP files remain exact. Current upstream wheel is 4,057,944 B with 420 product files; product unchanged, no new formal cost/full-suite/installed/budget claim.
