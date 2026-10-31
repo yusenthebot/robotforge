@@ -1,0 +1,353 @@
+{
+  "date": "2026-10-31",
+  "decision": "Rejected before product promotion: ordinary-view appearance becomes smoother but does not establish enough soil particle/layer structure in both paths.",
+  "base_commit": "e73d2c77310394d20455bc16fc07edd58ab12f24",
+  "capture_source": {
+    "package": "robotforge",
+    "package_version": "0.0.1",
+    "python": "3.12.16",
+    "platform": "macOS-26.3.2-arm64-arm-64bit",
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "git_commit": "e73d2c77310394d20455bc16fc07edd58ab12f24",
+    "git_dirty": false,
+    "active_source_sha256": "9f03a94afcc5fc5e5d7e0c7b039bbce6ae25974ba7df89db2169b719a1636d9b",
+    "plugins": [],
+    "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+  },
+  "evidence_directory": "../robotforge-evidence/2026-10-31-natural-dirt-screen",
+  "plan_sha256": "00126c7c68c8a856f95372c6c0b37dce4d771bc52bcc400ebf78e3ae0396c9f1",
+  "baseline_visual_gate_sha256": "fc2cf56f25a6c2fe22463f5804a141ef493f338e75e6a1971a37fa3aefb78129",
+  "validation_sha256": "120e526e40310b162bb046c839d137d4e79ac1a22a80ab87e7e3ea4d87b48e9c",
+  "source_inputs_exact": 780,
+  "original_wip_exact": 13,
+  "product_changed": false,
+  "physical_arrays_per_scene": 486,
+  "integrity_checks": 1262,
+  "paired_stills": [
+    {
+      "kind": "malo",
+      "view": "dpr1-studio-front.png",
+      "changed_pixels": 113022,
+      "max_byte_difference": 20,
+      "mean_byte_difference": 0.33143294270833334
+    },
+    {
+      "kind": "malo",
+      "view": "dpr1-studio-oblique.png",
+      "changed_pixels": 85759,
+      "max_byte_difference": 18,
+      "mean_byte_difference": 0.247638671875
+    },
+    {
+      "kind": "malo",
+      "view": "dpr2-studio-front.png",
+      "changed_pixels": 453607,
+      "max_byte_difference": 27,
+      "mean_byte_difference": 0.3739191080729167
+    },
+    {
+      "kind": "malo",
+      "view": "dpr2-studio-oblique.png",
+      "changed_pixels": 344882,
+      "max_byte_difference": 25,
+      "mean_byte_difference": 0.28065128580729165
+    },
+    {
+      "kind": "go2",
+      "view": "dpr1-studio-front.png",
+      "changed_pixels": 561022,
+      "max_byte_difference": 165,
+      "mean_byte_difference": 1.6488766276041666
+    },
+    {
+      "kind": "go2",
+      "view": "dpr1-studio-oblique.png",
+      "changed_pixels": 505086,
+      "max_byte_difference": 21,
+      "mean_byte_difference": 1.4228134765625
+    },
+    {
+      "kind": "go2",
+      "view": "dpr2-studio-front.png",
+      "changed_pixels": 2258830,
+      "max_byte_difference": 165,
+      "mean_byte_difference": 1.8098104654947917
+    },
+    {
+      "kind": "go2",
+      "view": "dpr2-studio-oblique.png",
+      "changed_pixels": 2041647,
+      "max_byte_difference": 27,
+      "mean_byte_difference": 1.5986979166666666
+    }
+  ],
+  "valid_original_stills": 16,
+  "root_original_static_views": 8,
+  "root_decoded_samples": 48,
+  "movies": [
+    {
+      "folder": "baseline-malo-v1/arc-dpr1",
+      "manifest_sha256": "47e4fbc20179c6143e2e60992b9be8c1891ea48cbf0d1c40c100e36b0f24d135",
+      "media_qa_sha256": "57e946f72eeecbceec382c106c5fc13c1d9ad415e5a438d2fb5ff324e6e06620",
+      "video_sha256": "cc48c919a8e73283925b85f245f3a2466fea8700d30832cb1ce2cb5a889c69ea",
+      "video_bytes": 874538,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "raw_frame_count": 345,
+      "duration_capped": false,
+      "decode_exit_code": 0,
+      "raw_arrival_inversions": 0
+    },
+    {
+      "folder": "baseline-malo-v1/arc-dpr2",
+      "manifest_sha256": "b3a43bd749a4f8fe99c05e07e6ec34806828482be43ff1bade71dee3731d0aba",
+      "media_qa_sha256": "ff61aa2ff9d9dd2b54750c032073a97786bb6755274661acb5c088a820dff785",
+      "video_sha256": "d6609e37e75e634a2251dcea3001c0620c3e586e82196c4a4d8a4c6263634133",
+      "video_bytes": 869205,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "raw_frame_count": 345,
+      "duration_capped": false,
+      "decode_exit_code": 0,
+      "raw_arrival_inversions": 0
+    },
+    {
+      "folder": "baseline-go2-v1/arc-dpr1",
+      "manifest_sha256": "c5b7136da1d59e9a73db827b94fac8c32f0385bfa49d4686bddad5e5e8711cc6",
+      "media_qa_sha256": "827c256b8d76a37d37b48dee318a2495ecadd826c4694af27a5787cb63c55e91",
+      "video_sha256": "ec15af8476affa7622a0beaef8647bf87b2c85759113f3244ad841ab4aafb7d8",
+      "video_bytes": 1606671,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "raw_frame_count": 345,
+      "duration_capped": false,
+      "decode_exit_code": 0,
+      "raw_arrival_inversions": 0
+    },
+    {
+      "folder": "baseline-go2-v1/arc-dpr2",
+      "manifest_sha256": "53a8b336b0b0fd40c52ceafe2ba882c7943d1705ee831d20da612906b1e17eb6",
+      "media_qa_sha256": "8e700fd101a00479a0df4ae7d9843f6877a6af626fb43d09e8e6b6e19611ee12",
+      "video_sha256": "cf5708ef176f7d505ab1fdef6b26b73982d19f96f723a48a937d89de4b5c9767",
+      "video_bytes": 1329049,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "raw_frame_count": 345,
+      "duration_capped": false,
+      "decode_exit_code": 0,
+      "raw_arrival_inversions": 0
+    },
+    {
+      "folder": "candidate-malo-v2/arc-dpr1",
+      "manifest_sha256": "2d54aa346b75b0f462221e69f523d7f1f35772ef25d123528b87fbcf0b3d0879",
+      "media_qa_sha256": "5b076591013be4d6589dc293b8faf775dd270ff088b123b911466eb9688a54e6",
+      "video_sha256": "9ce15efdbd28c1b389d64f95bfb8b5111b50665bebeddf1d4d44d0387efb1f64",
+      "video_bytes": 825378,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "raw_frame_count": 345,
+      "duration_capped": false,
+      "decode_exit_code": 0,
+      "raw_arrival_inversions": 0
+    },
+    {
+      "folder": "candidate-malo-v2/arc-dpr2",
+      "manifest_sha256": "b748352f5a7e5a460917c5bcfb5e0686bc65feebc58d61938546d2d956967173",
+      "media_qa_sha256": "8af737c3bbdc99beff85278a1d4ecaffbe327c0b65b52c3a177e61b93b0a3162",
+      "video_sha256": "fdf72078534a2da60abc2582de4a8632303d7acaf5acce96ea5bb547b366082b",
+      "video_bytes": 808991,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "raw_frame_count": 345,
+      "duration_capped": false,
+      "decode_exit_code": 0,
+      "raw_arrival_inversions": 0
+    },
+    {
+      "folder": "candidate-go2-v3/arc-dpr1",
+      "manifest_sha256": "fd59c29a788211ae3c9cd08d293a3f8581f976d145bc99938f9f2df3345edcb0",
+      "media_qa_sha256": "cf4737f75178ed30a78f734ed47bdf87d4367771c85b592f532df51de2737a83",
+      "video_sha256": "ab67c466feac04f3bc2b3cc02f5e4635a8ae50b64fa5bd89684fa7dca7fad706",
+      "video_bytes": 1489381,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "raw_frame_count": 345,
+      "duration_capped": false,
+      "decode_exit_code": 0,
+      "raw_arrival_inversions": 0
+    },
+    {
+      "folder": "candidate-go2-v3/arc-dpr2",
+      "manifest_sha256": "1251146e78a7d9324c179271c1a17e5073f8359f60c6c5a00abd7b4f8c71b439",
+      "media_qa_sha256": "eb6fa9668912498e155e33849c082ad1c340dff23b1067e36e7629984a1a7b9b",
+      "video_sha256": "9917c944c0129d10434ecdbde8cbb36f8601118b9725b30450b54ce62dcf3181",
+      "video_bytes": 1202298,
+      "duration_seconds": 5.833333,
+      "decoded_frame_count": 175,
+      "raw_frame_count": 345,
+      "duration_capped": false,
+      "decode_exit_code": 0,
+      "raw_arrival_inversions": 0
+    }
+  ],
+  "candidate": {
+    "recipe": "frozen 256 square linear luma relative contrast0.5, JPEG90; height0.4/roughness0.1 mean centered PNG; no sharpening",
+    "source_footprint": "Source nominal2m mapped to existing0.6m tile artistically, no physical scale claim",
+    "baseline": {
+      "linear_color_mean": 0.8463934865723884,
+      "height_mean": 0.509315221449907,
+      "roughness_mean": 0.9797357297404911
+    },
+    "measured": {
+      "linear_color_mean": 0.8463490889945466,
+      "height_mean": 0.5093121696920956,
+      "roughness_mean": 0.9801523246017156
+    },
+    "relative_mean_errors": {
+      "linear_color_mean": 5.245500886541521e-05,
+      "height_mean": 5.991884167055872e-06,
+      "roughness_mean": 0.00042521146119156583
+    },
+    "linear_luma_std": 0.04728070967297105,
+    "bias": 0.002104729834920659,
+    "files": {
+      "color.jpg": {
+        "bytes": 12590,
+        "sha256": "3fb0c9a5c70a7092a114b25664e3dbae146185ccef8821ed1f8f3861f74a50c7"
+      },
+      "detail.png": {
+        "bytes": 36473,
+        "sha256": "18bd398ae972c8b1a03fa0ffee13ec3ae4e11ece30b61384dc42436a11352b5c"
+      }
+    }
+  },
+  "source_assets": {
+    "asset": "https://polyhaven.com/a/dirt",
+    "license": "CC0",
+    "license_url": "https://polyhaven.com/license",
+    "api_terms": "https://github.com/Poly-Haven/Public-API/blob/master/ToS.md",
+    "author": "Charlotte Baglioni",
+    "nominal_mm": [
+      2000,
+      2000
+    ],
+    "use": "external build-time screen only; no runtime remote fetch",
+    "fetched_utc": "2026-10-31T14:51:21.191152+00:00",
+    "sources": [
+      {
+        "map": "Diffuse",
+        "size": 730425,
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dirt/dirt_diff_1k.jpg",
+        "md5": "cb37e24797597b1dd1ae3819fa80f076",
+        "path": "dirt_diff_1k.jpg",
+        "sha256": "6ce6ca7e28ed046f7f93fa60dcb29f8cf42cd5a539adc5676675acccfa34efd3"
+      },
+      {
+        "map": "Displacement",
+        "size": 1716048,
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/dirt/dirt_disp_1k.png",
+        "md5": "cdaa280f3413729636a764581dd00062",
+        "path": "dirt_disp_1k.png",
+        "sha256": "5d2efddb7561e4686bef559348df0d4f28f6fbe7648a96ba8293fed05e5008dd"
+      },
+      {
+        "map": "Rough",
+        "size": 1586570,
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/dirt/dirt_rough_1k.png",
+        "md5": "293473a9600f0938205a05461a4396bb",
+        "path": "dirt_rough_1k.png",
+        "sha256": "29f68a8972f1e69cf47e67924efe469350f953a5f707f63633a9c36cd7c63f6a"
+      }
+    ]
+  },
+  "go2_pre_adapter_settling": [
+    {
+      "dpr": 1,
+      "ms": 811.9000000059605,
+      "samples": 49,
+      "new_node_types": [
+        "Group",
+        "LineSegments",
+        "Points"
+      ],
+      "initial_nodes": 384,
+      "final_nodes": 387,
+      "memory_before": {
+        "geometries": 135,
+        "textures": 7
+      },
+      "memory_after": {
+        "geometries": 137,
+        "textures": 8
+      },
+      "programs_before": 9,
+      "programs_after": 11
+    },
+    {
+      "dpr": 2,
+      "ms": 809.2000000178814,
+      "samples": 49,
+      "new_node_types": [
+        "Group",
+        "LineSegments",
+        "Points"
+      ],
+      "initial_nodes": 384,
+      "final_nodes": 387,
+      "memory_before": {
+        "geometries": 135,
+        "textures": 7
+      },
+      "memory_after": {
+        "geometries": 137,
+        "textures": 8
+      },
+      "programs_before": 9,
+      "programs_after": 11
+    }
+  ],
+  "verification": {
+    "default_tests": 64,
+    "scope": [
+      "tests/test_terrain.py",
+      "tests/test_viewer_textures.py"
+    ],
+    "lint": true,
+    "format": true,
+    "offline_build": true,
+    "optional_tools_available": false,
+    "all_selected_receipts_unchanged": true,
+    "package": {
+      "base_commit": "e73d2c77310394d20455bc16fc07edd58ab12f24",
+      "wheel_bytes": 4057944,
+      "product_files": 420,
+      "unchanged_official_wheel_budget_bytes": 4194304,
+      "remaining_budget_bytes": 136360
+    }
+  },
+  "failures_retained": [
+    {
+      "path": "candidate-invalid-scalar-v1",
+      "reason": "PIL RGB conversion saturated16bit scalar source; corrected by dtype-range normalization before first candidate render, no recipe retune."
+    },
+    {
+      "path": "candidate-malo-v1",
+      "reason": "Adapter helper changed during capture; final SHA guard failed, not accepted. Final helper frozen forv2."
+    },
+    {
+      "path": "candidate-go2-v2",
+      "reason": "Strict topology guard failed; v3 independently observed pre-adapter lidar startup and retained the unchanged strict guard after settling. Original v2 cause was not conclusively isolated."
+    }
+  ],
+  "not_run": [
+    "color-only attribution after visual rejection",
+    "production integration",
+    "formal ABBA loading/draw cost",
+    "fresh installed smoke",
+    "new full suite/canonical/budget acceptance",
+    "cross-monitor/native zoom retest"
+  ],
+  "limits": "Eight decoded movies and48sampled frames are not every-frame or shimmer-free certification. This is an external image intervention, not shipped quality gain, locomotion or action-success work.",
+  "next_seed": "Continue shared scene surface and lighting quality from ordinary-view evidence, preserving current budgets; do not retune this frozen dirt crop."
+}

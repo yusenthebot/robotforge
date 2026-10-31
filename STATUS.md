@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-10-31 natural dirt screen: The fixed external 256-square CC0 color/detail pair (49,063 B) is rejected before product promotion; smoother brown patches do not establish ordinary-view soil structure gain in both paths.
+  Derived Malo rough hfield and Go2 dirt plane retain world, mesh, material, sampler, UV, camera and state controls: 1,262 checks, 8 static pairs, 8 fully decoded movies, 48 root-viewed samples and 486 stored arrays per scene.
+  64 terrain/texture tests, offline build and Ruff/format pass; 780 inputs and 13 original WIP files remain exact. Current upstream wheel is 4,057,944 B with 420 product files; product unchanged, no new formal cost/full-suite/installed/budget claim.
+  Initial 16-bit generation, changed helper and sensor startup failures remain recorded; Go2 pre-adapter topology tracing and unchanged strict guards pass. Report: docs/bench/2026-10-31-natural-dirt-screen.md/.json; broad goal active, action-success tuning deferred.
+
 - 2026-10-29 continuous robot placement: Opt-in continuous placement covers templates, curated library models and saved designs; separate commits/fresh guards/latest Undo/default one-shot preserved, camera eye/aim retained.
   Runtime1f984522/775inputs:685scoped default+356complete current non-slow browser+9GPU=1050distinct pytest,7canonical,source/fresh offline60-tool smoke and original11/11budgets pass.
   Three paired native workflows yield6fully decoded movies/36root samples,12exact workflow and24exact original-world canvas pairs,2050model/state/workflow checks.

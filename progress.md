@@ -1,5 +1,16 @@
 # progress
 
+## Natural dirt image screen (2026-10-31)
+
+One fixed 49,063 B external 256-square CC0 pair preserves mean color/height/roughness and sampler/shader/UV, but ordinary-view Malo rough hfield and Go2 floor show smoother brown patches without sufficient soil structure gain.
+Candidate rejected before product promotion; no crop, contrast or scale retuning, and no action-success work.
+1,262 paired integrity checks, 8 static pairs, 8 fully decoded movies and 48 root-viewed samples retain 486 arrays/state per scene; isolated Malo mesh paths are decoded and source files hashed.
+64 terrain/texture tests, offline wheel and Ruff/format pass; 780 inputs and 13 original WIP files remain exact, current upstream wheel is 4,057,944 B with 420 product files, product unchanged.
+Invalid 16-bit scalar conversion output and two failed helper runs remain recorded; frozen Malo v2 and Go2 v3 with observed sensor topology settling pass unchanged strict material/resource guards.
+No production, color-only, formal performance, full-suite, canonical, installed or budget acceptance claim after visual rejection.
+[Report](docs/bench/2026-10-31-natural-dirt-screen.md).
+Continue shared surface and lighting quality from ordinary-view evidence while preserving budgets; the broad goal remains active.
+
 ## Continuous robot placement (2026-10-29)
 
 Opt-in continuous placement covers templates, curated library models and saved designs; separate commits/fresh guards/latest Undo/default one-shot preserved, camera eye/aim retained.
