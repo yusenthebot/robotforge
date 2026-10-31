@@ -323,6 +323,7 @@ class Playground:
                 "set_object_surface",
                 "prepare_object_group",
                 "duplicate_object_group",
+                "move_object_group",
             }:
                 return self.edit_object_for_play(msg)
             if action in {"add_object", "undo_add"}:
@@ -575,7 +576,7 @@ class Playground:
         from robotforge.viewer.object_surface import handle as surface
 
         action = message.get("action")
-        if action in {"prepare_object_group", "duplicate_object_group"} or (
+        if action in {"prepare_object_group", "duplicate_object_group", "move_object_group"} or (
             action == "undo_object_edit" and isinstance(self._play_edit, GroupCopy)
         ):
             return group(self, message)

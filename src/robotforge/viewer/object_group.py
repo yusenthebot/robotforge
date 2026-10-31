@@ -7,7 +7,7 @@ import hashlib
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 import mujoco
@@ -21,7 +21,7 @@ from robotforge.sim import carry
 from robotforge.sim.session import fresh_data
 from robotforge.viewer.creation import Coordinate, Heading, _parse
 from robotforge.viewer.layout_state import BuiltinLayoutState, check_supported_restore
-from robotforge.viewer.object_edit import SHAPES, Digest, UndoEdit, _bounds, _guard, _owners, _supported
+from robotforge.viewer.object_edit import SHAPES, Digest, UndoEdit, _bounds, _guard, _owners, _supported, _task_users
 
 if TYPE_CHECKING:
     from robotforge.design.store import WorldStore
@@ -43,6 +43,7 @@ class Guard(BaseModel):
 
 class Prepare(Guard):
     names: list[str] = Field(min_length=2, max_length=16)
+    mode: Literal["copy", "move"] = "copy"
 
     @field_validator("names")
     @classmethod
@@ -76,6 +77,7 @@ class PreparedGroup:
     pose_sha256: str
     anchor: tuple[float, float, float]
     members: tuple[Member, ...]
+    mode: Literal["copy", "move"]
 
 
 @dataclass(frozen=True)
@@ -88,13 +90,24 @@ class GroupCopy:
     entries: tuple[ObjectEntry, ...]
 
 
+@dataclass(frozen=True)
+class MoveSource:
+    entries: tuple[ObjectEntry, ...]
+    pose: carry.Snapshot
+
+
+@dataclass(frozen=True)
+class GroupMove(GroupCopy):
+    before: MoveSource
+
+
 def _check(pg: Playground, store: WorldStore, guard: Guard) -> World:
     world = _guard(pg, store, guard.version, guard.generation, guard.world_sha256, "layout")
     if not pg.session.paused:
-        raise PlaygroundError("pause the simulation before copying a layout")
-    check_supported_restore(pg, "copying a prop layout")
+        raise PlaygroundError("pause the simulation before editing a layout")
+    check_supported_restore(pg, "editing a prop layout")
     if pg.session.model.nflex:
-        raise PlaygroundError("layout copying needs a rigid world; choose another map")
+        raise PlaygroundError("layout editing needs a rigid world; choose another map")
     return world
 
 
@@ -127,7 +140,7 @@ def _members(model, data, world, names) -> tuple[Member, ...]:
                 # The unrotated fixed bin has no body: its named geom is the 5 mm base.
                 pos -= rot[:, 2] * model.geom_size[geom, 2]
         if not np.all(np.isfinite(pos)) or np.linalg.norm(rot[:, 2] - [0, 0, 1]) > UPRIGHT:
-            raise PlaygroundError(f"{name} is tilted; make every selected prop upright before copying")
+            raise PlaygroundError(f"{name} is tilted; make every selected prop upright before editing the layout")
         yaw = math.degrees(math.atan2(rot[1, 0], rot[0, 0]))
         members.append(
             Member(
@@ -300,6 +313,11 @@ def _prepare(pg, request: Prepare):
     names = set(request.names)
     _collisions(model, data, world, names)
     height = _support_graph(model, data, world, names)
+    if request.mode == "move":
+        _movable(pg, world, names)
+        saved = fresh_data(model)
+        _collisions(model, saved, world, names)
+        _support_graph(model, saved, world, names)
     anchor = (
         sum(member.pos[0] for member in members) / len(members),
         sum(member.pos[1] for member in members) / len(members),
@@ -314,9 +332,11 @@ def _prepare(pg, request: Prepare):
         _pose_digest(model, data, members),
         anchor,
         members,
+        request.mode,
     )
     pg._play_group = prepared
     return {
+        "mode": prepared.mode,
         "token": prepared.token,
         "pose_sha256": prepared.pose_sha256,
         "anchor": list(anchor),
@@ -338,7 +358,7 @@ def _prepare(pg, request: Prepare):
     }
 
 
-def _check_prepared(pg, request, prepared):
+def _check_prepared(pg, request, prepared, mode="copy"):
     if not isinstance(prepared, PreparedGroup) or (
         prepared.token,
         prepared.version,
@@ -346,6 +366,8 @@ def _check_prepared(pg, request, prepared):
         prepared.world_sha256,
     ) != (request.token, request.version, request.generation, request.world_sha256):
         raise PlaygroundError("that layout preparation is no longer available; select the props again")
+    if prepared.mode != mode:
+        raise PlaygroundError("that layout preparation belongs to another mode; select the props again")
     world = _check(pg, prepared.store, request)
     data = copy.copy(pg.session.data)
     mujoco.mj_forward(pg.session.model, data)
@@ -354,10 +376,22 @@ def _check_prepared(pg, request, prepared):
     return world
 
 
-def _clones(world, prepared, request) -> tuple[ObjectEntry, ...]:
-    taken = {entry.name for entries in (world.objects, world.robots, world.terrain) for entry in entries}
+def _transformed(member, prepared, request, name, *, moving=False) -> ObjectEntry:
     angle = math.radians(request.yaw)
     rot = np.array([[math.cos(angle), -math.sin(angle)], [math.sin(angle), math.cos(angle)]])
+    xy = rot @ (np.array(member.pos[:2]) - prepared.anchor[:2]) + request.pos[:2]
+    pos = [float(xy[0]), float(xy[1]), member.pos[2] + request.pos[2] - prepared.anchor[2]]
+    if not all(math.isfinite(value) and abs(value) <= 100 for value in pos):
+        raise PlaygroundError("the transformed layout extends beyond the supported coordinates")
+    yaw = member.yaw
+    if moving:
+        # Keep an author's full turns while taking the actual upright orientation.
+        yaw = member.entry.yaw + (yaw - member.entry.yaw + 180) % 360 - 180
+    return ObjectEntry.model_validate({**member.entry.model_dump(), "name": name, "pos": pos, "yaw": yaw + request.yaw})
+
+
+def _clones(world, prepared, request) -> tuple[ObjectEntry, ...]:
+    taken = {entry.name for entries in (world.objects, world.robots, world.terrain) for entry in entries}
     clones = []
     for member in prepared.members:
         count = 2
@@ -368,15 +402,7 @@ def _clones(world, prepared, request) -> tuple[ObjectEntry, ...]:
                 break
             count += 1
         taken.add(name)
-        xy = rot @ (np.array(member.pos[:2]) - prepared.anchor[:2]) + request.pos[:2]
-        pos = [float(xy[0]), float(xy[1]), member.pos[2] + request.pos[2] - prepared.anchor[2]]
-        if not all(math.isfinite(value) and abs(value) <= 100 for value in pos):
-            raise PlaygroundError("the copied layout extends beyond the supported coordinates")
-        clones.append(
-            ObjectEntry.model_validate(
-                {**member.entry.model_dump(), "name": name, "pos": pos, "yaw": member.yaw + request.yaw}
-            )
-        )
+        clones.append(_transformed(member, prepared, request, name))
     return tuple(clones)
 
 
@@ -439,7 +465,7 @@ def _restore_disk(store, saved, candidate_world, candidate_xml, artifacts):
     return external_world
 
 
-def _commit(pg, store, guard, change, validate, entries, *, undoing=False):
+def _commit(pg, store, guard, change, validate, entries, *, undoing=False, moving: MoveSource | None = None):
     """WorldStore owns the sole compile; post-compile validation precedes every persisted byte."""
     original = store.file.read_bytes()
     original_model, original_data = pg.session.model, pg.session.data
@@ -453,6 +479,7 @@ def _commit(pg, store, guard, change, validate, entries, *, undoing=False):
     candidate_bytes = None
     candidate_xml = None
     artifacts = ApplyArtifacts()
+    target_pose = None
 
     def same_runtime():
         return (
@@ -464,11 +491,13 @@ def _commit(pg, store, guard, change, validate, entries, *, undoing=False):
         )
 
     def post_compile(candidate, compiled):
-        nonlocal rollback, disk, candidate_bytes, candidate_xml
+        nonlocal rollback, disk, candidate_bytes, candidate_xml, target_pose
         _check(pg, store, guard)
         if not same_runtime():
             raise PlaygroundError("the simulation pose changed during preparation; select the layout again")
         validate(candidate, compiled)
+        if moving is not None:
+            target_pose = moving.pose if undoing else carry.take(compiled.model, fresh_data(compiled.model))
         _check(pg, store, guard)
         if store.file.read_bytes() != original or not same_runtime():
             raise PlaygroundError("the world or pose changed during validation; select the layout again")
@@ -479,13 +508,18 @@ def _commit(pg, store, guard, change, validate, entries, *, undoing=False):
 
     try:
         result = pg._edit(change, exact_carry=True, post_compile=post_compile, artifacts=artifacts)
+        if target_pose is not None:
+            names = {entry.name for entry in entries}
+            # A pivot's authored entry can stay equal while its live orientation changes.
+            # Apply every selected target, even those _edit would otherwise carry unchanged.
+            carry._apply(pg.session.model, pg.session.data, target_pose, lambda name: carry.owner(name) in names)
+            mujoco.mj_forward(pg.session.model, pg.session.data)
         pg.session.paused = True
         pg._places = None
         pg._play_group = None
-        receipt = (
-            None
-            if undoing
-            else GroupCopy(
+        receipt = None
+        if not undoing:
+            args = (
                 store,
                 pg.session.version,
                 pg.session.generation,
@@ -493,10 +527,11 @@ def _commit(pg, store, guard, change, validate, entries, *, undoing=False):
                 uuid4().hex,
                 entries,
             )
-        )
+            receipt = GroupMove(*args, moving) if moving is not None else GroupCopy(*args)
         pg._play_edit = receipt
         return {
-            "removed" if undoing else "objects": [entry.name for entry in entries],
+            "removed" if undoing and moving is None else "objects": [entry.name for entry in entries],
+            **({"moved": True} if moving is not None else {}),
             "version": pg.session.version,
             "generation": pg.session.generation,
             "paused": True,
@@ -554,6 +589,90 @@ def _duplicate(pg, request: Duplicate):
     return _commit(pg, prepared.store, request, change, validate, entries)
 
 
+def _movable(pg, world, names: set[str]) -> None:
+    for name in names:
+        if users := _task_users(world, name):
+            raise PlaygroundError(f"{name} is used by task {', '.join(users)}; edit the task first")
+    model = copy.copy(pg.session.model)
+    owners = _owners(model, world)
+    for data in (fresh_data(model), copy.copy(pg.session.data)):
+        supported = set().union(*(_supported(model, data, name, owners) for name in names)) - names
+        if supported:
+            raise PlaygroundError(f"the selected layout supports {', '.join(sorted(supported))}; include them first")
+
+
+def _validate_targets(pg, candidate, compiled, names, *, pos=None, pose=None) -> None:
+    saved = fresh_data(compiled.model)
+    current = copy.copy(saved)
+    live = carry.take(pg.session.model, pg.session.data)
+    carry._apply(compiled.model, current, live, lambda name: carry.owner(name) not in names)
+    if pose is not None:
+        carry._apply(compiled.model, current, pose, lambda name: carry.owner(name) in names)
+    mujoco.mj_forward(compiled.model, current)
+    for data in (saved, current):
+        _collisions(compiled.model, data, candidate, names)
+        height = _support_graph(compiled.model, data, candidate, names, target=pos is not None)
+        if pos is not None and abs(height - pos[2]) > PENETRATION:
+            raise PlaygroundError("the target point is not on the layout's horizontal support")
+
+
+def _move(pg, request: Duplicate):
+    prepared = pg._play_group
+    world = _check_prepared(pg, request, prepared, "move")
+    names = {member.entry.name for member in prepared.members}
+    _movable(pg, world, names)
+    if np.allclose(request.pos, prepared.anchor, rtol=0, atol=1e-9) and abs(math.remainder(request.yaw, 360)) < 1e-9:
+        return {
+            "objects": [obj.name for obj in world.objects if obj.name in names],
+            "moved": True,
+            "unchanged": True,
+            "version": pg.session.version,
+            "generation": pg.session.generation,
+            "paused": True,
+        }
+    targets = {
+        member.entry.name: _transformed(member, prepared, request, member.entry.name, moving=True)
+        for member in prepared.members
+    }
+    # Replacement preserves every original index, regardless of selection order.
+    entries = tuple(targets[obj.name] for obj in world.objects if obj.name in names)
+    source = carry.take(pg.session.model, pg.session.data)
+    before = MoveSource(
+        tuple(obj.model_copy(deep=True) for obj in world.objects if obj.name in names),
+        carry.Snapshot(free={name: value for name, value in source.free.items() if carry.owner(name) in names}),
+    )
+
+    def change(candidate):
+        _check_prepared(pg, request, prepared, "move")
+        candidate.objects[:] = [targets.get(obj.name, obj) for obj in candidate.objects]
+
+    def validate(candidate, compiled):
+        _check_prepared(pg, request, prepared, "move")
+        _movable(pg, world, names)
+        _validate_targets(pg, candidate, compiled, names, pos=request.pos)
+
+    return _commit(pg, prepared.store, request, change, validate, entries, moving=before)
+
+
+def _undo_move(pg, receipt: GroupMove, guard, world):
+    names = {obj.name for obj in receipt.entries}
+    _movable(pg, world, names)
+    targets = {obj.name: obj for obj in receipt.before.entries}
+
+    def change(candidate):
+        _check(pg, receipt.store, guard)
+        candidate.objects[:] = [targets.get(obj.name, obj) for obj in candidate.objects]
+
+    def validate(candidate, compiled):
+        _check(pg, receipt.store, guard)
+        _movable(pg, world, names)
+        _validate_targets(pg, candidate, compiled, names, pose=receipt.before.pose)
+
+    return _commit(
+        pg, receipt.store, guard, change, validate, receipt.before.entries, undoing=True, moving=receipt.before
+    )
+
+
 def _undo(pg, request: UndoEdit):
     receipt = pg._play_edit
     if not isinstance(receipt, GroupCopy) or (receipt.token, receipt.version, receipt.generation) != (
@@ -567,6 +686,8 @@ def _undo(pg, request: UndoEdit):
     names = {entry.name for entry in receipt.entries}
     if tuple(obj for obj in world.objects if obj.name in names) != receipt.entries:
         raise PlaygroundError("the copied props changed; this layout copy can no longer be undone")
+    if isinstance(receipt, GroupMove):
+        return _undo_move(pg, receipt, guard, world)
 
     def no_external_load():
         model = copy.copy(pg.session.model)
@@ -599,4 +720,6 @@ def handle(pg: Playground, message: dict) -> dict:
             return _prepare(pg, request)
         if isinstance(request, UndoEdit):
             return _undo(pg, request)
+        if action == "move_object_group":
+            return _move(pg, request)
         return _duplicate(pg, request)

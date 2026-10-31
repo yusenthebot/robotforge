@@ -1,0 +1,617 @@
+{
+  "schema_version": 1,
+  "acceptance": true,
+  "merge_hold": false,
+  "feature": "Guarded move/rotation of existing2-16 rigid props, latest group Undo, legacycopy default preserved",
+  "baseline_git": "6eee897b37d3d0c4d8bb597b4eb6a5e05f48440d",
+  "baseline_source_sha256": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441",
+  "candidate_source_sha256": "990c32a64519e2f205d891ee13af543249ec83aa025d1d94139fab2eb5df44de",
+  "frozen_input_count": 786,
+  "frozen_inputs_receipt_sha256": "a8c70829051accaabc462a86fdabdbfadf4dee2d2d0e48bc2b7c2766b3b45710",
+  "original_wip_count": 13,
+  "original_wip_exact": true,
+  "pytest": {
+    "source": "990c32a64519e2f205d891ee13af543249ec83aa025d1d94139fab2eb5df44de",
+    "groups": [
+      {
+        "name": "final-default-v1",
+        "passed": 4160,
+        "skipped": 129,
+        "failed": 0
+      },
+      {
+        "name": "final-browser-v1",
+        "passed": 373,
+        "skipped": 2,
+        "failed": 0
+      },
+      {
+        "name": "final-gpu-v1",
+        "passed": 9,
+        "skipped": 0,
+        "failed": 0
+      }
+    ],
+    "distinct_passed": 4542,
+    "overlap": 0,
+    "scoped_reruns_added": false
+  },
+  "canonical_cases": 7,
+  "canonical_report_sha256": "2d2ac1b333fd7fb12d927acc05c0348c111f51a8a0e1eb670ab9799c5955db16",
+  "package": {
+    "passed": true,
+    "source": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.16",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": null,
+      "git_dirty": false,
+      "active_source_sha256": "990c32a64519e2f205d891ee13af543249ec83aa025d1d94139fab2eb5df44de",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "installed_import": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/wheel-env-v1/lib/python3.12/site-packages/robotforge",
+    "product_files": 421,
+    "source_wheel_installed_exact": true,
+    "wheel_bytes": 4071055,
+    "wheel_sha256": "d6dabbb01eba6c2f03708408d2701d3efa28b9225ebe1e22c7a57c66408658f4",
+    "installed_feature_scope": "Exact package bytes and installed CLI/viewer/MCP smoke; source real group workflows are separately recorded."
+  },
+  "package_inventory_sha256": "607668efc78af18ec94dbfeb5dab7a84d7c8df2743730763d58b1016bf65825f",
+  "budget": {
+    "checked": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "file_sha256": "fa15d36e69aa2f9edd9b101d61b24a706021caf46a951d0cf9671031afb382a8",
+    "raw_receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/budget-v1/2026-11-01-6eee897-dirty-partial.json",
+    "raw_sha256": "3b96269c27106fabc385b0b2209263946072cf9b4f6472620787de7e2570dbca",
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3975.6396,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.9047,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.8
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5539,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.348
+        },
+        "fps": {
+          "value": 60.2831,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 1.6,
+          "unit": "ms",
+          "better": "lower",
+          "median": 1.5999999940395355,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1789,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 2.2,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.199999988079071,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 133.5,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 560.0
+        },
+        "idle_cpu_pct": {
+          "value": 5.0,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    }
+  },
+  "controls": {
+    "pairs": 16,
+    "checks": 20613,
+    "rgba_exact": true,
+    "model_array_count": 486,
+    "source_resolution": "Absolute names retained; relative Go2 paths bound to exact loaded cached MJCF declaration/meshdir/XMLhash/modelmesh-name and asset bytes/hash. Raw offsets/paths/npaths retained; only declared isolation path storage excluded from crosssource equality.",
+    "texture_limit": "Native transport and readable image hashes exact; unreadable GPU image metadata/diagnostics only.",
+    "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/controls-comparison-v2.json",
+    "sha256": "fe0a51f481844aafee29e53a932dd94629a79c099d09201b7a48190b582c9c4b",
+    "root_viewed_candidate_stills": 16,
+    "root_review_sha256": "3695810816c34587ccf68228a94412498b366b74dfd628f601a2b3b7731587d0",
+    "front_framing_limit": "Go2 manual-final front clips part of stack; ordinary fixed view retained; oblique/native workflow show it."
+  },
+  "group_cost": {
+    "passed": true,
+    "members": [
+      2,
+      16
+    ],
+    "raw_sha256": "e1a4299076bc0f9f1d9a1c1f18bdbefbcbaef8004251997498c0bdf13f276c49",
+    "operation_ms": {
+      "16": {
+        "prepare": 18.7,
+        "noop-full-turn": 9.51,
+        "occupied-reject": 63.89,
+        "same-token-valid-retry": 140.46,
+        "whole-group-undo": 137.28
+      },
+      "2": {
+        "prepare": 12.12,
+        "noop-full-turn": 2.26,
+        "occupied-reject": 23.72,
+        "same-token-valid-retry": 62.01,
+        "whole-group-undo": 61.32
+      }
+    },
+    "scope": "One-pass sequential actual backend calls, descriptive only, no UI/HTTP or universal speed claim."
+  },
+  "media": {
+    "films": {
+      "baseline-malo": {
+        "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/workflow-baseline-malo-v1/workflow.mp4",
+        "video_sha256": "168ef1ab16ab623dee37e8f5b5bf39bda84d48c0451472fcb3bef82362e5c483",
+        "duration_seconds": 8.4,
+        "decoded_frame_count": 252,
+        "raw_frame_count": 471
+      },
+      "baseline-go2": {
+        "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/workflow-baseline-go2-v1/workflow.mp4",
+        "video_sha256": "7faa94fb2bc649bd238e58321960fc9b205a1f1458d846e98798c938d904f8f9",
+        "duration_seconds": 8.1,
+        "decoded_frame_count": 243,
+        "raw_frame_count": 452
+      },
+      "candidate-malo": {
+        "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/workflow-candidate-malo-v1/workflow.mp4",
+        "video_sha256": "03f3c7623f4834af69dd57e672d8127bc98ffdd42077b3a33a761c56d2f20153",
+        "duration_seconds": 46.2,
+        "decoded_frame_count": 1386,
+        "raw_frame_count": 1570
+      },
+      "candidate-go2": {
+        "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/workflow-candidate-go2-v1/workflow.mp4",
+        "video_sha256": "f5c2f753c9e1a08416159966ad232f17d12d38fd016e1759cb33b41a56426bd9",
+        "duration_seconds": 37.7,
+        "decoded_frame_count": 1131,
+        "raw_frame_count": 1476
+      }
+    },
+    "full_decode": true,
+    "root_viewed_decoded_samples": 24,
+    "root_review_sha256": "514718281d85b21d387957898ea08e4e7905a4d4e9db67e5d4502db925638067",
+    "scope": "Timestamped complete workflows;30fps encoding resamples inputs;sampled visual review only, no every-frame or long-term stability claim."
+  },
+  "positive_receipts": {
+    "final-build-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-build-v1.receipt.json",
+      "sha256": "9ac96abd4ae6a70c01eedf6618ab1ac407eb85f8cfd59be6e745bc131fef8841",
+      "returncode": 0,
+      "seconds": 0.14738029200816527,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-inventory-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-inventory-v1.receipt.json",
+      "sha256": "1f5fcab6e904fa23e4a9d1b2996b6f17ddb93de51a98df83d1734c1681f6cf90",
+      "returncode": 0,
+      "seconds": 0.21272962499642745,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-lint-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-lint-v1.receipt.json",
+      "sha256": "5f7a055b3a2be2b0c9e1838b9fc48010ac9fb0d163d71de779a459d09a3d8a04",
+      "returncode": 0,
+      "seconds": 0.0599756249866914,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-format-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-format-v1.receipt.json",
+      "sha256": "e40dac8ad90cfdb7e5880b7e46d89bbc30d2ee41c30b135e7779c305b5980e37",
+      "returncode": 0,
+      "seconds": 0.06602279099752195,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-js-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-js-v1.receipt.json",
+      "sha256": "ea93ab1bdc483f9a330e52cf6876aefb9375039324bc24267cac25b2565a177a",
+      "returncode": 0,
+      "seconds": 0.6020800000114832,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-default-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-default-v1.receipt.json",
+      "sha256": "546f6bfddd080c77a0dca6a99983da5557d0c0315a2f407872eeb0c860212323",
+      "returncode": 0,
+      "seconds": 1203.1386979170202,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-browser-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-browser-v1.receipt.json",
+      "sha256": "516519d082d55f0e9edff1affa21447c8eab29d7e338af7b69384c7de054701f",
+      "returncode": 0,
+      "seconds": 1857.868947125011,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-gpu-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-gpu-v1.receipt.json",
+      "sha256": "e6d2839b3b440e1302aaf4e6936d7a259b0554fdfe5b2a1bbedf96866c54045a",
+      "returncode": 0,
+      "seconds": 38.54982241700054,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-framework-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-framework-v1.receipt.json",
+      "sha256": "e17425eeef0651cd7d0e06c193737c0642084ce20148c93848c5e33c95cda570",
+      "returncode": 0,
+      "seconds": 1.728151292016264,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-source-smoke-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-source-smoke-v1.receipt.json",
+      "sha256": "fce9b62a156938c59efa4013b8612650c8370c64e117a494b9a12223f44693c5",
+      "returncode": 0,
+      "seconds": 3.9601343749964144,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-install-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-install-v1.receipt.json",
+      "sha256": "8c41b690b9b08162bc82dea79c8fbca5d0dc4f86e5e8328950d6ae90a23ceb02",
+      "returncode": 0,
+      "seconds": 0.41811287502059713,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-package-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-package-v1.receipt.json",
+      "sha256": "4109785f36292fefaa96b747635385d72518456f4d69ae223f5370c5991b3f1d",
+      "returncode": 0,
+      "seconds": 0.9127085420186631,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-installed-real-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-installed-real-v2.receipt.json",
+      "sha256": "200e54d915ae04af95f4a7fbf5f46db7916402897190d8d7fba061fdc9d7d0d0",
+      "returncode": 0,
+      "seconds": 7.455514417000813,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-installed-smoke-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-installed-smoke-v1.receipt.json",
+      "sha256": "c851b1885aa984a42968962079fa11459bdc7119c77a7e0448f57fb0655407c7",
+      "returncode": 0,
+      "seconds": 5.7393226670101285,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "final-budget-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/final-budget-v1.receipt.json",
+      "sha256": "e35b6eafce0416be5b984648395d5e34e5c6d341bbf32aad5be670a6faa769d8",
+      "returncode": 0,
+      "seconds": 25.582512458000565,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "group-cost-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/group-cost-v1.receipt.json",
+      "sha256": "ee5a1dd7b10e6a0d0cdaca591df385d5fefeae37fb5f622762435dc2246ddabc",
+      "returncode": 0,
+      "seconds": 1.750754708016757,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-comparison-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-comparison-v2.receipt.json",
+      "sha256": "b848d52fc47df97ad81a97edfa4df676bd47f185e82c876e4a1360375bafab81",
+      "returncode": 0,
+      "seconds": 4.010774958995171,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-baseline-malo-original-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-baseline-malo-original-v2.receipt.json",
+      "sha256": "8bffd8ff41ac09afdf856e7d8daced0c700e8f1b1f6ab322b240744531a0570c",
+      "returncode": 0,
+      "seconds": 13.513515375001589,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-baseline-malo-manual-final-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-baseline-malo-manual-final-v2.receipt.json",
+      "sha256": "f2533b19a8fd474e4b4431c4fb380f2abf6534433cc97e98601a3679dfde5158",
+      "returncode": 0,
+      "seconds": 13.112267582997447,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-baseline-go2-original-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-baseline-go2-original-v2.receipt.json",
+      "sha256": "b38732822d46966e43c51e0f2d6891ae97fd4b6ea24e6b7daa3f4eb664e9eab4",
+      "returncode": 0,
+      "seconds": 10.729055458999937,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-baseline-go2-manual-final-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-baseline-go2-manual-final-v2.receipt.json",
+      "sha256": "eae50da938f401eb8df494dc408276e72e2cb0f3d09be601953dfe68509d0862",
+      "returncode": 0,
+      "seconds": 10.772159707994433,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-candidate-malo-original-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-candidate-malo-original-v2.receipt.json",
+      "sha256": "ea59c490361e93889478cc1a00d4a279fa2b4e191750cd7bdca43abc3df9cd10",
+      "returncode": 0,
+      "seconds": 13.123265166999772,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-candidate-malo-manual-final-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-candidate-malo-manual-final-v2.receipt.json",
+      "sha256": "874b2f61f87bba2e898e4f6c0a25d2054f18e0b99fcbd02b227f81ff252fa348",
+      "returncode": 0,
+      "seconds": 13.010980666993419,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-candidate-go2-original-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-candidate-go2-original-v2.receipt.json",
+      "sha256": "6a32e0f17fa3e4a7ee3499504d7f616abd099af34aecb485248114e84735d04f",
+      "returncode": 0,
+      "seconds": 10.805157583003165,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "fixed-candidate-go2-manual-final-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/fixed-candidate-go2-manual-final-v2.receipt.json",
+      "sha256": "e639798dc472f9e6f353e92d612d6ab976f4ae9288850242436796fec83000bf",
+      "returncode": 0,
+      "seconds": 10.840576332993805,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "baseline-malo-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/baseline-malo-v1.receipt.json",
+      "sha256": "2f32887bdeb82f8a7b8d6a6e42ba56a7765a27176f2cfa41efa61942ef830776",
+      "returncode": 0,
+      "seconds": 17.827610957989236,
+      "inputs_unchanged": true,
+      "input_count": 784
+    },
+    "baseline-go2-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/baseline-go2-v1.receipt.json",
+      "sha256": "d0310eb18932d07437d484c2641fd2ab87e43d16fe857718ca7d9dfb6e3ca070",
+      "returncode": 0,
+      "seconds": 15.198214292002376,
+      "inputs_unchanged": true,
+      "input_count": 784
+    },
+    "candidate-malo-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/candidate-malo-v1.receipt.json",
+      "sha256": "b8ffd1ef504bec1d15b6dc6682e512f945fa686276fa5cebdfd593f3dcbce2af",
+      "returncode": 0,
+      "seconds": 56.24087891698582,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "candidate-go2-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/candidate-go2-v1.receipt.json",
+      "sha256": "b2824035e6f83fbfa564ed3a6deed82614f04b18b792497ec109601527ccf5c2",
+      "returncode": 0,
+      "seconds": 45.9878517909965,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "encode-baseline-malo-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/encode-baseline-malo-v1.receipt.json",
+      "sha256": "e0f533655810297cc764e009cb2a6e350e807a353ae2d81fb0835bb05e4cdca0",
+      "returncode": 0,
+      "seconds": 2.8277108749898616,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "encode-baseline-go2-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/encode-baseline-go2-v1.receipt.json",
+      "sha256": "c93b0417fcc22a19bb73d8d0395ffaa01fa7ce4137895dbec98c9780d94aa551",
+      "returncode": 0,
+      "seconds": 2.938006750016939,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "encode-candidate-malo-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/encode-candidate-malo-v1.receipt.json",
+      "sha256": "96bdb2546ed61f2f6bf0ec8a8d17e74cd08e26dd9325eae66f93a924b5f868de",
+      "returncode": 0,
+      "seconds": 7.291174665995641,
+      "inputs_unchanged": true,
+      "input_count": 786
+    },
+    "encode-candidate-go2-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-group-move/encode-candidate-go2-v1.receipt.json",
+      "sha256": "65909f6ae17ddac6a98594b3e1131eed829ec194f8f5d46c5146bf7029ed2e1f",
+      "returncode": 0,
+      "seconds": 6.777666917012539,
+      "inputs_unchanged": true,
+      "input_count": 786
+    }
+  },
+  "retained_failures": [
+    "initial-red.receipt.json",
+    "final-installed-real-v1.receipt.json",
+    "fixed-baseline-go2-original-v1.receipt.json"
+  ],
+  "helper_corrections": [
+    "installed-helper-correction-v2.json",
+    "controls-path-correction-v2.json",
+    "controls-review-adjustment-v1.json"
+  ],
+  "optional_tools_available": {
+    "mypy": false,
+    "pyright": false,
+    "bandit": false,
+    "pip_audit": false
+  },
+  "goal_status": "active",
+  "scope_limits": [
+    "Local macOS acceptance; manual CI not triggered.",
+    "Other slow/optional suites not comprehensively run.",
+    "No new material/shader or action-success gain claim.",
+    "Placement validity only; no continuous transport path simulation."
+  ]
+}

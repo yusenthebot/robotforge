@@ -1,5 +1,17 @@
 # progress
 
+## Prop group move and scene rearrangement (2026-11-01)
+
+Paused2-16 upright rigid props move/rotate as one existing layout while preserving names/order/authored nonpose parameters,complete support and source/target guards,and latest exact authored/live-pose Undo.
+Legacycopy preparation default and single-prop interfaces remain;successfulmove/Undo use oneexistingcompilepipeline/load/version,with two native stages in this round’s actual fixtures.
+Frozen990c32a6/786inputs:4160default+373non-slow browser+9actualGL=4542distinct pytest,7canonical,source/fresh installed60-tool smoke,421source/wheel/installed exact files and original11/11install/viewer budgets pass.
+Installed actualMalo/Go2 occupied retry/move/Undo and2/16backend cost observations pass;four complete native before/after films fully decode,24root samples reviewed.
+16fixed-world RGBApairs and20613stored controls pass with original/manual-final worlds,two lights/ordinary views,DPR1,rawpath/name retention and strictGo2 MJCF declaration/file provenance;16candidate stills reviewed in four contact sheets.
+External helper import/path assumptions failed before operations/browser and are retained,then corrected without product edits;unreadable GPU image metadata remains separately bounded.
+Wheel4071055B(+1671),no assets/dependencies,13originalWIP exact;no continuous transport-path,shader-quality or action-success gain claim.
+[Report](docs/bench/2026-11-01-prop-group-move.md).
+Broad visual/lightweight/creative-play goal stays active;actualmaterial inventory has not established a qualified new shared-material defect,so do not retune rejected screens to manufacture one.
+
 ## Actual material namespace prerequisite (2026-11-01)
 
 Malo import has anonymous body materials and explicit RF sensor dressing,with no name-prefixed fallback geometry to reproduce the proposed naming defect.
