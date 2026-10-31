@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-01 concrete content screen: the fixed natural 256-square color/detail pair fails its preregistered image/module admission caps before scene rendering: 93,121/81,920 B and 124,791/114,688 B.
+  Actual procedural pixels match both retained original-world browser records; numeric moment/clipping guards pass, but no candidate image or video establishes visual benefit.
+  19 fresh scoped tests (two actual Chrome), Ruff/format/offline wheel pass; 421 package files/4,071,055 B/hash, 786 inputs and 13 original WIP files remain exact.
+  No product, full-suite, installed, performance or formal budget claim; report docs/bench/2026-11-01-concrete-content-screen.md/.json; broad goal active, action-success tuning deferred.
+
 - 2026-11-01 metric shadow screen: fixed external 20mm/cap16/PCF17 fails shared ordinary-view admission; two independent blinded reviews prefer only four Malo Studio pairs, with the other twelve neutral; root also marks Go2 neutral.
   Frozen 990c32a6/786 inputs: 16 pairs/64 phase frames/32,947 stored controls, 16 OFF plus 16 restores with exact main RGBA, 486 arrays/context/native files/depth bytes and fresh Malo RGB controlled; ten toggles add no resources, compiles or depth draws.
   38 scoped tests (17 actual Chrome), Ruff/format/offline wheel pass; 421 package files/4,071,055 B/hash unchanged and 13 original WIP files exact.

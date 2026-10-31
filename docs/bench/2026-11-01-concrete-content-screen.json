@@ -1,0 +1,471 @@
+{
+  "schemaVersion": 1,
+  "kind": "robotforge-rejected-concrete-content-admission-screen",
+  "date": "2026-11-01",
+  "baseCommit": "a37b269e050722a41e1c885c7e0a97d50a2b0bc9",
+  "evidenceRoot": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-diagnosis",
+  "decision": "rejected-before-candidate-scene-rendering",
+  "broadGoal": "active",
+  "actionSuccessTuning": false,
+  "productionChanged": false,
+  "candidateSceneImages": 0,
+  "newVideos": 0,
+  "candidateIntegrated": false,
+  "source": {
+    "asset": "smooth_concrete_floor",
+    "official_asset_page": "https://polyhaven.com/a/smooth_concrete_floor",
+    "license_page": "https://polyhaven.com/license",
+    "license": "CC0-1.0",
+    "author": "Dimitrios Savva",
+    "nominal_width_m": 2,
+    "api_sha256": "3fb47c2f2eb2f0745bb020c7943bb40a131d71bba2068eeaaac2a2708341caa7",
+    "items": [
+      {
+        "channel": "Diffuse",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/smooth_concrete_floor/smooth_concrete_floor_diff_1k.jpg",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-diagnosis/sources/smooth_concrete_floor_diff_1k.jpg",
+        "bytes": 861674,
+        "upstream_md5": "321efe0af2d0809ab958b78a008fa116",
+        "sha256": "079587ae48fb3e2bfb0d0f9209eb75dc26ee30e213403d96377a30f6f6955092"
+      },
+      {
+        "channel": "Displacement",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/smooth_concrete_floor/smooth_concrete_floor_disp_1k.jpg",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-diagnosis/sources/smooth_concrete_floor_disp_1k.jpg",
+        "bytes": 169690,
+        "upstream_md5": "cb75bc46f1c1f65f4d3eb5f134439585",
+        "sha256": "fa294b4eef0756f7bdd73ac7103e20be75b00d900c88a7cb2f653bd78e79b71f"
+      },
+      {
+        "channel": "Rough",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/smooth_concrete_floor/smooth_concrete_floor_rough_1k.jpg",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-diagnosis/sources/smooth_concrete_floor_rough_1k.jpg",
+        "bytes": 488628,
+        "upstream_md5": "d69e03eafb7442684db178e26896a1ee",
+        "sha256": "89082ede1efd3a60fd600a49e381a5822c89ee3bf75456ad883b3057190042a5"
+      }
+    ]
+  },
+  "preregistration": {
+    "frozenUtc": "2026-10-31T22:42:30Z",
+    "phase": "before candidate generation and before any candidate scene image",
+    "files": {
+      "RECIPE.md": "2c8a841499560eb26d09ed14e3a6e9873d98c0a70a033d56b3d09a17764d2731",
+      "prepare_concrete_tiles.py": "f66d6b530091db60385ab4c557aef569bb962cae125f49a65475f9f199dbec11",
+      "concrete-prototype.js": "86ac738b547d72f8a555d2a1ec388440a11a2311784f076fa22b203f442f81cf",
+      "PROTOTYPE.md": "356ae13e7188dd466f0b332be227f4df1220496c4a8b80e91cf29363507b1bd9",
+      "source-provenance-v1.json": "e3fe3761b31da3af974b5e7b258a6715071f0a911b7eaedcc5c626f15fec6302",
+      "source-files-api.json": "3fb47c2f2eb2f0745bb020c7943bb40a131d71bba2068eeaaac2a2708341caa7",
+      "procedural-baseline-v1/stats.json": "594e106c2df29821be2a8f00c964df9bbd9e6557b6599059b395fa86621b5a30",
+      "plan-proposal.md": "721c588310cb7d2176e6fd6771a681b60cecc17ca414d9bf19904087f82ed871"
+    },
+    "fixedSceneGate": {
+      "worlds": [
+        "original Malo",
+        "original Go2 dock"
+      ],
+      "views": [
+        "front",
+        "oblique"
+      ],
+      "lights": [
+        "studio",
+        "daylight"
+      ],
+      "dpr": [
+        1,
+        2
+      ],
+      "eyeToleranceMeters": 1e-12,
+      "otherCameraFields": "exact",
+      "decision": "Must improve useful concrete character on both robot paths; reject without visual recipe/camera/light retuning. Motion and cost only after stills qualify."
+    },
+    "review": {
+      "agent": "/root/concrete_helpers_review_nov1",
+      "verdict": "APPROVE static only",
+      "executed": false
+    },
+    "retainedBudgets": {
+      "imagesBytes": 81920,
+      "moduleBytes": 114688,
+      "wheelBytes": 4194304
+    },
+    "notClaimed": [
+      "bug fix",
+      "robot native PBR change",
+      "GPU performance",
+      "motion acceptance",
+      "sensor depth segmentation acceptance"
+    ]
+  },
+  "baseline": {
+    "schemaVersion": 1,
+    "kind": "robotforge-procedural-concrete-baseline",
+    "style": "concrete",
+    "width": 256,
+    "height": 256,
+    "color": {
+      "filename": "color.png",
+      "sha256": "b7356e4fb9633b13c662365f651993093a6b84dd081b38fd5db9e713368aa88f",
+      "bytes": 16213,
+      "mode": "RGB",
+      "meanLinear": 0.9136439440479862,
+      "stdLinear": 0.020625750801262315
+    },
+    "detail": {
+      "filename": "detail.png",
+      "sha256": "22d7548c32445c9f6a2ee96e5e7412e0a2023100b460217897f75f806b12c4c0",
+      "bytes": 57086,
+      "mode": "RGB",
+      "heightMeanEncoded": 0.509315221449908,
+      "heightStdEncoded": 0.15114864108092907,
+      "roughnessMeanEncoded": 0.8797149059819243,
+      "roughnessStdEncoded": 0.007729600798715205
+    },
+    "browserProof": {
+      "malo": {
+        "source": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-malo-v3/baseline-dpr1-studio-front-extra.json",
+        "sha256": "653b7c320476a6f434662d8359c53114ba36e277d0ff8cb284a7e7bdffd7be4d",
+        "rgba": {
+          "color": "066fb049e4beb91523b4186a0f22b946eb884aacf753d37e0a02e7cb044bfa5f",
+          "detail": "520848c35020064f7e6ec809d03bdf1bde1302b2757eea3c146d6087303113cd"
+        }
+      },
+      "go2": {
+        "source": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-shared-surface-baseline/shadow-go2-v3/baseline-dpr1-studio-front-extra.json",
+        "sha256": "7485923682a8c96036f83a3b5c81c7d9bc7a7d7d7de940dd4c77ec51a6125589",
+        "rgba": {
+          "color": "066fb049e4beb91523b4186a0f22b946eb884aacf753d37e0a02e7cb044bfa5f",
+          "detail": "520848c35020064f7e6ec809d03bdf1bde1302b2757eea3c146d6087303113cd"
+        }
+      }
+    }
+  },
+  "candidate": {
+    "outputs": {
+      "color.jpg": {
+        "sha256": "771ea2ac4c693ab006528f8f0f16bbbb97ce9cb883036248ae8223846282b2ee",
+        "bytes": 6569
+      },
+      "detail.png": {
+        "sha256": "a394e4286fb000618a38559093b70c661325f538a1bc98805fa6b8d0781cc306",
+        "bytes": 86552
+      },
+      "candidate-tiles.js": {
+        "sha256": "ad40a94546d3894f132f076e05f710e66dc6cacaf91ee66ccd183532d0f15c55",
+        "bytes": 124791
+      }
+    },
+    "budgets": {
+      "imagesBytes": 93121,
+      "imagesCapBytes": 81920,
+      "moduleBytes": 124791,
+      "moduleCapBytes": 114688
+    },
+    "decodedGuards": {
+      "color": {
+        "decoded": {
+          "min": 0.8307698767746546,
+          "max": 1.0,
+          "mean": 0.9136863074821044,
+          "std": 0.0196794589882871,
+          "p1": 0.8631572134541023,
+          "p5": 0.8796223968878317,
+          "p50": 0.9130986517934192,
+          "p95": 0.9473065367331999,
+          "p99": 0.9559733532492861
+        },
+        "relativeMeanError": 4.6367553130810535e-05,
+        "relativeStdError": 0.04587914505964563
+      },
+      "height": {
+        "decoded": {
+          "min": 0.0,
+          "max": 1.0,
+          "mean": 0.5092581954656863,
+          "std": 0.15114429678913957,
+          "p1": 0.15294117647058825,
+          "p5": 0.26666666666666666,
+          "p50": 0.4980392156862745,
+          "p95": 0.7725490196078432,
+          "p99": 0.9215686274509803
+        },
+        "relativeMeanError": 0.00011196599241503069,
+        "relativeStdError": 2.8741851454516798e-05
+      },
+      "roughness": {
+        "decoded": {
+          "min": 0.803921568627451,
+          "max": 0.9215686274509803,
+          "mean": 0.8797139485677087,
+          "std": 0.007807510281993211,
+          "p1": 0.8627450980392157,
+          "p5": 0.8666666666666667,
+          "p50": 0.8784313725490196,
+          "p95": 0.8941176470588236,
+          "p99": 0.8980392156862745
+        },
+        "relativeMeanError": 1.0883232841596424e-06,
+        "relativeStdError": 0.01007936700831391
+      }
+    },
+    "clippedPercent": {
+      "color": 0.01068115234375,
+      "height": 0.4486083984375,
+      "roughness": 0.0
+    },
+    "failure": "fixed image/module byte cap exceeded; recipe forbids quality adjustment",
+    "preservationMethod": "Unchanged frozen generator replay; exception-frame locals retained after the same guard failure. No recipe or budget mutation."
+  },
+  "freshScopedAudit": {
+    "sourceInputs": 786,
+    "sourceInputsExact": true,
+    "activeSourceSha256": "990c32a64519e2f205d891ee13af543249ec83aa025d1d94139fab2eb5df44de",
+    "packageFiles": 421,
+    "packageSourceAndPriorExact": true,
+    "wheelBytes": 4071055,
+    "wheelSha256": "d6dabbb01eba6c2f03708408d2701d3efa28b9225ebe1e22c7a57c66408658f4",
+    "originalHead": "ce2199f0e56f716c5046e7d86ad0b5651e599c75",
+    "originalBranch": "feat/copy-whole-robot",
+    "originalWipCount": 13,
+    "originalWipExact": true,
+    "pytestCases": 19,
+    "pytestCasesByClass": {
+      "tests.test_viewer_textures": 17,
+      "tests.test_viewer_concrete_browser": 2
+    },
+    "receipts": {
+      "diagnose-rejected-concrete-v1.receipt.json": {
+        "returncode": 0,
+        "seconds": 1.3569577080197632,
+        "inputsUnchanged": true
+      },
+      "generate-concrete-v1.receipt.json": {
+        "returncode": 2,
+        "seconds": 1.378952582977945,
+        "inputsUnchanged": true
+      },
+      "ruff-check-v1.receipt.json": {
+        "returncode": 0,
+        "seconds": 0.10848291701404378,
+        "inputsUnchanged": true
+      },
+      "ruff-format-v1.receipt.json": {
+        "returncode": 0,
+        "seconds": 0.06617220799671486,
+        "inputsUnchanged": true
+      },
+      "concrete-scoped-tests-v1.receipt.json": {
+        "returncode": 0,
+        "seconds": 22.10662949999096,
+        "inputsUnchanged": true
+      },
+      "offline-wheel-v1.receipt.json": {
+        "returncode": 0,
+        "seconds": 0.15574970800662413,
+        "inputsUnchanged": true
+      }
+    },
+    "scope": "Scoped unchanged-product validation and package equality; rejected candidate not integrated or rendered."
+  },
+  "review": {
+    "producerAndPrototype": "APPROVE static only by /root/concrete_helpers_review_nov1",
+    "captureAndComparator": "Incomplete; unused. Actual source validation after imports must be fixed before future reuse."
+  },
+  "notClaimed": [
+    "fresh original-world Malo/Go2 images",
+    "candidate visual gain or regression",
+    "candidate GPU or sensor acceptance",
+    "candidate motion stability",
+    "fresh full suite",
+    "installed smoke",
+    "formal performance/budget validation",
+    "native zoom",
+    "Windows",
+    "quality release"
+  ],
+  "optionalToolsUnavailable": [
+    "mypy",
+    "pyright",
+    "bandit",
+    "pip-audit"
+  ],
+  "artifacts": {
+    "PROTOTYPE.md": {
+      "sha256": "356ae13e7188dd466f0b332be227f4df1220496c4a8b80e91cf29363507b1bd9",
+      "bytes": 4641
+    },
+    "RECIPE.md": {
+      "sha256": "2c8a841499560eb26d09ed14e3a6e9873d98c0a70a033d56b3d09a17764d2731",
+      "bytes": 8433
+    },
+    "closure-audit-v1.json": {
+      "sha256": "398d305f3bbeca4ccd206741b1301b78ffd3ec2ee2d5e9ee542bf9efecd6f903",
+      "bytes": 1589
+    },
+    "concrete-prototype.js": {
+      "sha256": "86ac738b547d72f8a555d2a1ec388440a11a2311784f076fa22b203f442f81cf",
+      "bytes": 14937
+    },
+    "concrete-scoped-tests-v1.log": {
+      "sha256": "2fa3eb1f6358bd392ab1540d5f37faa23b480ed6be100d6e0063b9e52caa15db",
+      "bytes": 100
+    },
+    "concrete-scoped-tests-v1.receipt.json": {
+      "sha256": "4e6d22b4453ccc798219e3648384e4b566ba7aefba0a3588995bca227a587072",
+      "bytes": 87814
+    },
+    "concrete-scoped-tests-v1.xml": {
+      "sha256": "84b4e51c0a537a4e9650eb5d47d73e280dbd440a6ccc54831fec46ffa6e620d9",
+      "bytes": 2711
+    },
+    "concrete_capture.py": {
+      "sha256": "c42a97b73bb45c58b3d96f85bf4770bd1fa55813af8e0a8b411ab24f3dfcce97",
+      "bytes": 48137
+    },
+    "concrete_compare.py": {
+      "sha256": "1e3029ae7ac8d58f8a44ee90454aa64315eead61ce0d336af49e0e773fe763f6",
+      "bytes": 31694
+    },
+    "diagnose-rejected-concrete-v1.log": {
+      "sha256": "67e10b4e2c1c3be105b35b3c1340c12b65932df639fb6b6c2d0b679f90537b30",
+      "bytes": 1502
+    },
+    "diagnose-rejected-concrete-v1.receipt.json": {
+      "sha256": "2d79e5e4711e583aabc28d7d24b070e2ad7e22cba16a598bd93e7aad013ca1ee",
+      "bytes": 87680
+    },
+    "generate-concrete-v1.log": {
+      "sha256": "3a1a68b4d807a8a01342621902eb19a81ff65ebe2f961b217cb57bc5c3c0d05d",
+      "bytes": 348
+    },
+    "generate-concrete-v1.receipt.json": {
+      "sha256": "a000a285536c39be0763ab21083676553f2fa5a6109cc2f61526e4fe35dfb703",
+      "bytes": 88260
+    },
+    "offline-wheel-v1.log": {
+      "sha256": "aa67f345aadb9d6e51c59051845936c1a9aec7e5c46e21d96a3144664b775d64",
+      "bytes": 178
+    },
+    "offline-wheel-v1.receipt.json": {
+      "sha256": "ca91fe0196eed11ca7fa01ecc4c9c74d923891c7c7fe5a0b030b46d3a3b66eff",
+      "bytes": 87732
+    },
+    "plan-proposal.md": {
+      "sha256": "721c588310cb7d2176e6fd6771a681b60cecc17ca414d9bf19904087f82ed871",
+      "bytes": 15805
+    },
+    "prepare_concrete_tiles.py": {
+      "sha256": "f66d6b530091db60385ab4c557aef569bb962cae125f49a65475f9f199dbec11",
+      "bytes": 20114
+    },
+    "preregistered-content-v1.json": {
+      "sha256": "3d8c6a31f5845bca109449bd49af8c71ed6c44fd78c063e2837b00ba49a6abd4",
+      "bytes": 1790
+    },
+    "preserved-original-wip.json": {
+      "sha256": "0f98dbea40aa78b883903263d7c294662976c67a8d290b4ce227233997c33988",
+      "bytes": 1453
+    },
+    "procedural-baseline-v1/color.png": {
+      "sha256": "b7356e4fb9633b13c662365f651993093a6b84dd081b38fd5db9e713368aa88f",
+      "bytes": 16213
+    },
+    "procedural-baseline-v1/color.rgba": {
+      "sha256": "066fb049e4beb91523b4186a0f22b946eb884aacf753d37e0a02e7cb044bfa5f",
+      "bytes": 262144
+    },
+    "procedural-baseline-v1/detail.png": {
+      "sha256": "22d7548c32445c9f6a2ee96e5e7412e0a2023100b460217897f75f806b12c4c0",
+      "bytes": 57086
+    },
+    "procedural-baseline-v1/detail.rgba": {
+      "sha256": "520848c35020064f7e6ec809d03bdf1bde1302b2757eea3c146d6087303113cd",
+      "bytes": 262144
+    },
+    "procedural-baseline-v1/node-receipt.json": {
+      "sha256": "36dbe0385347db156207736f2a328d734efa62b26ddd216aa4a95ab79534a182",
+      "bytes": 781
+    },
+    "procedural-baseline-v1/stats.json": {
+      "sha256": "594e106c2df29821be2a8f00c964df9bbd9e6557b6599059b395fa86621b5a30",
+      "bytes": 1653
+    },
+    "procedural_baseline.mjs": {
+      "sha256": "20d2b2748f170e3301905f3991a15ae955aeb11c78d76427f1c1eb7c34cf4b2b",
+      "bytes": 2709
+    },
+    "procedural_baseline.py": {
+      "sha256": "e2e77ac4cc93ad9a7c0704b3df5dfb7acf5f6dcd8d9ca0cac6524f190075fbc7",
+      "bytes": 2739
+    },
+    "rejected-generated-v1/candidate-tiles.js": {
+      "sha256": "ad40a94546d3894f132f076e05f710e66dc6cacaf91ee66ccd183532d0f15c55",
+      "bytes": 124791
+    },
+    "rejected-generated-v1/color.jpg": {
+      "sha256": "771ea2ac4c693ab006528f8f0f16bbbb97ce9cb883036248ae8223846282b2ee",
+      "bytes": 6569
+    },
+    "rejected-generated-v1/detail.png": {
+      "sha256": "a394e4286fb000618a38559093b70c661325f538a1bc98805fa6b8d0781cc306",
+      "bytes": 86552
+    },
+    "rejected-generated-v1/rejection.json": {
+      "sha256": "2b02a76b9bd4a43e29b0516c87029796548afe0c1ea9fd25d82ba02af85a99d3",
+      "bytes": 20581
+    },
+    "rejected_diagnostic.py": {
+      "sha256": "38bf5323b60d115945a097a4623429af0d450a1346c31c3f1ef89e8892214d52",
+      "bytes": 2832
+    },
+    "ruff-check-v1.log": {
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    "ruff-check-v1.receipt.json": {
+      "sha256": "587ea376ba825ac584bcbb577960031f45da5de5a8a38d0b86faab07f5a10fc4",
+      "bytes": 87592
+    },
+    "ruff-format-v1.log": {
+      "sha256": "541dab9a5d87bab781f95bd3dde03e8051c18124a0a5998b54f5a707f089784c",
+      "bytes": 28
+    },
+    "ruff-format-v1.receipt.json": {
+      "sha256": "05978da71f477cd5b9c565d53d60a48b66155f6622a08bd3ebc5005674f577f5",
+      "bytes": 87608
+    },
+    "run.py": {
+      "sha256": "c1fabaebaab7a2549315a2fc237cebee11d9e8b3a5605a36fc928eac9701753f",
+      "bytes": 1243
+    },
+    "source-files-api.json": {
+      "sha256": "3fb47c2f2eb2f0745bb020c7943bb40a131d71bba2068eeaaac2a2708341caa7",
+      "bytes": 28892
+    },
+    "source-provenance-v1.json": {
+      "sha256": "e3fe3761b31da3af974b5e7b258a6715071f0a911b7eaedcc5c626f15fec6302",
+      "bytes": 1762
+    },
+    "sources/smooth_concrete_floor_diff_1k.jpg": {
+      "sha256": "079587ae48fb3e2bfb0d0f9209eb75dc26ee30e213403d96377a30f6f6955092",
+      "bytes": 861674
+    },
+    "sources/smooth_concrete_floor_disp_1k.jpg": {
+      "sha256": "fa294b4eef0756f7bdd73ac7103e20be75b00d900c88a7cb2f653bd78e79b71f",
+      "bytes": 169690
+    },
+    "sources/smooth_concrete_floor_rough_1k.jpg": {
+      "sha256": "89082ede1efd3a60fd600a49e381a5822c89ee3bf75456ad883b3057190042a5",
+      "bytes": 488628
+    },
+    "wheel-v1/.gitignore": {
+      "sha256": "684888c0ebb17f374298b65ee2807526c066094c701bcc7ebbe1c1095f494fc1",
+      "bytes": 1
+    },
+    "wheel-v1/robotforge-0.0.1-py3-none-any.whl": {
+      "sha256": "d6dabbb01eba6c2f03708408d2701d3efa28b9225ebe1e22c7a57c66408658f4",
+      "bytes": 4071055
+    }
+  }
+}

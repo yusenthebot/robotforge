@@ -1,5 +1,15 @@
 # progress
 
+## Concrete content admission screen (2026-11-01)
+
+The fixed natural-concrete recipe passes its numerical moment/clipping guards but fails candidate-specific image/module caps before scene rendering: 93,121 versus 81,920 B and 124,791 versus 114,688 B.
+No recipe, quality or budget adjustment follows; unchanged diagnostic replay preserves rejected bytes separately, without visual or project-budget claims.
+The CPU probe's actual procedural RGBA exactly matches both retained original-world browser records; no shared normal/PBR bug is established by source tracing.
+19 fresh scoped tests including two actual Chrome cases, Ruff/format and offline wheel pass; 421 package files, 786 inputs and 13 original WIP files remain exact.
+Unused capture drafts retain an incomplete review and pre-import source-validation ordering limitation; no candidate images, movie, sensor/motion/performance or product acceptance is claimed.
+[Report](docs/bench/2026-11-01-concrete-content-screen.md).
+The broad goal stays active; establish compact material-channel encoding before another fixed content screen, while preserving prior rejected results and deferring action-success tuning.
+
 ## Shared metric shadow-footprint screen (2026-11-01)
 
 The external fixed 20mm light-plane radius/cap16/vendored 17-position PCF candidate is not promoted; two independent blinded reviewers prefer four Malo Studio comparisons and mark the other twelve neutral, while root also finds no useful Go2 ordinary-view gain.
