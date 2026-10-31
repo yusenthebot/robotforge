@@ -1,0 +1,215 @@
+{
+  "date": "2026-11-01",
+  "decision": "rejected at actual-asset prerequisite; product unchanged",
+  "goal_status": "active",
+  "base_commit": "1f918713c5e71b4503fd3b9368d965a0b1d7d051",
+  "source_sha256": "3cb6f45092f91fa9f7cd5d84841a613980123e878beeaebea3b6e4312ff22441",
+  "inputs": 783,
+  "protected_wip": 13,
+  "planned": {
+    "assets": [
+      "malo",
+      "go2"
+    ],
+    "stills": 16,
+    "pairs": 8
+  },
+  "actual": {
+    "assets": [
+      "malo"
+    ],
+    "stills": 8,
+    "pairs": 4,
+    "model_array_fields": 486,
+    "additional_model_structs": [
+      "opt",
+      "vis",
+      "stat"
+    ],
+    "control_checks": 4112,
+    "tests": 43,
+    "backend_tests": 38,
+    "browser_tests": 5,
+    "tests_by_class": {
+      "tests.test_viewer_native_pbr": 12,
+      "tests.test_viewer_native_pbr_browser": 5,
+      "tests.test_prop_materials": 26
+    }
+  },
+  "comparison": {
+    "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/v1/comparison-v2.json",
+    "sha256": "7bfddd42f33eabccc18f1bb2c45853ec33d3651630779eb4b2df3ccc100a51e2",
+    "controls_passed": true,
+    "prerequisite_stop": true,
+    "two_asset_approval": false,
+    "go2": "not run"
+  },
+  "pairs": [
+    {
+      "light": "studio",
+      "view": "front",
+      "canvas_sha256": "67b23b89312d7e95edc3238117798787d499e4c98fc0755d3817329c840cb448",
+      "changed_pixels": 0,
+      "sensor_canvas_hashes_equal": true
+    },
+    {
+      "light": "studio",
+      "view": "oblique",
+      "canvas_sha256": "5beabf9df9c3f14e60bc551d55c438e4c0b972d7d573054653c8c620d94ed3aa",
+      "changed_pixels": 0,
+      "sensor_canvas_hashes_equal": true
+    },
+    {
+      "light": "daylight",
+      "view": "front",
+      "canvas_sha256": "66a8105e0bb367d470dfd05c0d411caed1d82b46ef62eb52817074fcaaca0089",
+      "changed_pixels": 0,
+      "sensor_canvas_hashes_equal": true
+    },
+    {
+      "light": "daylight",
+      "view": "oblique",
+      "canvas_sha256": "c542496884a623eb3943c2f9b63fbca1925b1fed76dfd24ca7f814b75e177661",
+      "changed_pixels": 0,
+      "sensor_canvas_hashes_equal": true
+    }
+  ],
+  "root_visual_review": {
+    "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/root-visual-review.json",
+    "sha256": "39bbe0aa69848415b4c7071e669c2ab171d74fe1d10938bd92a16dd4b80fc681",
+    "stills": 8
+  },
+  "wheel": {
+    "wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/dist/robotforge-0.0.1-py3-none-any.whl",
+    "bytes": 4069384,
+    "sha256": "cee12b184b8b166d3f0f6bf36e8e6c2af574d49e3841071a5165ff7baf2edd59",
+    "source_exact_files": 421,
+    "initial_static_assertion": "counted35ZIPdirectoriesasfiles; correctedfilefilter; buildunchanged"
+  },
+  "receipts": {
+    "capture-malo-unit-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/capture-malo-unit-v1.receipt.json",
+      "sha256": "ed4100727a78f3fcc801031e3227d3fd75fc91b0f37d77deba105085bb4b970d",
+      "command": [
+        "uv",
+        "run",
+        "--offline",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/screen_capture.py",
+        "malo",
+        "unit_demo",
+        "v1"
+      ],
+      "seconds": 16.085330709000118
+    },
+    "capture-malo-steel-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/capture-malo-steel-v1.receipt.json",
+      "sha256": "0b07fd65ca69ee5e44dfc18160d3ade96a8f529d2949d535d339cc281f5c55e4",
+      "command": [
+        "uv",
+        "run",
+        "--offline",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/screen_capture.py",
+        "malo",
+        "steel_bot",
+        "v1"
+      ],
+      "seconds": 12.12676379198092
+    },
+    "compare-malo-stop-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/compare-malo-stop-v2.receipt.json",
+      "sha256": "d063d14bb62b5cc000fb718ed5c1c51b1916733dfd65432cbc8010ef80fb4bb0",
+      "command": [
+        "uv",
+        "run",
+        "--offline",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/compare_screen.py",
+        "v1",
+        "--kinds",
+        "malo",
+        "--revision",
+        "v2"
+      ],
+      "seconds": 1.4558727919938974
+    },
+    "offline-wheel": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/offline-wheel.receipt.json",
+      "sha256": "4f1700decca7f54f4ffd3dbebdd5133e0de731324c335e4b319d97f85ad126c2",
+      "command": [
+        "uv",
+        "build",
+        "--wheel",
+        "--offline",
+        "--out-dir",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/dist"
+      ],
+      "seconds": 0.14330566697753966
+    },
+    "ruff": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/ruff.receipt.json",
+      "sha256": "bf1e5543c11358a11001150673ec5cc69b4d82c88efa78327fdea1582aa0fefe",
+      "command": [
+        "uv",
+        "run",
+        "--offline",
+        "ruff",
+        "check",
+        "."
+      ],
+      "seconds": 0.10917558299843222
+    },
+    "format": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/format.receipt.json",
+      "sha256": "ecf573f31ef257f94d740a4c873fc0ba394e73f926b13c67abab205442cd7fc7",
+      "command": [
+        "uv",
+        "run",
+        "--offline",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "seconds": 0.07220270799007267
+    },
+    "material-contracts": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/material-contracts.receipt.json",
+      "sha256": "ff18476c0da8a6131bd6f9c12b4a98c5f939ac1ce514366107a61f584e2aa7e5",
+      "command": [
+        "uv",
+        "run",
+        "--offline",
+        "pytest",
+        "-q",
+        "-m",
+        "not slow",
+        "tests/test_viewer_native_pbr.py",
+        "tests/test_viewer_native_pbr_browser.py",
+        "tests/test_prop_materials.py",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/material-contracts.xml"
+      ],
+      "seconds": 12.42888129199855
+    }
+  },
+  "retained_failures": [
+    {
+      "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-material-namespace/v1/comparison.json",
+      "sha256": "19fbd67cac4129f9ed8f47a891dbc458899ec72f34719b07b42e3e858a55a5b0",
+      "failure": "Four scene world digests differ causally with instance-name-only saved YAML; v2 validates raw inputs before normalizing precisely those fields."
+    },
+    {
+      "failure": "Initial wheel inventory assertion counted35 ZIPdirectory entries as packagefiles; corrected filter proves421 exact files; same build/hash retained."
+    }
+  ],
+  "limits": [
+    "No product material/shader/API/physics changes.",
+    "No Go2 run, two-asset result, new movie, full suite, installed smoke, GPU suite or formal cost/budget claim.",
+    "No new dependencies/assets/passes; fresh wheel byte identical to previous baseline.",
+    "Names buffers normalized only declared alias substitutions; name lookup index validated semantically; original raw data retained.",
+    "Four derived YAML guard digests validated independently before normalization; camera1e-10, source assets/model state exact.",
+    "Runtime UUID/id exclusions are named; raw values retained; captured plugin lists independently empty/equal."
+  ],
+  "next": "Plan group prop move/rotation for rearranging existing scenes using current strict group support/collision/version/Undo guards; first verify real Malo/Go2 workflows and costs. Continue actual asset inventories before any shared material change; action-success tuning deferred."
+}
