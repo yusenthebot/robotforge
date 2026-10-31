@@ -16,7 +16,7 @@ import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook 
 import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 import { canMove, moveAxes, moveSpeed } from "./padmap.js";
-import { createPlacementGesture, initCreation } from "./creation.js";
+import { createPlacementGesture, initCreation, isObjectGroup } from "./creation.js";
 import { placementCoordinates } from "./placement-coordinate.js";
 import { createPlacementPreview } from "./placement-preview.js";
 import { createScreenDrive } from "./screen-drive.js";
@@ -2704,8 +2704,10 @@ function renderObjectSelectionControls() {
   $("object-surface").hidden = group || !objectSelection || !Object.hasOwn(objectSelection, "surface_material");
   for (const id of ["object-surface", "object-surface-apply", "object-surface-material"]) $(id).disabled = busy || !objectSelection;
   $("object-edit-done").disabled = busy;
-  $("object-group-copy").hidden = !group;
-  $("object-group-copy").disabled = busy || !paused || objectGroupSelection.size < 2 || !objectSelectionCurrent();
+  for (const id of ["object-group-copy", "object-group-move"]) {
+    $(id).hidden = !group;
+    $(id).disabled = busy || !paused || objectGroupSelection.size < 2 || !objectSelectionCurrent();
+  }
   if (group) {
     $("object-edit-title").textContent = t("prop_group_count", { count: objectGroupSelection.size });
     $("object-edit-hint").textContent = t(paused ? "prop_group_hint" : "prop_group_pause_hint");
@@ -2813,7 +2815,7 @@ function pickObjectForEdit(point) {
 
 $("edit-objects").addEventListener("click", () => beginObjectSelection());
 $("select-object-group").addEventListener("click", beginObjectGroupSelection);
-$("object-group-copy").addEventListener("click", async () => {
+async function beginObjectGroup(mode) {
   if (busy || !selectingObjectGroup || !paused || creationGesture.active()
       || objectGroupSelection.size < 2 || !objectSelectionCurrent()) return;
   const names = [...objectGroupSelection.keys()];
@@ -2821,11 +2823,13 @@ $("object-group-copy").addEventListener("click", async () => {
   creationGesture.invalidate();
   const epoch = objectGroupEpoch, pointerEpoch = creationGesture.epoch();
   stopDriving(); endDrag();
-  await runChoice($("object-group-copy"), { type: "world", action: "prepare_object_group", names, ...guard }, {
+  await runChoice($(`object-group-${mode}`), { type: "world", action: "prepare_object_group", names, ...guard,
+    ...(mode === "move" ? { mode } : {}) }, {
     done: (data) => {
       if (!selectingObjectGroup || objectGroupEpoch !== epoch || creationGesture.epoch() !== pointerEpoch
           || creationGesture.active() || !paused || !objectSelectionCurrent()
           || data.version !== guard.version || data.generation !== guard.generation
+          || (mode === "move" ? data.mode !== "move" : data.mode !== undefined && data.mode !== "copy")
           || data.world_sha256 !== guard.world_sha256 || sceneDesc.object_edit?.world_sha256 !== guard.world_sha256
           || !/^[0-9a-f]{32}$/.test(data.token || "") || !/^[0-9a-f]{64}$/.test(data.pose_sha256 || "")
           || !Array.isArray(data.anchor) || data.anchor.length !== 3 || !data.anchor.every(Number.isFinite)
@@ -2854,10 +2858,12 @@ $("object-group-copy").addEventListener("click", async () => {
         found.add(node.userData.geom);
       });
       if (!previewParts.length || [...geoms].some((geom) => !found.has(geom))) throw new Error(t("create_scene_changed"));
-      creator.duplicateGroup({ ...data, previewParts });
+      creator.objectGroup({ ...data, previewParts }, mode);
     },
   });
-});
+}
+$("object-group-copy").addEventListener("click", () => beginObjectGroup("copy"));
+$("object-group-move").addEventListener("click", () => beginObjectGroup("move"));
 function finishObjectSelection() {
   if (busy) return;
   clearObjectSelection(); updateUndo(); updateEmpty(); renderDrive(); canvas.focus();
@@ -2923,12 +2929,17 @@ $("undo-edit").addEventListener("click", async () => {
   if (busy || (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit)) return;
   stopDriving(); endDrag();
   const robotStart = !!lastRobotEdit, terrainEdit = !!lastTerrainEdit;
-  const robotFinish = lastObjectEdit?.kind === "robot_surface";
-  const { kind: _kind, ...receipt } = lastTerrainEdit || lastRobotEdit || lastObjectEdit;
+  const selectedReceipt = lastTerrainEdit || lastRobotEdit || lastObjectEdit;
+  const robotFinish = selectedReceipt.kind === "robot_surface";
+  const groupMove = selectedReceipt.kind === "group-move";
+  const { kind: _kind, objects: groupObjects, ...receipt } = selectedReceipt;
   await runChoice($("undo-edit"), { type: "world", action: terrainEdit ? "undo_terrain_edit" : robotStart ? "undo_robot_start" : robotFinish ? "undo_robot_surface" : "undo_object_edit", ...receipt }, {
     done: async (data) => {
+      if (groupMove && (data.moved !== true || !validGroupObjects(data.objects, groupObjects?.length, groupObjects))) {
+        throw new Error(t("create_scene_changed"));
+      }
       await waitForCreation(data, true); lastObjectEdit = lastRobotEdit = lastTerrainEdit = null; updateUndo();
-      toast(t(Array.isArray(data.removed) ? "prop_group_removed" : terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : robotFinish ? "robot_surface_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed, count: data.removed?.length })); canvas.focus();
+      toast(t(groupMove ? "prop_group_move_undone" : Array.isArray(data.removed) ? "prop_group_removed" : terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : robotFinish ? "robot_surface_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed, count: groupMove ? data.objects.length : data.removed?.length })); canvas.focus();
     },
   });
 });
@@ -2976,10 +2987,16 @@ function waitForCreation(data, rendered = false, { focus = true } = {}) {
   });
 }
 
-function groupCopyUndo(data) {
+function validGroupObjects(objects, count, expected = null) {
+  return Array.isArray(objects) && objects.length === count
+    && objects.every((name) => typeof name === "string" && name.length > 0)
+    && new Set(objects).size === count && (!expected || objects.every((name) => expected.includes(name)));
+}
+
+function groupEditUndo(data, kind) {
   const receipt = data.undo_edit;
   return receipt?.version === data.version && receipt.generation === data.generation
-    && /^[0-9a-f]{32}$/.test(receipt.token || "") ? { ...receipt, kind: "group-copy" } : null;
+    && /^[0-9a-f]{32}$/.test(receipt.token || "") ? { ...receipt, kind, objects: data.objects.slice() } : null;
 }
 
 async function placeEntity(item, pos) {
@@ -2992,7 +3009,7 @@ async function placeEntity(item, pos) {
   }
   pos = pos.slice();
   const repeating = creator.repeating();
-  if (item.kind === "group-copy" && (!paused || !objectSelectionCurrent()
+  if (isObjectGroup(item) && (!paused || !objectSelectionCurrent()
       || item.version !== placementVersion || item.generation !== placementGeneration
       || item.world_sha256 !== sceneDesc.object_edit?.world_sha256)) { toast(t("create_scene_changed")); return; }
   if (repeating && !Number.isInteger(placementGeneration)) { toast(t("loading_scene")); return; }
@@ -3005,7 +3022,7 @@ async function placeEntity(item, pos) {
     : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
-    : item.kind === "group-copy" ? { action: "duplicate_object_group", token: item.token, world_sha256: item.world_sha256, yaw: item.yaw }
+    : isObjectGroup(item) ? { action: item.kind === "group-move" ? "move_object_group" : "duplicate_object_group", token: item.token, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "terrain-edit" ? { action: "edit_terrain", name: item.name, yaw_delta: item.yaw_delta, world_sha256: item.world_sha256 }
     : item.kind === "terrain" ? { action: "add_terrain", preset: item.name, yaw: item.yaw, world_sha256: placementWorldSha }
       : { action: "add_object", preset: item.name, size: item.scale, yaw: item.yaw,
@@ -3014,9 +3031,10 @@ async function placeEntity(item, pos) {
     frame: !repeating && (item.kind === "robot" || item.kind === "model"),
     progress: (event) => { if (placementSession === creator.session()) creator.progress(event.stage, event.fraction); },
     done: async (data) => {
-      if (item.kind === "group-copy" && (!Array.isArray(data.objects) || data.objects.length !== item.members.length
-          || data.objects.some((name) => typeof name !== "string" || !name)
-          || new Set(data.objects).size !== item.members.length || !Number.isInteger(data.generation))) {
+      if (isObjectGroup(item) && (!validGroupObjects(data.objects, item.members.length,
+          item.kind === "group-move" ? item.members.map((member) => member.name) : null)
+          || !Number.isInteger(data.version) || !Number.isInteger(data.generation)
+          || (item.kind === "group-move" && !data.unchanged && data.moved !== true))) {
         lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
@@ -3026,7 +3044,7 @@ async function placeEntity(item, pos) {
           lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
           cancelCreation(true); throw new Error(t("create_scene_changed"));
         }
-        cancelCreation(true); toast(t("terrain_unchanged")); return;
+        cancelCreation(true); toast(t(isObjectGroup(item) ? "prop_group_unchanged" : "terrain_unchanged")); return;
       }
       if (item.kind === "terrain-edit") lastTerrainEdit = data.undo_terrain_edit || null;
       // A committed terrain edit remains undoable even if its first displayed geometry times out.
@@ -3037,11 +3055,11 @@ async function placeEntity(item, pos) {
       }
       if (item.kind === "model") creator.progress("display");
       try {
-        await waitForCreation(data, item.kind === "group-copy" || item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || repeating || item.kind === "edit" || item.kind === "copy" || item.kind === "start", { focus: !repeating });
+        await waitForCreation(data, isObjectGroup(item) || item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || repeating || item.kind === "edit" || item.kind === "copy" || item.kind === "start", { focus: !repeating });
       } catch (error) {
-        if (item.kind === "group-copy") {
+        if (isObjectGroup(item)) {
           lastObjectEdit = error.displayTimeout && stateVersion === data.version && stateGeneration === data.generation
-            ? groupCopyUndo(data) : null;
+            ? groupEditUndo(data, item.kind) : null;
           lastAddition = lastRobotEdit = lastTerrainEdit = null;
           cancelCreation(true);
         }
@@ -3087,7 +3105,7 @@ async function placeEntity(item, pos) {
         placementWorldSha = info.world_sha256;
       }
       lastAddition = data.undo || null;
-      lastObjectEdit = item.kind === "group-copy" ? groupCopyUndo(data) : data.undo_edit || null;
+      lastObjectEdit = isObjectGroup(item) ? groupEditUndo(data, item.kind) : data.undo_edit || null;
       lastRobotEdit = data.undo_robot_start || null;
       lastTerrainEdit = data.undo_terrain_edit || null;
       creationClickUntil = performance.now() + 500;
@@ -3100,7 +3118,7 @@ async function placeEntity(item, pos) {
         creator.next(item.kind === "copy" ? { world_sha256: sceneDesc.object_edit.world_sha256 } : {});
         creationSurface = creationAnchor = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
-      toast(t(item.kind === "group-copy" ? "prop_group_copied" : item.kind === "terrain-edit" ? "terrain_edited" : item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain, count: data.objects?.length }));
+      toast(t(isObjectGroup(item) ? item.kind === "group-move" ? "prop_group_moved" : "prop_group_copied" : item.kind === "terrain-edit" ? "terrain_edited" : item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain, count: data.objects?.length }));
       canvas.focus();
     },
   });
@@ -3112,7 +3130,7 @@ async function placeEntity(item, pos) {
 function updateUndo() {
   $("undo-add").hidden = !lastAddition || creator.active() || selectingObjects || !!sceneDesc?.lesson;
   $("undo-edit").hidden = (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit) || creator.active() || selectingObjects || !!sceneDesc?.lesson;
-  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : lastObjectEdit?.kind === "group-copy" ? "undo_prop_group" : "undo_object_edit");
+  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : isObjectGroup(lastObjectEdit) ? lastObjectEdit.kind === "group-move" ? "undo_prop_group_move" : "undo_prop_group" : "undo_object_edit");
   $("undo-edit").disabled = busy;
   $("undo-add").disabled = busy;
   $("undo-add").title = lastAddition?.name || "";

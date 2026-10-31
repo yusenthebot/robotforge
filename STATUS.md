@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-01 prop group move: paused2-16 rigidprops can move/rotate together with same names/order/nonpose parameters, saved/live source-load/task/support/collision guards and latest exact-author/live-pose Undo;legacycopy default remains.
+  Frozen990c32a6/786inputs:4160default+373non-slow browser+9actualGL=4542distinct pytest,7canonical,source/fresh offline60-tool smoke,421exact package files,installed actualMalo/Go2 and original11/11install/viewer budgets pass.
+  Four complete native before/after films decode with24root samples;16exact fixed-world pairs/20613stored checks and2/16backend cost observations pass;relativeGo2 assetpaths strictly bind originalMJCF declarations/namedmesh/files,rawmetadata retained.
+  Wheel4071055B(+1671),no newassets/dependencies,13originalWIP exact;external import/path-assumption failures retained and corrected without product changes.
+  Report:docs/bench/2026-11-01-prop-group-move.md/.json;placement validity only,no transport-path/material-gain/action-success claim,broad goal active.
+
 - 2026-11-01 material namespace prerequisite: Actual Malo has no name-prefixed fallback geometry;8still/4pair subset is exact and planned Go2 is stopped,so no renderer/provenance candidate is promoted.
   4112stored controls,486top-level arrays plus opt/vis/stat,43targeted tests(5actual Chrome),Ruff and offline wheel pass;421files/4069384B/hash match prior package,783inputs/13WIP exact.
   Four causal saved-YAML guard digests require validated comparison normalization;first failure and corrected receipt retained.
