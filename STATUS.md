@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-01 sand prerequisite: eight actual Malo-floor/Go2-dock baseline frames pass source/physics/material/visibility/owned-cleanup controls, but root and independent ordinary-view review establish no shared content deficit; stop before a candidate.
+  Each derived run preserves481 model arrays and full observed state; original friction/ten physical arrays match. Source805 and13WIP/791CMF/796unpromoted/799PR68/two801trees/78native inputs exact.
+  Initial plane-projection visibility failure retained; reviewed fresh-v2 correction changes no pixels in four exact Malo pairs. Isolated cache metadata refresh is hash-proved, zero staging attempts; no product edit, new tests/movie/build/budget or remote CI claim.
+  Desktop reconnect after unlock still reports locked; native zoom pending. [Report](docs/bench/2026-11-01-sand-prerequisite.md). Broad goal active, new visual benefit must be evidenced; action-success tuning deferred.
+
 - 2026-11-01 saved camera views: bounded named free-camera poses persist per browser/origin/source and restore manually after exploration, refresh and fresh server/Chrome reopen; existing Back/follow/edit boundaries and interfaces retained.
   Frozen805 inputs:4305default+124scoped actualChrome+9graphics/sensor=4438distinct passes;129default skips excluded,7same-runtime framework cases, source/fresh427-file installed smoke and original4install+four7viewer fixedABBA budgets pass.
   Wheel4,145,465B(+6,014),no new assets/dependencies;24native static stages/20non-self exactRGBA pairs,six fully decoded films/36samples and4UI stills inspected.

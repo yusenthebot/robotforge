@@ -1,0 +1,211 @@
+{
+  "recorded_at": "2026-11-01T12:44:03.353352+00:00",
+  "decision": "stop_before_candidate",
+  "reason": "All eight ordinary-view baseline frames were inspected by root and an independent reviewer. Directional fine ridges were visible, but neither unmistakable repeated tile motifs nor a shared content deficit attributable independently of dock geometry were established on both actual paths.",
+  "runtime_changed": false,
+  "base_main": "c03357d9af41127b017ef6bac905cfd407d9e5d0",
+  "source_checkout": "/Users/yusenthebot/dev/robotforge-camera-views",
+  "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/candidate-source-v1.json",
+  "source_freeze_sha256": "f803349c1f9b031159994f955c494dbda114c212f95ebec234bbf18594defa93",
+  "accepted_source_files": 805,
+  "report_source_matches_accepted": true,
+  "evidence_root": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite",
+  "frames": [
+    {
+      "world": "malo",
+      "label": "malo-studio-front",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-malo-v2/malo-studio-front.png",
+      "png_sha256": "c2c9b94cf3695231811ea049b1439169bf494ae3e83fe4516b5c199e178c6d33",
+      "rgba_sha256": "9c69a448768a336ff0bc705b025532545567628a63d481cd937c58982236bbd9",
+      "primary_visible": true,
+      "png_matches_full_raw": true,
+      "root_inspected_full_frame": true
+    },
+    {
+      "world": "malo",
+      "label": "malo-studio-side",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-malo-v2/malo-studio-side.png",
+      "png_sha256": "f044561e54520dd5eafa7361260cf9c5ed4f8a43c9e1d9f49bbb76010d3289bf",
+      "rgba_sha256": "8bd4f517a282941270f1b4d97626aa15c2c15aed64ba9d3033d51e07934b38ba",
+      "primary_visible": true,
+      "png_matches_full_raw": true,
+      "root_inspected_full_frame": true
+    },
+    {
+      "world": "malo",
+      "label": "malo-daylight-front",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-malo-v2/malo-daylight-front.png",
+      "png_sha256": "9bf51c4d5b9e9eef24875121e5104cf627a9b4c12f9d42e30e15158f90c7f08a",
+      "rgba_sha256": "ec6cba26adcb14fca5862b3e5dc4b2bde58da7725288c97a60be6c796504449a",
+      "primary_visible": true,
+      "png_matches_full_raw": true,
+      "root_inspected_full_frame": true
+    },
+    {
+      "world": "malo",
+      "label": "malo-daylight-side",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-malo-v2/malo-daylight-side.png",
+      "png_sha256": "c4212b477e77bbc09319fcb8d52718cb14d30de6ae4a822083b75eee362acf93",
+      "rgba_sha256": "ca9b5659245633142fe2fa2da83da9131661ba606313ca7ad4842dfe85a70b8c",
+      "primary_visible": true,
+      "png_matches_full_raw": true,
+      "root_inspected_full_frame": true
+    },
+    {
+      "world": "go2",
+      "label": "go2-studio-front",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-go2-v2/go2-studio-front.png",
+      "png_sha256": "315433ebe4bb2a214af24eac2ed4f5a19fbf3be8df0e3f5b015e73ca6306707f",
+      "rgba_sha256": "ace27adf83f9e536d60afa218f3bdf756fce2c6bab71a08f3d0f55c5836d9eef",
+      "primary_visible": true,
+      "png_matches_full_raw": true,
+      "root_inspected_full_frame": true
+    },
+    {
+      "world": "go2",
+      "label": "go2-studio-side",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-go2-v2/go2-studio-side.png",
+      "png_sha256": "6cb1b335ce27aaf557cbb261cf742ff46da8820f8881a97729141a58470b8004",
+      "rgba_sha256": "7b1b4ac427bf9a3b8d3f83a0831e4ceb0b74e4d47c82a7f98511e71f2f1d544c",
+      "primary_visible": true,
+      "png_matches_full_raw": true,
+      "root_inspected_full_frame": true
+    },
+    {
+      "world": "go2",
+      "label": "go2-daylight-front",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-go2-v2/go2-daylight-front.png",
+      "png_sha256": "c3bb6486b36c3ffc7aa1a8b460f5d262c8a281c0016e0c052a7e58a132158929",
+      "rgba_sha256": "75c368101b98e6246c7ae4c6dd346fd2de94cbeb28ec1e73c3ca839532a833b6",
+      "primary_visible": true,
+      "png_matches_full_raw": true,
+      "root_inspected_full_frame": true
+    },
+    {
+      "world": "go2",
+      "label": "go2-daylight-side",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-go2-v2/go2-daylight-side.png",
+      "png_sha256": "c2f59d621f1345891c121d47e612495d8fd5caf4553fcb581d741615d9eeba1f",
+      "rgba_sha256": "3b2c7b6aa749732298cf3711bd8f83c1c1dc46979a3376100822bb4a97a4e784",
+      "primary_visible": true,
+      "png_matches_full_raw": true,
+      "root_inspected_full_frame": true
+    }
+  ],
+  "runs": [
+    {
+      "world": "malo",
+      "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-malo-v2/manifest.json",
+      "manifest_sha256": "4e9b88303a96564e75f9f1fcd2700b96442326fcd6c9812eaaa4ddbe88ab3480",
+      "parent_receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-malo-v2.parent.json",
+      "parent_receipt_sha256": "b6466a82add320e32958fdf11e7517311d7b30907543cc99e94b0c49ac5a791a",
+      "passed": true,
+      "model_arrays_each_stage": 481,
+      "within_run_full_native_state_equal": true,
+      "original_physical_array_guards": [
+        "geom_friction",
+        "geom_size",
+        "geom_pos",
+        "geom_quat",
+        "geom_contype",
+        "geom_conaffinity",
+        "geom_condim",
+        "body_mass",
+        "body_inertia",
+        "qpos0"
+      ],
+      "staging_fallback_attempts": 0,
+      "socket_chrome_parent_server_closed": true
+    },
+    {
+      "world": "go2",
+      "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-go2-v2/manifest.json",
+      "manifest_sha256": "d08122753969cf2d930f9269de25b01c699be6176c179c1c6e6928b664cd7f89",
+      "parent_receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-go2-v2.parent.json",
+      "parent_receipt_sha256": "309607745f8b72ae0ce2c72d850444c8ec932848abd8e91770bb79ce0226b16d",
+      "passed": true,
+      "model_arrays_each_stage": 481,
+      "within_run_full_native_state_equal": true,
+      "original_physical_array_guards": [
+        "geom_friction",
+        "geom_size",
+        "geom_pos",
+        "geom_quat",
+        "geom_contype",
+        "geom_conaffinity",
+        "geom_condim",
+        "body_mass",
+        "body_inertia",
+        "qpos0"
+      ],
+      "staging_fallback_attempts": 0,
+      "socket_chrome_parent_server_closed": true
+    }
+  ],
+  "v1_to_v2_malo_pixel_audit": [
+    {
+      "label": "malo-studio-front",
+      "v1_rgba_sha256": "9c69a448768a336ff0bc705b025532545567628a63d481cd937c58982236bbd9",
+      "v2_rgba_sha256": "9c69a448768a336ff0bc705b025532545567628a63d481cd937c58982236bbd9",
+      "full_rgba_equal": true
+    },
+    {
+      "label": "malo-studio-side",
+      "v1_rgba_sha256": "8bd4f517a282941270f1b4d97626aa15c2c15aed64ba9d3033d51e07934b38ba",
+      "v2_rgba_sha256": "8bd4f517a282941270f1b4d97626aa15c2c15aed64ba9d3033d51e07934b38ba",
+      "full_rgba_equal": true
+    },
+    {
+      "label": "malo-daylight-front",
+      "v1_rgba_sha256": "ec6cba26adcb14fca5862b3e5dc4b2bde58da7725288c97a60be6c796504449a",
+      "v2_rgba_sha256": "ec6cba26adcb14fca5862b3e5dc4b2bde58da7725288c97a60be6c796504449a",
+      "full_rgba_equal": true
+    },
+    {
+      "label": "malo-daylight-side",
+      "v1_rgba_sha256": "ca9b5659245633142fe2fa2da83da9131661ba606313ca7ad4842dfe85a70b8c",
+      "v2_rgba_sha256": "ca9b5659245633142fe2fa2da83da9131661ba606313ca7ad4842dfe85a70b8c",
+      "full_rgba_equal": true
+    }
+  ],
+  "v1_retained_failure": {
+    "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/baseline-malo-v1/manifest.json",
+    "sha256": "d01765c6d77361e6105b2fc9658024d85bcfe9726cb0fdbe47d5d1ab9f38573e",
+    "passed": false,
+    "reason": "Projected plane AABB crossed behind camera; finite visibility grid missed visible ground in both front lights. V2 is a post-capture harness correction with new captures and unchanged strict pixels; v1 remains failed."
+  },
+  "helper_files": {
+    "sand_prerequisite_v1.py": "3970f9271a4f91f6c4afa1c319108763c59541dacae9204c7d516e248bd901a6",
+    "SAND-PREREQUISITE-v1.md": "73cfd21c0fd304683d76f8c3b20ef1dd23722e95fad9c51ae7332a806056ef9b",
+    "sand_prerequisite_v2.py": "17abe6815b82af4976b031f0bcd57eec60565cdf2ea340b6330308d5177186c8",
+    "SAND-PREREQUISITE-v2.md": "851cece192458906552f198553e88130ee01ba8c863fa959237fe53e3fb2e4fa",
+    "references-v1.json": "317b8f8d543a9a657e0001ff62fd917f337a19c3e52f744d16ba6a5bbd7939fc",
+    "run_capture_v1.py": "ac73035f01c56c1ab8a6d69a734a38dd50971fbad529d4ea143bb0fe54f949ae"
+  },
+  "protected_files": {
+    "cmf": 791,
+    "original": 13,
+    "unpromoted_mesh": 796,
+    "baseline": 799,
+    "accepted_801": 801,
+    "report_801": 801,
+    "native_assets": 78
+  },
+  "protected_and_source_unchanged": true,
+  "native_desktop": {
+    "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-sand-prerequisite/native-desktop-availability-v2.json",
+    "sha256": "d2e600ad17e20541ecff10a5579f5fa24cf258d56181d286dd0b0548073468ec",
+    "fresh_native_zoom_pass": false,
+    "result": "Tool still reports native Mac desktop locked after user unlock reply and a fresh runtime connection."
+  },
+  "scope": {
+    "fresh_pytest": false,
+    "new_wheel_or_install": false,
+    "formal_load_fps_budgets": false,
+    "new_movie": false,
+    "remote_ci": false,
+    "windows": false,
+    "visual_gain_claim": false
+  },
+  "broad_goal": "active; materials/lightweight/creative-play, individual action-success tuning deferred"
+}
