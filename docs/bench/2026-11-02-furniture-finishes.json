@@ -1,0 +1,1729 @@
+{
+  "status": "local_verified_remote_pending",
+  "source_base": "d879706876fce9b29f012aae836fea1ee8864716",
+  "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/candidate-source-v1.json",
+  "source_count": 814,
+  "tests": {
+    "units": 453,
+    "furniture_browser": 2,
+    "legacy_surface_browser": 19,
+    "visuals_and_gpu": 60,
+    "distinct": 534,
+    "full_default_suite_run": false,
+    "framework_cases": 7
+  },
+  "package": {
+    "source_root": "/Users/yusenthebot/dev/robotforge-furniture-finishes",
+    "wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/wheels-v1/robotforge-0.0.1-py3-none-any.whl",
+    "wheel_bytes": 4151883,
+    "wheel_baseline_bytes": 4151437,
+    "wheel_delta_bytes": 446,
+    "wheel_total_budget_bytes": 4194304,
+    "wheel_sha256": "b8c73ed037a835acdba963d9e8b9b0c4a79822f612799e53b209fae726e3bb7e",
+    "package_files": 430,
+    "all_source_wheel_installed_files_equal": true,
+    "installed_imports": {
+      "root": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/wheel-env-v1/lib/python3.12/site-packages/robotforge/__init__.py",
+      "handler": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/wheel-env-v1/lib/python3.12/site-packages/robotforge/viewer/server.py",
+      "selection": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/wheel-env-v1/lib/python3.12/site-packages/robotforge/viewer/object_selection.py",
+      "static": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/wheel-env-v1/lib/python3.12/site-packages/robotforge/viewer/static"
+    },
+    "fresh_locked_offline_smoke_passed": true,
+    "installed_carried_selection_smoke_passed": true,
+    "installed_selection_report_sha256": "40426b4c3d12c99d3949c3501f25ed76eab2e0179c52690efeae4893e1f8ca2e",
+    "installed_furniture_smoke_passed": true,
+    "installed_furniture_report_sha256": "83a53af4821cebc7efde9ec634ab47cfb31c61fa8f8b2526df29c67d6bef27d5"
+  },
+  "budgets": {
+    "install-budgets-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/install-budgets-v1/2026-11-02-d879706-dirty-partial.json",
+      "selected": {
+        "install.wheel_kb": "ok",
+        "install.installed_mb": "ok",
+        "install.download_mb": "ok",
+        "install.packages": "ok"
+      },
+      "other_budget_status": "not run"
+    },
+    "viewer-a0-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-a0-v1/2026-11-02-3ccc6c8-partial.json",
+      "selected": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      },
+      "other_budget_status": "not run"
+    },
+    "viewer-b1-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-b1-v1/2026-11-02-d879706-dirty-partial.json",
+      "selected": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      },
+      "other_budget_status": "not run"
+    },
+    "viewer-b2-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-b2-v1/2026-11-02-d879706-dirty-partial.json",
+      "selected": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      },
+      "other_budget_status": "not run"
+    },
+    "viewer-a3-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-a3-v1/2026-11-02-3ccc6c8-partial.json",
+      "selected": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      },
+      "other_budget_status": "not run"
+    }
+  },
+  "viewer_abba": [
+    {
+      "stage": "viewer-a0-v1",
+      "cold_start_s": 0.9133,
+      "fps": 60.0491,
+      "frame_ms": 1.5,
+      "assets_fps": 60.2069,
+      "assets_frame_ms": 4.0,
+      "server_peak_mb": 144.1,
+      "idle_cpu_pct": 4.8,
+      "warehouse_peak_mb": 569.4
+    },
+    {
+      "stage": "viewer-b1-v1",
+      "cold_start_s": 0.9374,
+      "fps": 60.1009,
+      "frame_ms": 1.6,
+      "assets_fps": 60.259,
+      "assets_frame_ms": 4.1,
+      "server_peak_mb": 143.2,
+      "idle_cpu_pct": 5.0,
+      "warehouse_peak_mb": 572.6
+    },
+    {
+      "stage": "viewer-b2-v1",
+      "cold_start_s": 0.9283,
+      "fps": 60.1069,
+      "frame_ms": 1.5,
+      "assets_fps": 60.1369,
+      "assets_frame_ms": 2.8,
+      "server_peak_mb": 144.0,
+      "idle_cpu_pct": 4.6,
+      "warehouse_peak_mb": 569.6
+    },
+    {
+      "stage": "viewer-a3-v1",
+      "cold_start_s": 0.926,
+      "fps": 60.3408,
+      "frame_ms": 1.6,
+      "assets_fps": 59.9161,
+      "assets_frame_ms": 4.0,
+      "server_peak_mb": 143.2,
+      "idle_cpu_pct": 4.8,
+      "warehouse_peak_mb": 567.4
+    }
+  ],
+  "captures": {
+    "passed": true,
+    "pairs": [
+      {
+        "world": "malo",
+        "left": [
+          "baseline",
+          "initial"
+        ],
+        "right": [
+          "baseline",
+          "final"
+        ],
+        "rgba_sha256": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+        "equal": true
+      },
+      {
+        "world": "malo",
+        "left": [
+          "baseline",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "initial"
+        ],
+        "rgba_sha256": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+        "equal": true
+      },
+      {
+        "world": "malo",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "table-original"
+        ],
+        "rgba_sha256": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+        "equal": true
+      },
+      {
+        "world": "malo",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "table-restore"
+        ],
+        "rgba_sha256": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+        "equal": true
+      },
+      {
+        "world": "malo",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "bin-original"
+        ],
+        "rgba_sha256": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+        "equal": true
+      },
+      {
+        "world": "malo",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "bin-restore"
+        ],
+        "rgba_sha256": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+        "equal": true
+      },
+      {
+        "world": "malo",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "final"
+        ],
+        "rgba_sha256": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+        "equal": true
+      },
+      {
+        "world": "malo",
+        "left": [
+          "candidate",
+          "table-finish"
+        ],
+        "right": [
+          "candidate",
+          "table-undo-original"
+        ],
+        "rgba_sha256": "1c0f09ed36ebd54a3adaf3ce3e19e6ebfef79af4d9d5ccf9670b51fc0270d08d",
+        "equal": true
+      },
+      {
+        "world": "malo",
+        "left": [
+          "candidate",
+          "bin-finish"
+        ],
+        "right": [
+          "candidate",
+          "bin-undo-original"
+        ],
+        "rgba_sha256": "ca9c9777bf17a847109cfa0c8bebf71aaba6728e88b24be933a23cfacef0b86c",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "baseline",
+          "initial"
+        ],
+        "right": [
+          "baseline",
+          "final"
+        ],
+        "rgba_sha256": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "baseline",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "initial"
+        ],
+        "rgba_sha256": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "table-original"
+        ],
+        "rgba_sha256": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "table-restore"
+        ],
+        "rgba_sha256": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "bin-original"
+        ],
+        "rgba_sha256": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "bin-restore"
+        ],
+        "rgba_sha256": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "candidate",
+          "initial"
+        ],
+        "right": [
+          "candidate",
+          "final"
+        ],
+        "rgba_sha256": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "candidate",
+          "table-finish"
+        ],
+        "right": [
+          "candidate",
+          "table-undo-original"
+        ],
+        "rgba_sha256": "f67ddbc088dcdfd004b0180039ab631b06db36dd46abbf357532d490de01c2c7",
+        "equal": true
+      },
+      {
+        "world": "go2",
+        "left": [
+          "candidate",
+          "bin-finish"
+        ],
+        "right": [
+          "candidate",
+          "bin-undo-original"
+        ],
+        "rgba_sha256": "a25f3a20077c1c89c9748ddeff89dcd0947fe4d9ee9a0d2253e2da47ab4e5887",
+        "equal": true
+      }
+    ],
+    "runs": {
+      "malo-baseline": {
+        "frames": 2,
+        "samples": 5,
+        "actions": 0,
+        "physical_arrays": 47,
+        "navigation_to_ready_seconds": 0.427062458,
+        "initial_http_resource_paths": [
+          "/static/style.css",
+          "/static/training.css",
+          "/static/app.js",
+          "/static/vendor/three/three.module.min.js",
+          "/static/flowview.js",
+          "/static/vendor/three/OrbitControls.js",
+          "/static/mapview.js",
+          "/static/gamepad.js",
+          "/static/training.js",
+          "/static/i18n.js",
+          "/static/look.js",
+          "/static/lighting.js",
+          "/static/sensors.js",
+          "/static/lesson.js",
+          "/static/ground-look.js",
+          "/static/water.js",
+          "/static/rotors.js",
+          "/static/cloth.js",
+          "/static/padmap.js",
+          "/static/placement-coordinate.js",
+          "/static/creation.js",
+          "/static/placement-preview.js",
+          "/static/arrangements.js",
+          "/static/screen-drive.js",
+          "/static/camera-views.js",
+          "/static/robot-surface.js",
+          "/static/camera-bookmarks.js",
+          "/static/plot.js",
+          "/static/lighting-fit.js",
+          "/static/vendor/three/three.core.min.js",
+          "/static/sensorpicture.js",
+          "/static/sensorkit.js",
+          "/mesh/1.bin"
+        ],
+        "initial_resource_transfer_bytes": 48516173,
+        "initial_resource_encoded_body_bytes": 48506273,
+        "initial_resource_decoded_body_bytes": 48506273,
+        "whole_session_http": {
+          "completed_encoded_bytes": 48549475,
+          "request_events": 34
+        },
+        "apply_click_to_visible_seconds": [],
+        "renderer_by_stage": {
+          "initial": {
+            "draw": {
+              "calls": 57,
+              "frame": 148,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "table-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 258,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "bin-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 418,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "primitive-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 599,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "final": {
+            "draw": {
+              "calls": 57,
+              "frame": 717,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          }
+        },
+        "visual_changes": {}
+      },
+      "malo-candidate": {
+        "frames": 11,
+        "samples": 19,
+        "actions": 10,
+        "physical_arrays": 47,
+        "navigation_to_ready_seconds": 0.42510125,
+        "initial_http_resource_paths": [
+          "/static/style.css",
+          "/static/training.css",
+          "/static/app.js",
+          "/static/vendor/three/three.module.min.js",
+          "/static/vendor/three/OrbitControls.js",
+          "/static/flowview.js",
+          "/static/gamepad.js",
+          "/static/mapview.js",
+          "/static/training.js",
+          "/static/sensors.js",
+          "/static/i18n.js",
+          "/static/lesson.js",
+          "/static/look.js",
+          "/static/lighting.js",
+          "/static/ground-look.js",
+          "/static/water.js",
+          "/static/cloth.js",
+          "/static/rotors.js",
+          "/static/padmap.js",
+          "/static/placement-coordinate.js",
+          "/static/creation.js",
+          "/static/placement-preview.js",
+          "/static/arrangements.js",
+          "/static/screen-drive.js",
+          "/static/robot-surface.js",
+          "/static/camera-bookmarks.js",
+          "/static/camera-views.js",
+          "/static/plot.js",
+          "/static/sensorpicture.js",
+          "/static/sensorkit.js",
+          "/static/vendor/three/three.core.min.js",
+          "/static/lighting-fit.js",
+          "/mesh/1.bin"
+        ],
+        "initial_resource_transfer_bytes": 48516142,
+        "initial_resource_encoded_body_bytes": 48506242,
+        "initial_resource_decoded_body_bytes": 48506242,
+        "whole_session_http": {
+          "completed_encoded_bytes": 519382124,
+          "request_events": 44
+        },
+        "apply_click_to_visible_seconds": [
+          0.831436291,
+          0.775186458,
+          0.873342375,
+          0.892709791,
+          0.908411125,
+          0.900899292,
+          0.888221125
+        ],
+        "renderer_by_stage": {
+          "initial": {
+            "draw": {
+              "calls": 57,
+              "frame": 149,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "table-finish-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 448,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 21
+          },
+          "table-finish": {
+            "draw": {
+              "calls": 57,
+              "frame": 545,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 20
+          },
+          "table-original-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 844,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "table-original": {
+            "draw": {
+              "calls": 57,
+              "frame": 940,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "table-undo-original": {
+            "draw": {
+              "calls": 57,
+              "frame": 1063,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 20
+          },
+          "table-restore-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 1360,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "table-restore": {
+            "draw": {
+              "calls": 57,
+              "frame": 1457,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "bin-finish-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 1756,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "bin-finish": {
+            "draw": {
+              "calls": 57,
+              "frame": 1852,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "bin-original-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 2161,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "bin-original": {
+            "draw": {
+              "calls": 57,
+              "frame": 2257,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "bin-undo-original": {
+            "draw": {
+              "calls": 57,
+              "frame": 2392,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "bin-restore-selected": {
+            "draw": {
+              "calls": 58,
+              "frame": 2697,
+              "lines": 20,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 52,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "bin-restore": {
+            "draw": {
+              "calls": 57,
+              "frame": 2795,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "mixed-selection": {
+            "draw": {
+              "calls": 60,
+              "frame": 3020,
+              "lines": 44,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 54,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "mixed-plastic-selected": {
+            "draw": {
+              "calls": 60,
+              "frame": 3227,
+              "lines": 44,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 54,
+              "textures": 8
+            },
+            "programs": 19
+          },
+          "mixed-plastic": {
+            "draw": {
+              "calls": 57,
+              "frame": 3328,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          },
+          "final": {
+            "draw": {
+              "calls": 57,
+              "frame": 3466,
+              "lines": 8,
+              "points": 0,
+              "triangles": 691244
+            },
+            "memory": {
+              "geometries": 51,
+              "textures": 8
+            },
+            "programs": 18
+          }
+        },
+        "visual_changes": {
+          "bin": {
+            "differing_rgba_bytes": 3416
+          },
+          "table": {
+            "differing_rgba_bytes": 34171
+          }
+        },
+        "cross_process_model_hash_differences": []
+      },
+      "go2-baseline": {
+        "frames": 2,
+        "samples": 5,
+        "actions": 0,
+        "physical_arrays": 47,
+        "navigation_to_ready_seconds": 0.455871,
+        "initial_http_resource_paths": [
+          "/static/style.css",
+          "/static/training.css",
+          "/static/app.js",
+          "/static/flowview.js",
+          "/static/vendor/three/OrbitControls.js",
+          "/static/gamepad.js",
+          "/static/mapview.js",
+          "/static/vendor/three/three.module.min.js",
+          "/static/training.js",
+          "/static/i18n.js",
+          "/static/sensors.js",
+          "/static/look.js",
+          "/static/lighting.js",
+          "/static/lesson.js",
+          "/static/water.js",
+          "/static/ground-look.js",
+          "/static/rotors.js",
+          "/static/cloth.js",
+          "/static/padmap.js",
+          "/static/creation.js",
+          "/static/placement-coordinate.js",
+          "/static/placement-preview.js",
+          "/static/arrangements.js",
+          "/static/camera-views.js",
+          "/static/screen-drive.js",
+          "/static/robot-surface.js",
+          "/static/camera-bookmarks.js",
+          "/static/plot.js",
+          "/static/sensorkit.js",
+          "/static/sensorpicture.js",
+          "/static/lighting-fit.js",
+          "/static/vendor/three/three.core.min.js",
+          "/mesh/1.bin"
+        ],
+        "initial_resource_transfer_bytes": 22001741,
+        "initial_resource_encoded_body_bytes": 21991841,
+        "initial_resource_decoded_body_bytes": 21991841,
+        "whole_session_http": {
+          "completed_encoded_bytes": 22035043,
+          "request_events": 34
+        },
+        "apply_click_to_visible_seconds": [],
+        "renderer_by_stage": {
+          "initial": {
+            "draw": {
+              "calls": 162,
+              "frame": 95,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "table-selected": {
+            "draw": {
+              "calls": 157,
+              "frame": 169,
+              "lines": 30,
+              "points": 18,
+              "triangles": 481318
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "bin-selected": {
+            "draw": {
+              "calls": 157,
+              "frame": 279,
+              "lines": 30,
+              "points": 18,
+              "triangles": 481318
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "primitive-selected": {
+            "draw": {
+              "calls": 152,
+              "frame": 403,
+              "lines": 30,
+              "points": 18,
+              "triangles": 476806
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "final": {
+            "draw": {
+              "calls": 162,
+              "frame": 485,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          }
+        },
+        "visual_changes": {}
+      },
+      "go2-candidate": {
+        "frames": 11,
+        "samples": 19,
+        "actions": 10,
+        "physical_arrays": 47,
+        "navigation_to_ready_seconds": 0.436185333,
+        "initial_http_resource_paths": [
+          "/static/style.css",
+          "/static/training.css",
+          "/static/app.js",
+          "/static/flowview.js",
+          "/static/gamepad.js",
+          "/static/vendor/three/OrbitControls.js",
+          "/static/training.js",
+          "/static/mapview.js",
+          "/static/sensors.js",
+          "/static/i18n.js",
+          "/static/vendor/three/three.module.min.js",
+          "/static/look.js",
+          "/static/lesson.js",
+          "/static/lighting.js",
+          "/static/cloth.js",
+          "/static/water.js",
+          "/static/ground-look.js",
+          "/static/rotors.js",
+          "/static/padmap.js",
+          "/static/creation.js",
+          "/static/placement-preview.js",
+          "/static/arrangements.js",
+          "/static/placement-coordinate.js",
+          "/static/screen-drive.js",
+          "/static/camera-views.js",
+          "/static/camera-bookmarks.js",
+          "/static/robot-surface.js",
+          "/static/plot.js",
+          "/static/sensorkit.js",
+          "/static/sensorpicture.js",
+          "/static/lighting-fit.js",
+          "/static/vendor/three/three.core.min.js",
+          "/mesh/1.bin"
+        ],
+        "initial_resource_transfer_bytes": 22001710,
+        "initial_resource_encoded_body_bytes": 21991810,
+        "initial_resource_decoded_body_bytes": 21991810,
+        "whole_session_http": {
+          "completed_encoded_bytes": 227723372,
+          "request_events": 44
+        },
+        "apply_click_to_visible_seconds": [
+          1.125489125,
+          1.107198542,
+          1.087464958,
+          1.117210166,
+          1.208478417,
+          1.110218042,
+          1.139552334
+        ],
+        "renderer_by_stage": {
+          "initial": {
+            "draw": {
+              "calls": 162,
+              "frame": 94,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "table-finish-selected": {
+            "draw": {
+              "calls": 152,
+              "frame": 315,
+              "lines": 30,
+              "points": 18,
+              "triangles": 476806
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "table-finish": {
+            "draw": {
+              "calls": 162,
+              "frame": 381,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "table-original-selected": {
+            "draw": {
+              "calls": 152,
+              "frame": 604,
+              "lines": 30,
+              "points": 18,
+              "triangles": 476806
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "table-original": {
+            "draw": {
+              "calls": 162,
+              "frame": 672,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "table-undo-original": {
+            "draw": {
+              "calls": 162,
+              "frame": 772,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "table-restore-selected": {
+            "draw": {
+              "calls": 152,
+              "frame": 990,
+              "lines": 30,
+              "points": 18,
+              "triangles": 476806
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "table-restore": {
+            "draw": {
+              "calls": 162,
+              "frame": 1057,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "bin-finish-selected": {
+            "draw": {
+              "calls": 152,
+              "frame": 1279,
+              "lines": 30,
+              "points": 18,
+              "triangles": 476806
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "bin-finish": {
+            "draw": {
+              "calls": 162,
+              "frame": 1347,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "bin-original-selected": {
+            "draw": {
+              "calls": 152,
+              "frame": 1578,
+              "lines": 30,
+              "points": 18,
+              "triangles": 476806
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "bin-original": {
+            "draw": {
+              "calls": 162,
+              "frame": 1646,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "bin-undo-original": {
+            "draw": {
+              "calls": 162,
+              "frame": 1747,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "bin-restore-selected": {
+            "draw": {
+              "calls": 152,
+              "frame": 1964,
+              "lines": 30,
+              "points": 18,
+              "triangles": 476806
+            },
+            "memory": {
+              "geometries": 144,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "bin-restore": {
+            "draw": {
+              "calls": 162,
+              "frame": 2031,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "mixed-selection": {
+            "draw": {
+              "calls": 155,
+              "frame": 2186,
+              "lines": 54,
+              "points": 18,
+              "triangles": 477062
+            },
+            "memory": {
+              "geometries": 146,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "mixed-plastic-selected": {
+            "draw": {
+              "calls": 147,
+              "frame": 2339,
+              "lines": 54,
+              "points": 18,
+              "triangles": 471558
+            },
+            "memory": {
+              "geometries": 146,
+              "textures": 6
+            },
+            "programs": 12
+          },
+          "mixed-plastic": {
+            "draw": {
+              "calls": 162,
+              "frame": 2408,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          },
+          "final": {
+            "draw": {
+              "calls": 162,
+              "frame": 2506,
+              "lines": 18,
+              "points": 18,
+              "triangles": 487894
+            },
+            "memory": {
+              "geometries": 143,
+              "textures": 6
+            },
+            "programs": 11
+          }
+        },
+        "visual_changes": {
+          "bin": {
+            "differing_rgba_bytes": 5568
+          },
+          "table": {
+            "differing_rgba_bytes": 21554
+          }
+        },
+        "cross_process_model_hash_differences": []
+      }
+    },
+    "inputs": {
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/manifest.json": "becef2dcec1418d4722a69b7c47060afcf0315bc84d173650973b08184288103",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/front-initial.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/front-initial.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/front-final.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/front-final.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0000-initial.jpg": "00823a4fe9de4bfd07ea9907de1b5b30dd104e7a2af37e5811d97b313b1bbb75",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0001-table-selected.jpg": "3fee7b880a4ce8aee9390ae5107def908c49ac442a2b3a1bf12fd05a479093ec",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0002-bin-selected.jpg": "bfa9b8b5e8dd51863bdcd78e3045f710ba149fc265e7412c736bf871dbeec7d9",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0003-primitive-selected.jpg": "0abbc2d9723f8da300df0bc4d8b08cf04dc05cbb1d218b48f8f10fcc3dea0d62",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0004-final.jpg": "1f012b4b26b93e4163584c123d2b5da046a80da444e9efcefe17bd288420d16c",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/manifest.json": "424f707e0ae0fd5d9978e184ad81e202ed27653e91a85b9e35a4421f820ea3eb",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-initial.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-initial.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-finish.rgba": "1c0f09ed36ebd54a3adaf3ce3e19e6ebfef79af4d9d5ccf9670b51fc0270d08d",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-finish.png": "ac6ce7c4552e7ab9b79b22d51c77a0fad5192d93838c1d02e071a54812b643d5",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-original.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-original.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-undo-original.rgba": "1c0f09ed36ebd54a3adaf3ce3e19e6ebfef79af4d9d5ccf9670b51fc0270d08d",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-undo-original.png": "ac6ce7c4552e7ab9b79b22d51c77a0fad5192d93838c1d02e071a54812b643d5",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-restore.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-restore.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-finish.rgba": "ca9c9777bf17a847109cfa0c8bebf71aaba6728e88b24be933a23cfacef0b86c",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-finish.png": "e3124f1809d2720b7cb04b5043ae53c174917b1cc183fab402259071555896e1",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-original.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-original.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-undo-original.rgba": "ca9c9777bf17a847109cfa0c8bebf71aaba6728e88b24be933a23cfacef0b86c",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-undo-original.png": "e3124f1809d2720b7cb04b5043ae53c174917b1cc183fab402259071555896e1",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-restore.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-restore.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-mixed-plastic.rgba": "a33866dd8e6dd2139a5282d391231e0b1cf6234d0ee29651d28946342e29255a",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-mixed-plastic.png": "ae0eb63d644cb3b685a17efaf2df685f23990348be9a433ce94564f19c7bf400",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-final.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-final.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0000-initial.jpg": "00823a4fe9de4bfd07ea9907de1b5b30dd104e7a2af37e5811d97b313b1bbb75",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0001-table-finish-selected.jpg": "88aea04c45d752d40f9390759891d810d3e3df05e848079872cba6085c55ca5a",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0002-table-finish.jpg": "ddbbb61bfb542bc60df6a9e1acd0adc53a1664476fccaa76b1012c1bf10375a1",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0003-table-original-selected.jpg": "ac113e6b00dedc802afeec82e91e974aeca82939cca70398cdd54df9c4e8ee5c",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0004-table-original.jpg": "71cbaaab1e14c12de8bd87acf0c54851b638448b0e74b77e6fd06ccd366c5bab",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0005-table-undo-original.jpg": "e82d0759c4c1256dddf24a1cbc29484714974c4764b695f2eccb65285e50f356",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0006-table-restore-selected.jpg": "ac113e6b00dedc802afeec82e91e974aeca82939cca70398cdd54df9c4e8ee5c",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0007-table-restore.jpg": "71cbaaab1e14c12de8bd87acf0c54851b638448b0e74b77e6fd06ccd366c5bab",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0008-bin-finish-selected.jpg": "022fbd429844bf4590458d4baf890d3dd4cbfe6235d5547cae24bfbe06e240bb",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0009-bin-finish.jpg": "65c9e6e11651516cab8f472a5ad7ebe5a6209ef5c46679154b1f083fd7566f41",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0010-bin-original-selected.jpg": "82a1795d0cb22dedff100327aa99cc2cf1dff558ddf6d2cdd27000964f7073f4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0011-bin-original.jpg": "3be9da36e429ca43e38e91dafa79700efd098354a99a1a37f61767faf1d41358",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0012-bin-undo-original.jpg": "5156773c65802ad95e517f2e91ba33dbe155157846b2b59413955d2056d66018",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0013-bin-restore-selected.jpg": "82a1795d0cb22dedff100327aa99cc2cf1dff558ddf6d2cdd27000964f7073f4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0014-bin-restore.jpg": "3be9da36e429ca43e38e91dafa79700efd098354a99a1a37f61767faf1d41358",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0015-mixed-selection.jpg": "11bdfbbce83fb4e367ffd7de7788139ad8b64fd5c716a714730979d76f560a9a",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0016-mixed-plastic-selected.jpg": "c2d09a29a1592d94f157c53257e9cd115b5119d2d499cc202480726153ddde6b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0017-mixed-plastic.jpg": "68466b28940a33f07265d400f298314d6db004da6c89fea5f432ccfbb363640c",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0018-final.jpg": "7c352bdaeb6844b1e54bf84a69faca85ece50d492ee42f067054983f955463d1",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/authored-world.yaml": "00d36b2634f298b358257579bc370525745bde50ea46b863a0f1814bc54bafa4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/authored-world.yaml": "00d36b2634f298b358257579bc370525745bde50ea46b863a0f1814bc54bafa4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/manifest.json": "169e9a886133bd47ab5cc8e949af120a597606584048f9aaa63a62ea86fe63c5",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/front-initial.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/front-initial.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/front-final.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/front-final.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0000-initial.jpg": "17c55f4b6ea7c9e72df2c2368d96213c2b62a87ed47d8b05e01db0cfbc9e9881",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0001-table-selected.jpg": "664906033aeedbf3e45b962acbc6e25976a9861fb1d6d105ad6aa5dc59c22ec9",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0002-bin-selected.jpg": "e489b8b663b9e4884f5717f1ce2c6cb77d247ebf51552ad8b1502a7aebc543e4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0003-primitive-selected.jpg": "07cb1ddb19310a943bffa5d96e299c835304a9f910fd64a3b56ab2f2e17c5680",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0004-final.jpg": "b63e1c55bba1f484c5d2c83461790c538304ae89fa010150bb42d41130ec87b8",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/manifest.json": "086a0b1e7884f23228f73708560154ea0b150f0c5903866f609eb6a7a08a873a",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-initial.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-initial.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-finish.rgba": "f67ddbc088dcdfd004b0180039ab631b06db36dd46abbf357532d490de01c2c7",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-finish.png": "a638a29e2dcfa484aa47b3682ee96185536eca6fbb109f15d3fadcfb3c9e9410",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-original.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-original.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-undo-original.rgba": "f67ddbc088dcdfd004b0180039ab631b06db36dd46abbf357532d490de01c2c7",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-undo-original.png": "a638a29e2dcfa484aa47b3682ee96185536eca6fbb109f15d3fadcfb3c9e9410",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-restore.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-restore.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-finish.rgba": "a25f3a20077c1c89c9748ddeff89dcd0947fe4d9ee9a0d2253e2da47ab4e5887",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-finish.png": "3214d1737845d064fbdde09c55eea6ad306323547f7e499bceb57eb20e1daab3",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-original.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-original.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-undo-original.rgba": "a25f3a20077c1c89c9748ddeff89dcd0947fe4d9ee9a0d2253e2da47ab4e5887",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-undo-original.png": "3214d1737845d064fbdde09c55eea6ad306323547f7e499bceb57eb20e1daab3",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-restore.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-restore.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-mixed-plastic.rgba": "8f5c676f82adf6cadd98a1c304173a380da3f9c56fa2b39264747f12cd1f66f6",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-mixed-plastic.png": "afab1a2432ae012ae740ae5354e512d33a29e65e9801c2566f866fe267614bbf",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-final.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-final.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0000-initial.jpg": "17c55f4b6ea7c9e72df2c2368d96213c2b62a87ed47d8b05e01db0cfbc9e9881",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0001-table-finish-selected.jpg": "27cff13b1fe7c82608d1f69b149b7883c4366ec8c7ee916340ca073002500d3e",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0002-table-finish.jpg": "04cade1b796a0fa14845bab05bd7857ac2195e82dc17683cb9838d42da5d80c8",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0003-table-original-selected.jpg": "3b34becd0628ea4ed0c0c420e1d1fcea07729d133d6521421f210cfd94653db5",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0004-table-original.jpg": "866da15206b59ffe6785aba84242032123043d51c8bd2f89151a85e5bcb2d3aa",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0005-table-undo-original.jpg": "cad375c8d401c4d142ac7d9fa22f3474ca7be048fb40af27c4e99aeb8bb6bbff",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0006-table-restore-selected.jpg": "3b34becd0628ea4ed0c0c420e1d1fcea07729d133d6521421f210cfd94653db5",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0007-table-restore.jpg": "866da15206b59ffe6785aba84242032123043d51c8bd2f89151a85e5bcb2d3aa",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0008-bin-finish-selected.jpg": "58db11afaeda1cb41e235cb56537dbbc6379b36e036cf7fb0e99827efb3709e9",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0009-bin-finish.jpg": "64197d95a0abfeadf4ee3c3571cfdff53f1595359442093d63d285df2edc5444",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0010-bin-original-selected.jpg": "0a5769d02f43a42cef19d3c689ce8d45b1d1c053157163ae6c8be347deb5bc62",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0011-bin-original.jpg": "15ba07cfc4c45024b826089c66040b592431bcae198ffaffd0becf8c69c6ae11",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0012-bin-undo-original.jpg": "c0cc3916c3acfb98d5cb1f1ca1bb3ed58a2dae1aaca234b0f63b999fd372b54e",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0013-bin-restore-selected.jpg": "0a5769d02f43a42cef19d3c689ce8d45b1d1c053157163ae6c8be347deb5bc62",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0014-bin-restore.jpg": "15ba07cfc4c45024b826089c66040b592431bcae198ffaffd0becf8c69c6ae11",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0015-mixed-selection.jpg": "88e81ce29fc221cb4cdca69698770cd8f4fd680dbe8dde04740d6a4d23bc4358",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0016-mixed-plastic-selected.jpg": "14bbe9856ccdb481598422c593f54a64b8b3b254d98145e9e0055db0235ec6a2",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0017-mixed-plastic.jpg": "bf6e392d2c9aa45c2ecdc042ed2c30ead6f1093698baec18615b08d78bd1eb64",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0018-final.jpg": "3492c4f8b1c18b1962b5adc1accceb44430375fdf9d18eff9b3b811a75449baf",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/authored-world.yaml": "1190766b8a9e1aeafd8cfd0edef0b2305a54dc4f2b99b581b8e51cd944240544",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/authored-world.yaml": "1190766b8a9e1aeafd8cfd0edef0b2305a54dc4f2b99b581b8e51cd944240544"
+    },
+    "scope": "18 correlated full-frame comparisons; local HTTP resource timings exclude WebSocket payload bandwidth."
+  },
+  "films": {
+    "malo-baseline": {
+      "duration_seconds": 6.466667,
+      "video_bytes": 288535,
+      "video_sha256": "226637d9141e7e0228bb2c4012036325373bc29d011f08a40d48bfd29e45737b",
+      "decoded_frame_count": 194,
+      "raw_frame_count": 5,
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/workflow.mp4"
+    },
+    "malo-candidate": {
+      "duration_seconds": 38.166667,
+      "video_bytes": 1403583,
+      "video_sha256": "9c71459d369500333e0d871606d9ccf2bad83dfb9cefb71e9e779f007fe7f551",
+      "decoded_frame_count": 1145,
+      "raw_frame_count": 19,
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/workflow.mp4"
+    },
+    "go2-baseline": {
+      "duration_seconds": 6.6,
+      "video_bytes": 405334,
+      "video_sha256": "eab3e9f5b08e94dc90d1064bc28d90beca641f28f16c9d578c11f163df3d33d7",
+      "decoded_frame_count": 198,
+      "raw_frame_count": 5,
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/workflow.mp4"
+    },
+    "go2-candidate": {
+      "duration_seconds": 40.866667,
+      "video_bytes": 1953029,
+      "video_sha256": "beeaff50dee94603a020052639b3b77c8ecb8fb7547d1062f5ba2bdeddf66dce",
+      "decoded_frame_count": 1226,
+      "raw_frame_count": 19,
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/workflow.mp4"
+    }
+  },
+  "witness_files": {
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/manifest.json": "becef2dcec1418d4722a69b7c47060afcf0315bc84d173650973b08184288103",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/front-initial.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/front-initial.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/front-final.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/front-final.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0000-initial.jpg": "00823a4fe9de4bfd07ea9907de1b5b30dd104e7a2af37e5811d97b313b1bbb75",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0001-table-selected.jpg": "3fee7b880a4ce8aee9390ae5107def908c49ac442a2b3a1bf12fd05a479093ec",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0002-bin-selected.jpg": "bfa9b8b5e8dd51863bdcd78e3045f710ba149fc265e7412c736bf871dbeec7d9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0003-primitive-selected.jpg": "0abbc2d9723f8da300df0bc4d8b08cf04dc05cbb1d218b48f8f10fcc3dea0d62",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/workflow/0004-final.jpg": "1f012b4b26b93e4163584c123d2b5da046a80da444e9efcefe17bd288420d16c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/manifest.json": "424f707e0ae0fd5d9978e184ad81e202ed27653e91a85b9e35a4421f820ea3eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-initial.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-initial.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-finish.rgba": "1c0f09ed36ebd54a3adaf3ce3e19e6ebfef79af4d9d5ccf9670b51fc0270d08d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-finish.png": "ac6ce7c4552e7ab9b79b22d51c77a0fad5192d93838c1d02e071a54812b643d5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-original.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-original.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-undo-original.rgba": "1c0f09ed36ebd54a3adaf3ce3e19e6ebfef79af4d9d5ccf9670b51fc0270d08d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-undo-original.png": "ac6ce7c4552e7ab9b79b22d51c77a0fad5192d93838c1d02e071a54812b643d5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-restore.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-table-restore.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-finish.rgba": "ca9c9777bf17a847109cfa0c8bebf71aaba6728e88b24be933a23cfacef0b86c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-finish.png": "e3124f1809d2720b7cb04b5043ae53c174917b1cc183fab402259071555896e1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-original.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-original.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-undo-original.rgba": "ca9c9777bf17a847109cfa0c8bebf71aaba6728e88b24be933a23cfacef0b86c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-undo-original.png": "e3124f1809d2720b7cb04b5043ae53c174917b1cc183fab402259071555896e1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-restore.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-bin-restore.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-mixed-plastic.rgba": "a33866dd8e6dd2139a5282d391231e0b1cf6234d0ee29651d28946342e29255a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-mixed-plastic.png": "ae0eb63d644cb3b685a17efaf2df685f23990348be9a433ce94564f19c7bf400",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-final.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/front-final.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0000-initial.jpg": "00823a4fe9de4bfd07ea9907de1b5b30dd104e7a2af37e5811d97b313b1bbb75",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0001-table-finish-selected.jpg": "88aea04c45d752d40f9390759891d810d3e3df05e848079872cba6085c55ca5a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0002-table-finish.jpg": "ddbbb61bfb542bc60df6a9e1acd0adc53a1664476fccaa76b1012c1bf10375a1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0003-table-original-selected.jpg": "ac113e6b00dedc802afeec82e91e974aeca82939cca70398cdd54df9c4e8ee5c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0004-table-original.jpg": "71cbaaab1e14c12de8bd87acf0c54851b638448b0e74b77e6fd06ccd366c5bab",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0005-table-undo-original.jpg": "e82d0759c4c1256dddf24a1cbc29484714974c4764b695f2eccb65285e50f356",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0006-table-restore-selected.jpg": "ac113e6b00dedc802afeec82e91e974aeca82939cca70398cdd54df9c4e8ee5c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0007-table-restore.jpg": "71cbaaab1e14c12de8bd87acf0c54851b638448b0e74b77e6fd06ccd366c5bab",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0008-bin-finish-selected.jpg": "022fbd429844bf4590458d4baf890d3dd4cbfe6235d5547cae24bfbe06e240bb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0009-bin-finish.jpg": "65c9e6e11651516cab8f472a5ad7ebe5a6209ef5c46679154b1f083fd7566f41",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0010-bin-original-selected.jpg": "82a1795d0cb22dedff100327aa99cc2cf1dff558ddf6d2cdd27000964f7073f4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0011-bin-original.jpg": "3be9da36e429ca43e38e91dafa79700efd098354a99a1a37f61767faf1d41358",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0012-bin-undo-original.jpg": "5156773c65802ad95e517f2e91ba33dbe155157846b2b59413955d2056d66018",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0013-bin-restore-selected.jpg": "82a1795d0cb22dedff100327aa99cc2cf1dff558ddf6d2cdd27000964f7073f4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0014-bin-restore.jpg": "3be9da36e429ca43e38e91dafa79700efd098354a99a1a37f61767faf1d41358",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0015-mixed-selection.jpg": "11bdfbbce83fb4e367ffd7de7788139ad8b64fd5c716a714730979d76f560a9a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0016-mixed-plastic-selected.jpg": "c2d09a29a1592d94f157c53257e9cd115b5119d2d499cc202480726153ddde6b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0017-mixed-plastic.jpg": "68466b28940a33f07265d400f298314d6db004da6c89fea5f432ccfbb363640c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/workflow/0018-final.jpg": "7c352bdaeb6844b1e54bf84a69faca85ece50d492ee42f067054983f955463d1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1/authored-world.yaml": "00d36b2634f298b358257579bc370525745bde50ea46b863a0f1814bc54bafa4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1/authored-world.yaml": "00d36b2634f298b358257579bc370525745bde50ea46b863a0f1814bc54bafa4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/manifest.json": "169e9a886133bd47ab5cc8e949af120a597606584048f9aaa63a62ea86fe63c5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/front-initial.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/front-initial.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/front-final.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/front-final.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0000-initial.jpg": "17c55f4b6ea7c9e72df2c2368d96213c2b62a87ed47d8b05e01db0cfbc9e9881",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0001-table-selected.jpg": "664906033aeedbf3e45b962acbc6e25976a9861fb1d6d105ad6aa5dc59c22ec9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0002-bin-selected.jpg": "e489b8b663b9e4884f5717f1ce2c6cb77d247ebf51552ad8b1502a7aebc543e4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0003-primitive-selected.jpg": "07cb1ddb19310a943bffa5d96e299c835304a9f910fd64a3b56ab2f2e17c5680",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/workflow/0004-final.jpg": "b63e1c55bba1f484c5d2c83461790c538304ae89fa010150bb42d41130ec87b8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/manifest.json": "086a0b1e7884f23228f73708560154ea0b150f0c5903866f609eb6a7a08a873a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-initial.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-initial.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-finish.rgba": "f67ddbc088dcdfd004b0180039ab631b06db36dd46abbf357532d490de01c2c7",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-finish.png": "a638a29e2dcfa484aa47b3682ee96185536eca6fbb109f15d3fadcfb3c9e9410",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-original.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-original.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-undo-original.rgba": "f67ddbc088dcdfd004b0180039ab631b06db36dd46abbf357532d490de01c2c7",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-undo-original.png": "a638a29e2dcfa484aa47b3682ee96185536eca6fbb109f15d3fadcfb3c9e9410",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-restore.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-table-restore.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-finish.rgba": "a25f3a20077c1c89c9748ddeff89dcd0947fe4d9ee9a0d2253e2da47ab4e5887",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-finish.png": "3214d1737845d064fbdde09c55eea6ad306323547f7e499bceb57eb20e1daab3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-original.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-original.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-undo-original.rgba": "a25f3a20077c1c89c9748ddeff89dcd0947fe4d9ee9a0d2253e2da47ab4e5887",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-undo-original.png": "3214d1737845d064fbdde09c55eea6ad306323547f7e499bceb57eb20e1daab3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-restore.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-bin-restore.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-mixed-plastic.rgba": "8f5c676f82adf6cadd98a1c304173a380da3f9c56fa2b39264747f12cd1f66f6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-mixed-plastic.png": "afab1a2432ae012ae740ae5354e512d33a29e65e9801c2566f866fe267614bbf",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-final.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/front-final.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0000-initial.jpg": "17c55f4b6ea7c9e72df2c2368d96213c2b62a87ed47d8b05e01db0cfbc9e9881",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0001-table-finish-selected.jpg": "27cff13b1fe7c82608d1f69b149b7883c4366ec8c7ee916340ca073002500d3e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0002-table-finish.jpg": "04cade1b796a0fa14845bab05bd7857ac2195e82dc17683cb9838d42da5d80c8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0003-table-original-selected.jpg": "3b34becd0628ea4ed0c0c420e1d1fcea07729d133d6521421f210cfd94653db5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0004-table-original.jpg": "866da15206b59ffe6785aba84242032123043d51c8bd2f89151a85e5bcb2d3aa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0005-table-undo-original.jpg": "cad375c8d401c4d142ac7d9fa22f3474ca7be048fb40af27c4e99aeb8bb6bbff",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0006-table-restore-selected.jpg": "3b34becd0628ea4ed0c0c420e1d1fcea07729d133d6521421f210cfd94653db5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0007-table-restore.jpg": "866da15206b59ffe6785aba84242032123043d51c8bd2f89151a85e5bcb2d3aa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0008-bin-finish-selected.jpg": "58db11afaeda1cb41e235cb56537dbbc6379b36e036cf7fb0e99827efb3709e9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0009-bin-finish.jpg": "64197d95a0abfeadf4ee3c3571cfdff53f1595359442093d63d285df2edc5444",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0010-bin-original-selected.jpg": "0a5769d02f43a42cef19d3c689ce8d45b1d1c053157163ae6c8be347deb5bc62",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0011-bin-original.jpg": "15ba07cfc4c45024b826089c66040b592431bcae198ffaffd0becf8c69c6ae11",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0012-bin-undo-original.jpg": "c0cc3916c3acfb98d5cb1f1ca1bb3ed58a2dae1aaca234b0f63b999fd372b54e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0013-bin-restore-selected.jpg": "0a5769d02f43a42cef19d3c689ce8d45b1d1c053157163ae6c8be347deb5bc62",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0014-bin-restore.jpg": "15ba07cfc4c45024b826089c66040b592431bcae198ffaffd0becf8c69c6ae11",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0015-mixed-selection.jpg": "88e81ce29fc221cb4cdca69698770cd8f4fd680dbe8dde04740d6a4d23bc4358",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0016-mixed-plastic-selected.jpg": "14bbe9856ccdb481598422c593f54a64b8b3b254d98145e9e0055db0235ec6a2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0017-mixed-plastic.jpg": "bf6e392d2c9aa45c2ecdc042ed2c30ead6f1093698baec18615b08d78bd1eb64",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/workflow/0018-final.jpg": "3492c4f8b1c18b1962b5adc1accceb44430375fdf9d18eff9b3b811a75449baf",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1/authored-world.yaml": "1190766b8a9e1aeafd8cfd0edef0b2305a54dc4f2b99b581b8e51cd944240544",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1/authored-world.yaml": "1190766b8a9e1aeafd8cfd0edef0b2305a54dc4f2b99b581b8e51cd944240544",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/preflight-v1.receipt.json": "1dbbfdd0c6d42cc9e9dcc428dd54db27b41d0a945e50439e93ddb68bc84528a5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/preflight-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/units-v2.receipt.json": "44b93dd8dd5cb8ad11ad0201a66be09a5b5bed0385a9a9fbd5efbdd2023f8c18",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/units-v2.log": "401f5abbfbc75cca76ed71b777e807a0a64cba9f249c5deab03cf189e96f7724",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/furniture-browser-v1.receipt.json": "c54cd96faab8db7d8b051e157cb3c1f749b1798b9046a97b41b2490b5b674065",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/furniture-browser-v1.log": "1bf55effc41683ab432f571d2a3c1b440c925e9326a3c39f8e86a7cb4966d59a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/legacy-surface-browser-v1.receipt.json": "614d5ae436f7e3b72dae3c7282b146418b4396ec3adf2e538482d59ea5711c1c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/legacy-surface-browser-v1.log": "548572c0c74b9519a6f5e2b3e4615b951a7a36f46978bf1537d9fe8ad2fad98c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/graphics-v1.receipt.json": "4f9e1e6b792d24a67c1a0e1361847e10bb37e8a602a16d529ec9a6623edcc8b9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/graphics-v1.log": "38306e08ddf00c405cfff16cfacb252dc6b720b0b56eb358603506f18d818a8d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1.receipt.json": "025261e19c99eda10eff53db6a06c77ed83c3df1aec8d441011ac8e2e773e8fb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1.receipt.json": "d737b346c574c5ded7398b2458781565ba5d1761cc16ce85edb38592e87c2888",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1.receipt.json": "28c455f78882af3fda8b8be4ebd3b02d5ccd7c00e1cc757f7146cd06dca17df9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1.receipt.json": "a08611aac1c0eb92c62ef4c46a38e048cf2f8fe8ecd3120e611afb7c89deb87f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/framework-v1.receipt.json": "34578c1720bd60231b6b6c14d2eae87ade5d696c7df60aa4e84c3b15c3b69229",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/framework-v1.log": "46495435ec10516e21bc478d6c37eefb9b9aaeddc6f285ed6483bd20b0dc2743",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/build-v1.receipt.json": "0966f0fdf6441ed1bf430c19c6567ca64f32787e748aac40de94a0797a94383b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/build-v1.log": "a482c33bb9974f9a89234b9604e31ed0b5e0b0a4e7f458823cacfb6b68a11117",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/install-smoke-v1.receipt.json": "97e05125d67add0f5746276c19a09844bdc475701f52729cae275627ed428e7e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/install-smoke-v1.log": "1cb871a4de30164fa071edcc0756d027e61d90753b61c002e3077f0a971f1cc1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/compare-v1.receipt.json": "fc31bc4afd61204b9b58c6a283a0eefa314a8e0c42ca9d93bf78848a731a9643",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/compare-v1.log": "a4c1fcbdace01ca24e5fb35e97b76c3e10368ca8b72d4a5840e05fdb4dfe5c94",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/install-budgets-v1.receipt.json": "f52a39d87ea5151578f48e17097f79e22741ad6c9c23a031f463a2f4a5af54ab",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/install-budgets-v1.log": "5a5f6746220bdbaa1ae566eefd427b0a21fc564a5b6276f3c4cfb3894d126306",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-a0-v1.receipt.json": "d82910eee0c9728608ff9a2b298c5d0a3d68942a23bb880b358e5682355599ef",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-a0-v1.log": "9f7ec18f2688ebcb88b37c099518e04a44e093b2bca1595be6ca7e6f9197dd50",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-b1-v1.receipt.json": "2bfda570d9e2c385ccac03e6c94aa25c3eb3adf01c57574495947deb06e514ce",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-b1-v1.log": "c2353745f783a4a69d729d260da2f40878935a06ffe77b390f4c8390219c0956",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-b2-v1.receipt.json": "33b537d219b02232c1bb371172a0e56d3b7de025e993a0a4d5aad23a0e4894fa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-b2-v1.log": "97f94c7b96685987ee77e0537811df664ee57bafa718e441b1ccee0c34ced2bf",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-a3-v1.receipt.json": "cb0fc43d4bb4f009f1a0b355c4c6f4d433348be3774dfcf26e0ffb2700755536",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-a3-v1.log": "5b586923b484169fdba69807077e108786ae1d849d5075a6ad4c9e045f61c26c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1.receipt.json": "48d4d3c249405cdd9d51e0e6a2f61a35a550cafadd08741ce99f5aa6314868ff",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1.log": "b8a13c9d32bf7e5bbead1fd09cdfb29961381c42c9ac734efd4fdf1a71ad16ab",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1.receipt.json": "3acbfac9d446b6166c9e5f24524540724150ddb9b27d63a0adc370d4f75de862",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1.log": "415a40ed56edf5cae1f4118981503626c118f0bccdef9cb3ee61dff4f3fc2bf0",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1.receipt.json": "70b5fc38aa89222c897f45997bc88ed437b7c95857bead3b6f08ccde5e5b1963",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1.log": "fce0c14cc7667f1ce03b5aaf7c5a0624488f54cbb6c63e82acd4f136f1e1dd6a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1.receipt.json": "c1fe3557f9cd5e431b0b6b418d06283da3163f0e7bd34a5613b66656c38bea5d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1.log": "0c9344d42c2ee6f94970453318bbf58f592a740a84c7e90ee643fe04dcefa121",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/install-budgets-v1/2026-11-02-d879706-dirty-partial.json": "d74ff7531bd51cb0ca8e765b8db30df3992652acd1caabde032eab4a80749da3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-a0-v1/2026-11-02-3ccc6c8-partial.json": "a95b1148e7590aa2089aca355753de4ec8a364579d2d2711865ba19096cf504f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-b1-v1/2026-11-02-d879706-dirty-partial.json": "43351c9d71102b3213a979839cd0e4028fd506acd273b87cca83f6407ef30918",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-b2-v1/2026-11-02-d879706-dirty-partial.json": "446e7f58c35332dd9946269d556acee5ab1df25baf4a740be0bda81a26e0e647",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/viewer-a3-v1/2026-11-02-3ccc6c8-partial.json": "568059ea09aea8d1ce4f964896d381b2151b4c3f6541d3411524093c39528e3e",
+    "/Users/yusenthebot/dev/robotforge-furniture-finishes/docs/bench/budget.json": "fa15d36e69aa2f9edd9b101d61b24a706021caf46a951d0cf9671031afb382a8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/workflow.mp4": "226637d9141e7e0228bb2c4012036325373bc29d011f08a40d48bfd29e45737b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/media-qa.json": "7b9d16fe940a17ab0dde0d99bbd11927bb64799ae2e917f10e6e2d7b9b0f3819",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/manifest.json": "fad92572dc605fbbae97890068366964cd391f703e586a8bc8a7bd8e8f8f297a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/decoded-contact.jpg": "25759c05ed35f0b4da156e0ffb50b5e905558b4b5a89a1df50f76b1c239f582a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/fps-preflight.json": "83f22253f238bb49c00bc72e9b100ffce95d7a1a594f8721ec8219e2dca1de47",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/raw-frames/f00003.jpg": "0abbc2d9723f8da300df0bc4d8b08cf04dc05cbb1d218b48f8f10fcc3dea0d62",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/raw-frames/f00002.jpg": "bfa9b8b5e8dd51863bdcd78e3045f710ba149fc265e7412c736bf871dbeec7d9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/raw-frames/f00000.jpg": "00823a4fe9de4bfd07ea9907de1b5b30dd104e7a2af37e5811d97b313b1bbb75",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/raw-frames/f00001.jpg": "3fee7b880a4ce8aee9390ae5107def908c49ac442a2b3a1bf12fd05a479093ec",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-baseline-media-v1/raw-frames/f00004.jpg": "1f012b4b26b93e4163584c123d2b5da046a80da444e9efcefe17bd288420d16c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/workflow.mp4": "9c71459d369500333e0d871606d9ccf2bad83dfb9cefb71e9e779f007fe7f551",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/media-qa.json": "5e8e0d6898d37b3508766b13f5bd14681e2b807d56e824a6cdcd82229af3cffd",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/manifest.json": "36008d565a5de3fa2ccca91bcaaaf41c300f40f94f8f280ad2bb0525e7e942f2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/decoded-contact.jpg": "f09dde27021ea91ed4939b6f39034a0d7e027578c1cdd1f1f0c5269b1bb4ff11",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/fps-preflight.json": "fddb0e582252fadb93623ffeb1f8de5f3004f5358530f668a6a5ece4e7f05ad0",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00017.jpg": "68466b28940a33f07265d400f298314d6db004da6c89fea5f432ccfbb363640c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00003.jpg": "ac113e6b00dedc802afeec82e91e974aeca82939cca70398cdd54df9c4e8ee5c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00002.jpg": "ddbbb61bfb542bc60df6a9e1acd0adc53a1664476fccaa76b1012c1bf10375a1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00016.jpg": "c2d09a29a1592d94f157c53257e9cd115b5119d2d499cc202480726153ddde6b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00000.jpg": "00823a4fe9de4bfd07ea9907de1b5b30dd104e7a2af37e5811d97b313b1bbb75",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00014.jpg": "3be9da36e429ca43e38e91dafa79700efd098354a99a1a37f61767faf1d41358",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00015.jpg": "11bdfbbce83fb4e367ffd7de7788139ad8b64fd5c716a714730979d76f560a9a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00001.jpg": "88aea04c45d752d40f9390759891d810d3e3df05e848079872cba6085c55ca5a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00005.jpg": "e82d0759c4c1256dddf24a1cbc29484714974c4764b695f2eccb65285e50f356",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00011.jpg": "3be9da36e429ca43e38e91dafa79700efd098354a99a1a37f61767faf1d41358",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00010.jpg": "82a1795d0cb22dedff100327aa99cc2cf1dff558ddf6d2cdd27000964f7073f4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00004.jpg": "71cbaaab1e14c12de8bd87acf0c54851b638448b0e74b77e6fd06ccd366c5bab",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00012.jpg": "5156773c65802ad95e517f2e91ba33dbe155157846b2b59413955d2056d66018",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00006.jpg": "ac113e6b00dedc802afeec82e91e974aeca82939cca70398cdd54df9c4e8ee5c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00007.jpg": "71cbaaab1e14c12de8bd87acf0c54851b638448b0e74b77e6fd06ccd366c5bab",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00013.jpg": "82a1795d0cb22dedff100327aa99cc2cf1dff558ddf6d2cdd27000964f7073f4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00009.jpg": "65c9e6e11651516cab8f472a5ad7ebe5a6209ef5c46679154b1f083fd7566f41",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00008.jpg": "022fbd429844bf4590458d4baf890d3dd4cbfe6235d5547cae24bfbe06e240bb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/malo-candidate-media-v1/raw-frames/f00018.jpg": "7c352bdaeb6844b1e54bf84a69faca85ece50d492ee42f067054983f955463d1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/workflow.mp4": "eab3e9f5b08e94dc90d1064bc28d90beca641f28f16c9d578c11f163df3d33d7",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/media-qa.json": "bb88c4f19f6ceeb5ce8edbb192f458be131daa601324574b1fa17c4b64a22e61",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/manifest.json": "446942a68070d7a713c7bf277201dc1e842a421c49aa1143a4cedfefa477ef15",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/decoded-contact.jpg": "fb2339ccf701aafe7cd64372d026c35ac8141c10581ee16466687cf8b1ac1a97",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/fps-preflight.json": "9fc9ec80098b0800c784277f16308651e02ffaa02ff8cf8fec89803cd9776d86",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/raw-frames/f00003.jpg": "07cb1ddb19310a943bffa5d96e299c835304a9f910fd64a3b56ab2f2e17c5680",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/raw-frames/f00002.jpg": "e489b8b663b9e4884f5717f1ce2c6cb77d247ebf51552ad8b1502a7aebc543e4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/raw-frames/f00000.jpg": "17c55f4b6ea7c9e72df2c2368d96213c2b62a87ed47d8b05e01db0cfbc9e9881",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/raw-frames/f00001.jpg": "664906033aeedbf3e45b962acbc6e25976a9861fb1d6d105ad6aa5dc59c22ec9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-baseline-media-v1/raw-frames/f00004.jpg": "b63e1c55bba1f484c5d2c83461790c538304ae89fa010150bb42d41130ec87b8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/workflow.mp4": "beeaff50dee94603a020052639b3b77c8ecb8fb7547d1062f5ba2bdeddf66dce",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/media-qa.json": "33f57e22da502149c843bf7e69b60da2a0224cb685e33bc1fb0be152f3badb9b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/manifest.json": "f229dc56d6c85ff902170fe375b5ad8d8fb5b1c3a0964c0e66222521d91ea02a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/decoded-contact.jpg": "7c46e5fdfe2a7a535003cd2af92c1d7e17d78031697cfd616b830da1f0dc7fd5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/fps-preflight.json": "ea8e3613b88b0813075a452b592d2844691dae9f159df7d730975bd9b8282949",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00017.jpg": "bf6e392d2c9aa45c2ecdc042ed2c30ead6f1093698baec18615b08d78bd1eb64",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00003.jpg": "3b34becd0628ea4ed0c0c420e1d1fcea07729d133d6521421f210cfd94653db5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00002.jpg": "04cade1b796a0fa14845bab05bd7857ac2195e82dc17683cb9838d42da5d80c8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00016.jpg": "14bbe9856ccdb481598422c593f54a64b8b3b254d98145e9e0055db0235ec6a2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00000.jpg": "17c55f4b6ea7c9e72df2c2368d96213c2b62a87ed47d8b05e01db0cfbc9e9881",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00014.jpg": "15ba07cfc4c45024b826089c66040b592431bcae198ffaffd0becf8c69c6ae11",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00015.jpg": "88e81ce29fc221cb4cdca69698770cd8f4fd680dbe8dde04740d6a4d23bc4358",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00001.jpg": "27cff13b1fe7c82608d1f69b149b7883c4366ec8c7ee916340ca073002500d3e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00005.jpg": "cad375c8d401c4d142ac7d9fa22f3474ca7be048fb40af27c4e99aeb8bb6bbff",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00011.jpg": "15ba07cfc4c45024b826089c66040b592431bcae198ffaffd0becf8c69c6ae11",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00010.jpg": "0a5769d02f43a42cef19d3c689ce8d45b1d1c053157163ae6c8be347deb5bc62",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00004.jpg": "866da15206b59ffe6785aba84242032123043d51c8bd2f89151a85e5bcb2d3aa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00012.jpg": "c0cc3916c3acfb98d5cb1f1ca1bb3ed58a2dae1aaca234b0f63b999fd372b54e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00006.jpg": "3b34becd0628ea4ed0c0c420e1d1fcea07729d133d6521421f210cfd94653db5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00007.jpg": "866da15206b59ffe6785aba84242032123043d51c8bd2f89151a85e5bcb2d3aa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00013.jpg": "0a5769d02f43a42cef19d3c689ce8d45b1d1c053157163ae6c8be347deb5bc62",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00009.jpg": "64197d95a0abfeadf4ee3c3571cfdff53f1595359442093d63d285df2edc5444",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00008.jpg": "58db11afaeda1cb41e235cb56537dbbc6379b36e036cf7fb0e99827efb3709e9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/go2-candidate-media-v1/raw-frames/f00018.jpg": "3492c4f8b1c18b1962b5adc1accceb44430375fdf9d18eff9b3b811a75449baf",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/baseline-source-v1.json": "9c04395b07b24c81cb5c3b1d5a213072394638a633b69baee958008a681c2f70",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/candidate-source-v1.json": "044fb272cae1ccc72c1617a4206ef195e5128e52cb6c792c71123d2484fc3847",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/run_guarded_v1.py": "03538d4b5dc64969dcfd5c06a9b7837ef45ba30997f63ca058ea34324dfaf2d0",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/capture_furniture_v1.py": "04f203d67b5eb90403d8fbfa3c5d42b3256ad76a4b2a9eaea7bc7d8dd4d3d659",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/CAPTURE-FURNITURE-v1.md": "ac98cf8454fab6b09277e40d8fa0d2d2748229b68b5f5b5fe9d79dc80b75dd48",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/comparisons-v1.json": "0f23d56a587e344048a2a90f46043d925c746995143f0d17de152fca3270efda",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/compare_captures_v1.py": "5cc22dad387a059d59776ed96741e284edd28cfe48dc685d1c8545dbdea043f4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/install_and_smoke_v1.py": "7492c17cd6c47ce74624d44fc0d1d94bf1e58fd59f00e565bae36c268302bb51",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/installed_furniture_smoke_v1.py": "6fa23d71723d0900a1f9771bcb5c1fc136e910348a5e157a4f870e462b5cdcc2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/prepare_motion_media_v1.py": "37e22647c4691257f18f7fdceadfbf03a3395b0f76cea60f39c0d580b81bfd2a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/package-equivalence-v1.json": "d4322254c2d865a6b43c3707afb408c170c9ce045f2b5519d039b259ffdd5049",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/installed-selection-smoke-v1.json": "40426b4c3d12c99d3949c3501f25ed76eab2e0179c52690efeae4893e1f8ca2e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/installed-furniture-smoke-v1.json": "83a53af4821cebc7efde9ec634ab47cfb31c61fa8f8b2526df29c67d6bef27d5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/framework-v1/manifest.json": "94d00e07f3648f6bc09933278db421b1f8162a6fbcac500e4fe8099cafa542b7",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/units-v1.receipt.json": "1892e4e78d858c756b31b341f24ecfff376906cbe637abcfb85ec8add6ac839b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/units-v1.log": "bd400a41e1c111d247a9c6faf5a134dd13ee7445c18d533f7b0c304366352fe1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/record-v1.receipt.json": "9d28a6f5d5bfd2cb4104b531d9ab14b158da486efde6b27bf30c2e09522bd008",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/record-v1.log": "87be901d36a03fd08f98c7a1b789e0cd3e9ca7348356fef71c07db4ccd48726e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/record_v1.py": "e2074b58b2c3dbf268baa04a2fd556522975765796e7a547a498e26807c3bd28",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-furniture-finishes/record_v2.py": "7723f0dd95e64018257d5b34521c37ae019f6709f8d46453ed8967355859ccfd"
+  },
+  "inspection": {
+    "root_decoded_contacts": 24,
+    "root_native_ui_stills": 4,
+    "independent_native_stills": 8,
+    "continuous_video_watch": false,
+    "ordinary_view_table_wood_gain": "subtle_or_neutral",
+    "ordinary_view_bin_steel_change": "clearly_visible_preserves_authored_hue",
+    "default_or_global_visual_quality_improvement_established": false
+  },
+  "native_zoom": {
+    "verified": false,
+    "tool_report_after_user_unlock": "Mac is locked; direct Chrome connection also unavailable"
+  },
+  "exclusions": [
+    "Windows",
+    "remote CI",
+    "native OS/browser zoom",
+    "full test suite",
+    "WebSocket payload bandwidth",
+    "general speedup",
+    "general visual quality gain",
+    "continuous motion quality"
+  ],
+  "tools_unavailable": [
+    "bandit",
+    "pip-audit",
+    "mypy"
+  ],
+  "report_assembly_failure": "v1 assumed not_run instead of actual not run status; parser-only v2 correction; no budget or product changes",
+  "retained_failure": "units-v1 referenced nonexistent test_prop_looks.py; zero tests ran; corrected path set passed units-v2",
+  "goal_status": "active",
+  "next_seed": "Screen repeated versioned mesh transfers after visual edits, reviewing prior rejected reuse first"
+}

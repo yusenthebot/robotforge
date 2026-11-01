@@ -39,6 +39,34 @@ def populate(playground):
     playground.add_object("desk", shape="table", size=[1, 0.6, 0.7], pos=[4, 0])
 
 
+def test_mixed_furniture_batch_and_original_restore_heterogeneous_surfaces(pg):  # noqa: F811
+    populate(pg)
+    pg.add_object("sink", shape="bin", pos=[6, 0], fixed=True, yaw=37, surface_material="steel")
+    original, old_model = pg.store.load(), pg.session.model
+    names = ["desk", "box", "sink"]
+    result = batch(pg, names, finish="wood")
+    changed = {entry.name: entry for entry in pg.store.load().objects}
+    assert all(changed[name].surface_material == "wood" for name in names)
+    for field in (
+        "body_mass",
+        "body_inertia",
+        "geom_friction",
+        "geom_contype",
+        "geom_conaffinity",
+        "geom_size",
+        "mesh_vert",
+        "mesh_face",
+        "geom_rgba",
+    ):
+        np.testing.assert_array_equal(getattr(pg.session.model, field), getattr(old_model, field), err_msg=field)
+    undo(pg, result)
+    assert pg.store.load() == original
+    cleared = batch(pg, names, finish=None)
+    assert all(entry.surface_material is None for entry in pg.store.load().objects if entry.name in names)
+    undo(pg, cleared)
+    assert pg.store.load() == original
+
+
 def test_mixed_batch_one_compile_load_history_preserves_physics_and_latest_undo(pg, monkeypatch):  # noqa: F811
     pg.add_robot("rover", template="rover", pos=[-2, 0])
     populate(pg)
@@ -158,7 +186,7 @@ def test_member_boundaries_and_mixed_changed_unchanged_targets(pg, monkeypatch, 
         {"names": ["box", 3]},
         {"names": "box"},
         {"names": ["box", "missing"]},
-        {"names": ["box", "desk"]},
+        {"names": ["box", "unsupported"]},
         {"surface_material": "gold"},
         {"surface_material": True},
         {"name": "box"},
@@ -171,6 +199,8 @@ def test_member_boundaries_and_mixed_changed_unchanged_targets(pg, monkeypatch, 
 )
 def test_invalid_member_or_guard_refuses_the_whole_edit(pg, patch):  # noqa: F811
     populate(pg)
+    if "unsupported" in patch.get("names", []):
+        pg.add_object("unsupported", shape="drawer", pos=[7, 0])
     before = snapshot(pg)
     with pytest.raises(PlaygroundError):
         batch(pg, **patch)

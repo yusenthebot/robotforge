@@ -41,6 +41,7 @@ from robotforge.design import (
     terrain,
 )
 from robotforge.design import water as waters
+from robotforge.design.object_surfaces import SURFACE_SHAPES
 from robotforge.design.tasks.spec import TaskEntry
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
@@ -329,8 +330,8 @@ class ObjectEntry(_Strict):
             )
         if self.material is not None and self.shape not in ("box", "sphere", "cylinder"):
             raise ValueError(f"object {self.name!r}: material is for loose boxes, balls and cylinders")
-        if self.surface_material is not None and self.shape not in ("box", "sphere", "cylinder"):
-            raise ValueError(f"object {self.name!r}: surface_material is for boxes, balls and cylinders")
+        if self.surface_material is not None and self.shape not in SURFACE_SHAPES:
+            raise ValueError(f"object {self.name!r}: surface_material is for boxes, balls, cylinders, tables and bins")
         if self.seed is not None or self.params:
             self._generated_fields()
         return self
@@ -1056,7 +1057,7 @@ def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: f
                     rgba=[c * 0.7 for c in rgba[:3]] + [1],
                 )
             )
-    looks.dress(spec, body, "table", obj.size, rgba, obj.name, geoms)
+    looks.dress(spec, body, "table", obj.size, rgba, obj.name, geoms, material=obj.surface_material)
     # a cloth hangs over its edges, not in under its top
     mechanisms.cloth_skirt(body, length, width, height - top, height)
 
@@ -1096,7 +1097,7 @@ def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: flo
             **kwargs,
         )
         geoms.append(g)
-    looks.dress(spec, parent, "bin", obj.size, rgba, obj.name, geoms, pos=[x, y, z])
+    looks.dress(spec, parent, "bin", obj.size, rgba, obj.name, geoms, pos=[x, y, z], material=obj.surface_material)
 
 
 def _home_qpos(model: mujoco.MjModel, homes) -> np.ndarray:

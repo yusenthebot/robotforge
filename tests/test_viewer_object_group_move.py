@@ -39,10 +39,24 @@ def pose(pg, name, xyz, yaw=0.0):  # noqa: F811
 
 
 @pytest.mark.parametrize("reverse", [False, True])
-def test_move_keeps_names_world_order_authored_settings_and_one_compile_inverse(pg, monkeypatch, reverse):  # noqa: F811
+@pytest.mark.parametrize("finished", [False, True])
+def test_move_keeps_names_world_order_authored_settings_and_one_compile_inverse(
+    pg,  # noqa: F811
+    monkeypatch,
+    reverse,
+    finished,
+):
     from robotforge.design import store as store_module
 
     table(pg)
+    if finished:
+
+        def finishes(world):
+            for entry, finish in zip(world.objects, ("wood", "steel", "plastic"), strict=True):
+                entry.surface_material = finish
+
+        pg._edit(finishes)
+        pg.session.paused = True
     originals = pg.store.load().objects
     before = state(pg)
     calls, loads = [], []

@@ -69,6 +69,33 @@ def test_immutable_global_records_unicode_names_restart_and_removal(library_home
         assert restarted.entries() == []
 
 
+@pytest.mark.parametrize("shape,size", [("table", [1, 0.6, 0.7]), ("bin", [0.4, 0.3, 0.2])])
+@pytest.mark.parametrize("finish", [None, "plastic", "wood", "steel"])
+def test_furniture_visual_finishes_and_legacy_members_persist_without_physical_material(
+    library_home, shape, size, finish
+):
+    selected = members()
+    for member in selected:
+        member.update(shape=shape, size=size)
+        member.pop("material")
+        member.pop("surface_material")
+        if finish is not None:
+            member["surface_material"] = finish
+    with arrangements.locked() as saved:
+        record = saved.save("Furniture", selected)
+    with arrangements.locked() as reopened:
+        assert reopened.record(record["id"], record["sha256"])["members"] == selected
+        assert reopened.entries() == [record]
+
+
+@pytest.mark.parametrize("shape", ["table", "bin"])
+@pytest.mark.parametrize("material", ["plastic", "wood", "steel"])
+def test_furniture_record_physical_material_stays_forbidden(shape, material):
+    selected = {**members()[0], "shape": shape, "material": material, "surface_material": "wood"}
+    with pytest.raises(arrangements.ArrangementError, match="unsupported material"):
+        arrangements.validate_member(selected)
+
+
 def test_two_to_sixteen_members_and_sixteen_record_limit(library_home):
     with arrangements.locked() as saved:
         for count in (2, 16):

@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-02 furniture finishes: tables and bins share the existing visual surface contract and single/mixed editing, preserving physical material, default looks, rubber feet and arrangement format.
+  534 distinct scoped pytest cases,7 same-runtime framework cases, fresh locked offline installed smoke/430-file equivalence,4 install and fixed ABBA4×7 viewer budgets pass; wheel4151883B(+446), no new assets/dependencies/shaders.
+  Actual Malo/Go2 four flows pass;26 native frames form18 correlated exact fullRGBA pairs,4 fully decoded sampled films retain48 acquired JPEGs;24 decoded samples and4 native control images inspected.
+  Bin Steel changes are clear; table Wood/mixed Plastic are subtle, so no default/global visual-quality gain claimed; native desktop zoom still tool-blocked after unlock, Windows/CI/fullsuite excluded. [Report](docs/bench/2026-11-02-furniture-finishes.md).
+  Broad goal active; next screen repeated versioned mesh transfers after visual edits, reviewing rejected reuse work first; action-success tuning deferred.
+
 - 2026-11-02 carried-prop selection: one explicit button includes all recursively supported rigid props, up to16, for existing group move/copy/save; legacy interfaces and movement admission remain.
   388distinct scoped pytest cases,7same-runtime framework cases, fresh locked offline installed smoke/429-file equivalence,4install and fixedABBA4×7viewer budgets pass; wheel4151437B(+2561), no new assets/dependencies.
   Actual Malo/Go2 baseline/manual and candidate/query→move→Undo flows pass;10diagnostic frames form8exact fullRGBA comparisons,4fully decoded sampled films retain40JPEGs,24decoded contacts inspected.
