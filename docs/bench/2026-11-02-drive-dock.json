@@ -1,0 +1,435 @@
+{
+  "date": "2026-11-02",
+  "baseline_main_tree": "093037d6f61120e491459be603ddae92d9f964ec",
+  "baseline_equivalent_worktree_commit": "8ebf237e7f7cebd848f963f9f07921e741006086",
+  "candidate_source_sha256": "a925f661a0f6377d4894d0b56ad873854390458e6bf1144478d4cd012e387b71",
+  "candidate_input_count": 809,
+  "change": "Remove low-bottom keyboard hint override; keep hints above dock.",
+  "distinct_browser_test_passes": 124,
+  "test_groups": {
+    "driving_camera_new_regression": 59,
+    "layout_row_saved_layout": 65
+  },
+  "wheel": {
+    "bytes": 4148876,
+    "delta_bytes": -21,
+    "sha256": "0956c9136eb5c4d2eef1e53501f30354f0a3e96a83097c09fcdbb021b5249f78",
+    "source_wheel_installed_product_files": 428,
+    "only_changed_product_file": "robotforge/viewer/static/style.css",
+    "css_source_delta_bytes": -125
+  },
+  "metrics": {
+    "viewer-a0-v1": {
+      "cold_start_s": 0.9247,
+      "fps": 60.0551,
+      "frame_ms": 1.6,
+      "assets_fps": 60.1569,
+      "assets_frame_ms": 2.2,
+      "server_peak_mb": 143.7,
+      "idle_cpu_pct": 4.6
+    },
+    "viewer-b1-v1": {
+      "cold_start_s": 0.9426,
+      "fps": 60.1129,
+      "frame_ms": 1.6,
+      "assets_fps": 59.978,
+      "assets_frame_ms": 2.0,
+      "server_peak_mb": 143.5,
+      "idle_cpu_pct": 4.8
+    },
+    "viewer-b2-v1": {
+      "cold_start_s": 0.9282,
+      "fps": 60.093,
+      "frame_ms": 1.9,
+      "assets_fps": 60.1489,
+      "assets_frame_ms": 2.3,
+      "server_peak_mb": 143.7,
+      "idle_cpu_pct": 4.8
+    },
+    "viewer-a3-v1": {
+      "cold_start_s": 0.9366,
+      "fps": 60.1049,
+      "frame_ms": 1.6,
+      "assets_fps": 60.1469,
+      "assets_frame_ms": 2.2,
+      "server_peak_mb": 144.0,
+      "idle_cpu_pct": 4.6
+    },
+    "install-budgets-v1": {
+      "wheel_kb": 4051.6367,
+      "installed_mb": 164.0655,
+      "packages": 42.0,
+      "download_mb": 52.5149
+    }
+  },
+  "captures": {
+    "passed": 4,
+    "full_native_canvas_images": 8,
+    "full_rgba_equal_pairs": 6,
+    "within_run_native_arrays": 481,
+    "raw_jpeg_samples": 100,
+    "resource_entries_per_capture": 33,
+    "http_transfer_bytes_measured": false,
+    "reset_clicks_per_candidate": 2
+  },
+  "films": [
+    {
+      "world": "malo",
+      "variant": "baseline",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-baseline-media-v3/workflow.mp4",
+      "sha256": "2778d513729b49116fe7c96fd5e3f3f991235bad2bd0189e1d4ca1a8c5649f0c",
+      "duration_s": 7.2,
+      "decoded_frames": 216,
+      "raw_samples": 20,
+      "raw_span_s": 7.132137165986933,
+      "duration_error_s": 0.0011961673464009337,
+      "input_clock": {
+        "declared_time_base": "1/1000000",
+        "observed_time_base": "1/1000000",
+        "image_framerate_option": 1000000,
+        "strictly_increasing_pts": true,
+        "packet_count": 21,
+        "declared_concat_durations_seconds": [
+          "0.209350750",
+          "0.199723750",
+          "0.204127500",
+          "0.200938541",
+          "1.249883709",
+          "0.200491625",
+          "0.199901541",
+          "0.203030125",
+          "0.199636500",
+          "0.244995000",
+          "0.205512250",
+          "0.197249584",
+          "0.199793791",
+          "0.199443917",
+          "2.414461417",
+          "0.201734666",
+          "0.199755667",
+          "0.201923750",
+          "0.200183083",
+          "0.033333333"
+        ],
+        "maximum_interval_error_seconds": "9.17E-7",
+        "maximum_raw_endpoint_drift_seconds": "0.000010165986933",
+        "input_probe_file": "concat-input-probe.json",
+        "input_probe_sha256": "fe137a49376da44a672ec8e4b18738a15c1bb9d572d13fd37f7bf7f006ee157a",
+        "scope": "Each unchanged concat duration is represented within one microsecond; cumulative raw endpoint quantization is reported separately."
+      },
+      "preflight_output_frames": 216
+    },
+    {
+      "world": "malo",
+      "variant": "candidate",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-candidate-media-v3/workflow.mp4",
+      "sha256": "837a05cb5f3b27044d62945b9744916d0f4b6b83eccd0fee402738bc9c411a61",
+      "duration_s": 9.633333,
+      "decoded_frames": 289,
+      "raw_samples": 30,
+      "raw_span_s": 9.545448249962647,
+      "duration_error_s": 0.021218083370687424,
+      "input_clock": {
+        "declared_time_base": "1/1000000",
+        "observed_time_base": "1/1000000",
+        "image_framerate_option": 1000000,
+        "strictly_increasing_pts": true,
+        "packet_count": 31,
+        "declared_concat_durations_seconds": [
+          "0.191953375",
+          "0.201825625",
+          "0.205861583",
+          "0.199562333",
+          "1.180345625",
+          "0.198990875",
+          "0.203522500",
+          "0.202535417",
+          "0.216055042",
+          "0.562137375",
+          "0.185854916",
+          "0.230743000",
+          "0.199755209",
+          "0.197698416",
+          "1.334567500",
+          "0.200551084",
+          "0.200250333",
+          "0.195954750",
+          "0.221499958",
+          "0.349076542",
+          "0.201472208",
+          "0.199533834",
+          "0.200833333",
+          "0.218490875",
+          "1.247305917",
+          "0.199887083",
+          "0.197062042",
+          "0.203108125",
+          "0.199013375",
+          "0.033333333"
+        ],
+        "maximum_interval_error_seconds": "9.58E-7",
+        "maximum_raw_endpoint_drift_seconds": "0.000013249962647",
+        "input_probe_file": "concat-input-probe.json",
+        "input_probe_sha256": "a06634cc229834c3a2a96e09fc93046992fe4b13beb527b731fa4bac39e346f4",
+        "scope": "Each unchanged concat duration is represented within one microsecond; cumulative raw endpoint quantization is reported separately."
+      },
+      "preflight_output_frames": 289
+    },
+    {
+      "world": "go2",
+      "variant": "baseline",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-baseline-media-v3/workflow.mp4",
+      "sha256": "f3adfcd654ca2fd651ba8048d3463c03569ea415642bec16b8d6ee289d1822ef",
+      "duration_s": 7.2,
+      "decoded_frames": 216,
+      "raw_samples": 20,
+      "raw_span_s": 7.118797582981642,
+      "duration_error_s": 0.014535750351691412,
+      "input_clock": {
+        "declared_time_base": "1/1000000",
+        "observed_time_base": "1/1000000",
+        "image_framerate_option": 1000000,
+        "strictly_increasing_pts": true,
+        "packet_count": 21,
+        "declared_concat_durations_seconds": [
+          "0.199146708",
+          "0.220732083",
+          "0.197794000",
+          "0.197625875",
+          "1.254435584",
+          "0.198366208",
+          "0.200548750",
+          "0.201318167",
+          "0.197610333",
+          "0.250952875",
+          "0.201828083",
+          "0.198491292",
+          "0.198453250",
+          "0.200242875",
+          "2.383536750",
+          "0.198773958",
+          "0.201596500",
+          "0.212455292",
+          "0.204889000",
+          "0.033333333"
+        ],
+        "maximum_interval_error_seconds": "9.58E-7",
+        "maximum_raw_endpoint_drift_seconds": "0.000008582995646",
+        "input_probe_file": "concat-input-probe.json",
+        "input_probe_sha256": "e5073076c114add044490f5f0ec5e0af91010262b56c3b4a90db33d9009bd7ad",
+        "scope": "Each unchanged concat duration is represented within one microsecond; cumulative raw endpoint quantization is reported separately."
+      },
+      "preflight_output_frames": 216
+    },
+    {
+      "world": "go2",
+      "variant": "candidate",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-candidate-media-v3/workflow.mp4",
+      "sha256": "5e9ac5d5097701c1e3370f5a7cae3a38ee3816c6e51d33a0f3094efa7d22d4a3",
+      "duration_s": 9.5,
+      "decoded_frames": 285,
+      "raw_samples": 30,
+      "raw_span_s": 9.423346500028856,
+      "duration_error_s": 0.009986833304477472,
+      "input_clock": {
+        "declared_time_base": "1/1000000",
+        "observed_time_base": "1/1000000",
+        "image_framerate_option": 1000000,
+        "strictly_increasing_pts": true,
+        "packet_count": 31,
+        "declared_concat_durations_seconds": [
+          "0.199061709",
+          "0.202617125",
+          "0.198832375",
+          "0.216487083",
+          "1.184333542",
+          "0.200161541",
+          "0.200206750",
+          "0.203833875",
+          "0.195361209",
+          "0.551622041",
+          "0.201860500",
+          "0.197040459",
+          "0.202773208",
+          "0.197615833",
+          "1.280103167",
+          "0.200772875",
+          "0.199392000",
+          "0.201691958",
+          "0.211680292",
+          "0.337426667",
+          "0.200059000",
+          "0.199871291",
+          "0.199912750",
+          "0.200556750",
+          "1.234911959",
+          "0.200883375",
+          "0.198241333",
+          "0.202212167",
+          "0.203823666",
+          "0.033333333"
+        ],
+        "maximum_interval_error_seconds": "9.59E-7",
+        "maximum_raw_endpoint_drift_seconds": "0.000013500028856",
+        "input_probe_file": "concat-input-probe.json",
+        "input_probe_sha256": "968ec289107a160da58feae721e7856fdeba040cce6bc535ec84cb0f73787bbd",
+        "scope": "Each unchanged concat duration is represented within one microsecond; cumulative raw endpoint quantization is reported separately."
+      },
+      "preflight_output_frames": 285
+    }
+  ],
+  "inputs": {
+    "candidate-source-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/candidate-source-v1.json",
+      "sha256": "a925f661a0f6377d4894d0b56ad873854390458e6bf1144478d4cd012e387b71"
+    },
+    "comparison-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/comparison-v1.json",
+      "sha256": "30e722dd40b7836ccc6c67f8ce098a5a2a191cfe4d054721b41070898d945e16"
+    },
+    "related-browser-v2.xml": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/related-browser-v2.xml",
+      "sha256": "cb276e1f17d3984d9ac4c33e7f3fc92afe1730e26d9d8bd4dc08ff328603d159"
+    },
+    "layout-browser-v1.xml": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/layout-browser-v1.xml",
+      "sha256": "3fbcbfca92ed6999913b751796f5437eb46b98b7e520968d5912f6eda1388f1e"
+    },
+    "layout-browser-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/layout-browser-v1.receipt.json",
+      "sha256": "b8118006d6e988a1e86b6a39963dca84cfe4dccba0d19ec035966c772dfe1427"
+    },
+    "package-equivalence-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/package-equivalence-v1.json",
+      "sha256": "7344daf8d00eb32eedaedc496cb6f6a00e8de71d6cef5deab38af470d4d69af0"
+    },
+    "installed-smoke-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/installed-smoke-v1.receipt.json",
+      "sha256": "dc8b231c60effa21501232a64be2be472924792426d5a3df5c7e12ba85f0c094"
+    },
+    "install-budgets-v1.receipt.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/install-budgets-v1.receipt.json",
+      "sha256": "1573b7c6e74e755ae86ea49a4c8ded9d717bc4644e0cd11b76cfaf3c507182e3"
+    },
+    "root-visual-review-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/root-visual-review-v1.json",
+      "sha256": "69b69aeb56ef1e15d3b4de1e94e8115ccf07b2c26f04c06565e843be20bb703f"
+    },
+    "run_guarded_v2.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/run_guarded_v2.py",
+      "sha256": "0b8aa385e955b4a4b2dc516cefabc6402d8a1843c253cd4185615ad29421a821"
+    },
+    "drive_dock_capture_v4.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/drive_dock_capture_v4.py",
+      "sha256": "652c7a2833a6f327139976388d461d34e09db46b452599fcd19d03f02f90b332"
+    },
+    "DRIVE-DOCK-v4.md": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/DRIVE-DOCK-v4.md",
+      "sha256": "980ce6c94987329db19e3f90fc7a688080dce17ed97878237fcf7cb0e9fedbf9"
+    },
+    "prepare_media_v6.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/prepare_media_v6.py",
+      "sha256": "ca22bd09768ffb0cde40b437f183dc0a2d1c18c269bb369470074444cea26311"
+    },
+    "MEDIA-v6.md": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/MEDIA-v6.md",
+      "sha256": "9086c7068345b16b99e2d48635d8f383a3547c98044f1ce53db256cd0ce4c6ec"
+    },
+    "encode_motion_v4.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/encode_motion_v4.py",
+      "sha256": "bf799cbef07ffea594900786acc1b14f4833415107e57b36ca3b161c634aa408"
+    },
+    "malo-baseline-capture": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-baseline-v3/manifest.json",
+      "sha256": "c142181c296132c1eea75acc932d4c2660647ce78b31df348dce41f828560040"
+    },
+    "malo-baseline-media-manifest.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-baseline-media-v3/media-manifest.json",
+      "sha256": "771d17d40166061fd977bb36f66156a808a41faae6af0ade356fb3cb559c26b6"
+    },
+    "malo-baseline-media-qa.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-baseline-media-v3/media-qa.json",
+      "sha256": "9416eff63feae9207aac4b58bb65ccdee1cbf7b0b8f02a87bf853ecc59f638b5"
+    },
+    "malo-baseline-fps-preflight.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-baseline-media-v3/fps-preflight.json",
+      "sha256": "f1c56a8bc69cf41526215916d1ff8d01762b7188990e376e2d9b4890ece3bce0"
+    },
+    "malo-candidate-capture": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-candidate-v3/manifest.json",
+      "sha256": "edf548b3df4864db599880a267efb613d7bd7c8f8d3e1b61c91a1db3ce80eb65"
+    },
+    "malo-candidate-media-manifest.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-candidate-media-v3/media-manifest.json",
+      "sha256": "3f1862e7ec9b2de6a79446c1e2ce16b0a87bfdc30aedd00633f10e11fbedc0d2"
+    },
+    "malo-candidate-media-qa.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-candidate-media-v3/media-qa.json",
+      "sha256": "ef21665f4a67623fe4761445f824168bd9a6a63f9bdb4761cb5d997de6d6df3f"
+    },
+    "malo-candidate-fps-preflight.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/malo-candidate-media-v3/fps-preflight.json",
+      "sha256": "2d394ea7b1bee2a28145da6b49546018f87a47ca5a3e2a36bec6ade03a7d4333"
+    },
+    "go2-baseline-capture": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-baseline-v3/manifest.json",
+      "sha256": "a7184cf2df9328c4b22b63631f2a22c9b7188a8789678b6ddcb4bee29c016ce0"
+    },
+    "go2-baseline-media-manifest.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-baseline-media-v3/media-manifest.json",
+      "sha256": "c93022dcf60415d0dab2cdc91b25252191ccd091803513283ae322c865ed8fa3"
+    },
+    "go2-baseline-media-qa.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-baseline-media-v3/media-qa.json",
+      "sha256": "f09ef8b5d412db27d2fbe2b8895c9a67bc1bbf63dc6e2a8627c6e34722d8d9cc"
+    },
+    "go2-baseline-fps-preflight.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-baseline-media-v3/fps-preflight.json",
+      "sha256": "59dfe76ecda46289db5d8f918ae4e1114091cb36d726545364ef9032a823e5ba"
+    },
+    "go2-candidate-capture": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-candidate-v3/manifest.json",
+      "sha256": "1b2d32d23b054729682f10b42414efb80aa408e0963163ef9c6def00a8edeca9"
+    },
+    "go2-candidate-media-manifest.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-candidate-media-v3/media-manifest.json",
+      "sha256": "089af4f001e56b11d0b81e29b64766276605a7b84360acde5cdc6f78dfe86d6f"
+    },
+    "go2-candidate-media-qa.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-candidate-media-v3/media-qa.json",
+      "sha256": "aa3431105252c4cea21e9e6851aed7658450bceab32282d8a237cad4c99fb6b5"
+    },
+    "go2-candidate-fps-preflight.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/go2-candidate-media-v3/fps-preflight.json",
+      "sha256": "2ac0a1c420aa4ea61e8e4f8710c3513b99918db9e7fd410f7f44fba74cf025d6"
+    },
+    "viewer-a0-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/viewer-a0-v1/2026-11-02-8ebf237-partial.json",
+      "sha256": "ab60eb3b2f5d2c782d68092cf3f31a89991c1b4b41f8ae9baaac382b9043cd14"
+    },
+    "viewer-b1-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/viewer-b1-v1/2026-11-02-093037d-dirty-partial.json",
+      "sha256": "24fa6c79b703f73ef25466446c0fc1fd8aacedd3c3c270ced6f6f30871274c48"
+    },
+    "viewer-b2-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/viewer-b2-v1/2026-11-02-093037d-dirty-partial.json",
+      "sha256": "7d428ead228b402ce10d7007c696300522f8d7ce11ef98a499e3add815fa6108"
+    },
+    "viewer-a3-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/viewer-a3-v1/2026-11-02-8ebf237-partial.json",
+      "sha256": "a6084421ac02d69997758f719f43cfc9178e11c0f9834f06773135a43399b707"
+    },
+    "install-budgets-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-drive-dock/install-budgets-v1/2026-11-02-093037d-dirty-partial.json",
+      "sha256": "210cfe75bc1a716371613d12837d81276a087c94e1ba6ec75c17f5f75235816c"
+    }
+  },
+  "limits": [
+    "Scoped124browserpasses, not fresh full-default/full-browser/Windows/remoteCI acceptance.",
+    "Native desktop zoom remains unverified.",
+    "At most5Hz sampled screenshots, explicit30CFRresampling; no smoothness/fullplayback certification.",
+    "No new material/image-quality benefit claim; this fixes playability.",
+    "Old failures and source-only rejected helper revisions preserved.",
+    "Push/merge pending at report creation; actual delivery must be separately verified."
+  ]
+}
