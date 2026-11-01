@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from robotforge.viewer.creation import Addition
     from robotforge.viewer.object_edit import Edit
     from robotforge.viewer.object_group import GroupCopy, PreparedGroup
-    from robotforge.viewer.object_surface import SurfaceEdit
+    from robotforge.viewer.object_surface import SurfaceBatchEdit, SurfaceEdit
     from robotforge.viewer.robot_edit import RobotEdit
     from robotforge.viewer.robot_surface import RobotSurfaceEdit
     from robotforge.viewer.terrain_create import TerrainAddition
@@ -138,7 +138,9 @@ class Playground:
     _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
     _play_addition: Addition | TerrainAddition | None = field(default=None, init=False, repr=False)
-    _play_edit: Edit | SurfaceEdit | RobotSurfaceEdit | GroupCopy | None = field(default=None, init=False, repr=False)
+    _play_edit: Edit | SurfaceEdit | SurfaceBatchEdit | RobotSurfaceEdit | GroupCopy | None = field(
+        default=None, init=False, repr=False
+    )
     _play_group: PreparedGroup | None = field(default=None, init=False, repr=False)
     _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
     _play_terrain_edit: TerrainEdit | None = field(default=None, init=False, repr=False)
@@ -321,6 +323,7 @@ class Playground:
                 "undo_object_edit",
                 "duplicate_object",
                 "set_object_surface",
+                "set_object_surfaces",
                 "prepare_object_group",
                 "duplicate_object_group",
                 "move_object_group",
@@ -572,7 +575,7 @@ class Playground:
         from robotforge.viewer.object_edit import duplicate, edit, undo
         from robotforge.viewer.object_group import GroupCopy
         from robotforge.viewer.object_group import handle as group
-        from robotforge.viewer.object_surface import SurfaceEdit
+        from robotforge.viewer.object_surface import SurfaceBatchEdit, SurfaceEdit
         from robotforge.viewer.object_surface import handle as surface
 
         action = message.get("action")
@@ -580,8 +583,8 @@ class Playground:
             action == "undo_object_edit" and isinstance(self._play_edit, GroupCopy)
         ):
             return group(self, message)
-        if action == "set_object_surface" or (
-            action == "undo_object_edit" and isinstance(self._play_edit, SurfaceEdit)
+        if action in {"set_object_surface", "set_object_surfaces"} or (
+            action == "undo_object_edit" and isinstance(self._play_edit, (SurfaceEdit, SurfaceBatchEdit))
         ):
             return surface(self, message)
         if action == "duplicate_object":
