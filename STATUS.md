@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-01 fixed concrete compact screen: exact lossless detail passes image/module caps (69,989/81,920 B and 93,948/114,688 B), but actual module-only wheel4,210,423 B exceeds original4MiB by16,119 B before glue; candidate remains unpromoted, no scene/video/visual-gain claim.
+  Independent offline426/427-file package checks and Pillow RGB/RGBA equality pass;23fresh scoped tests(21default+2actualChrome on accepted wood/grass), source/helper review and Ruff/format pass; initial ZIP-directory inventory failure retained and corrected without re-encoding.
+  All801accepted inputs plus13WIP/791CMF/796unpromoted/799PR68/78native inputs exact; today's desktop connection still reports locked, no fresh native-zoom pass. [Report](docs/bench/2026-11-01-concrete-compact-screen.md).
+  Runtime unchanged; broad goal active, measure general resource packaging/reuse next, action-success tuning deferred.
+
 - 2026-11-01 compact ground detail: fixed losslessWebP preserves wood/grass RGBA and all runtime interfaces; module bodies−41,174B, wheel4,139,451B(−30,811), original4MiB headroom54,853B, no assets/dependencies added.
   186scoped passes(130default+52actualChrome+4GL), source/fresh426file installed smoke and exact offline reproduction, original4install+both7viewer fixed repeats pass; no full-default/framework repeat.
   12native captures/40fullRGBA phase pairs,4fully decoded films/24samples; raw2Malo path-storage arrays explicitly proved, Go2all481exact. Initialfog/diagnostic/QA-variable failures retained; causalON-stale-ON and prospectively corrected fullseries pass without relaxing pixels or changing productfog.
