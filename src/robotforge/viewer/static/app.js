@@ -2776,10 +2776,14 @@ function renderObjectSelectionControls() {
   const group = selectingObjectGroup;
   $("object-select-carried").hidden = group || !objectSelection;
   $("object-select-carried").disabled = busy || !paused || !objectSelection || !objectSelectionCurrent();
-  for (const id of ["object-focus", "object-move", "object-copy", "object-remove"]) {
+  for (const id of ["object-move", "object-copy", "object-remove"]) {
     $(id).hidden = group;
     $(id).disabled = busy || !objectSelection;
   }
+  const focus = $("object-focus"), focusNext = $(group ? "object-group-row" : "object-surface");
+  if (focus.nextElementSibling !== focusNext) focusNext.before(focus);
+  focus.hidden = false;
+  focus.disabled = busy || (group ? !objectGroupSelection.size || !objectSelectionCurrent() : !objectSelection);
   const surfaceMembers = group ? [...objectGroupSelection.values()] : objectSelection ? [objectSelection] : [];
   const eligible = surfaceMembers.length > 0 && surfaceMembers.every((entry) => Object.hasOwn(entry, "surface_material"));
   const surfaceReady = eligible && (!group || (paused && surfaceMembers.length >= 2 && objectSelectionCurrent()));
@@ -2874,12 +2878,22 @@ function updateObjectHighlight() {
 }
 
 function focusObject() {
-  if (busy || !objectSelection || !hasSize() || placementVersion !== sceneDesc?.version
+  if (busy || !(selectingObjectGroup ? objectGroupSelection.size : objectSelection) || !hasSize() || placementVersion !== sceneDesc?.version
       || placementGeneration !== stateGeneration || renderedVersion !== sceneDesc.version) return;
+  if (selectingObjectGroup && (!worldRoot || !objectSelectionCurrent())) return;
   updateObjectHighlight();
-  if (!objectHighlight?.visible) return;
+  let bounds = objectHighlight?.visible ? objectHighlight.box : null;
+  if (selectingObjectGroup) {
+    bounds = new THREE.Box3();
+    for (const name of objectGroupSelection.keys()) {
+      const highlight = objectGroupHighlights.get(name);
+      if (highlight?.visible && !highlight.box.isEmpty()) bounds.union(highlight.box);
+    }
+    if (bounds.isEmpty()) return;
+  }
+  if (!bounds) return;
   // Use current rendered geometry, including a free prop's motion and every part of a fixed prop.
-  const sphere = objectHighlight.box.getBoundingSphere(new THREE.Sphere());
+  const sphere = bounds.getBoundingSphere(new THREE.Sphere());
   const r = freeRect(), width = r.right - r.left, height = r.bottom - r.top;
   if (width <= 80 || height <= 80) return;
   const direction = camera.position.clone().sub(controls.target);

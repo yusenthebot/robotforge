@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-02 group Focus: the existing action frames current selected prop groups, preserving direction, membership, Undo and single-prop behavior. Fixed a real toolbar-wrap projection regression and an inherited furniture Surface assertion reproduced on baseline.
+  66 distinct phased Chrome passes, fresh offline installed viewer/WebSocket/60-tool MCP smoke and430-file equivalence,4install and fixedABBA4×7viewer budgets pass; wheel4152068B(+185), no new assets/dependencies/passes.
+  Actual Malo/Go2 four accepted captures:16nativeframes,4exact initial/pre-Focus RGBA pairs,481unchanged model arrays; group projected area1.762×/3.254×. Four media packages retain84JPEGs and timestamps; films fully decode,24decoded panels inspected.
+  Native desktop zoom/Windows/CI/fullsuite excluded; shared material-quality gain not claimed. [Report](docs/bench/2026-11-02-group-focus.md).
+  Mesh-cache candidates remain rejected after bounded diagnosis; [screen record](docs/bench/2026-11-02-mesh-buffer-screen.md). Broad visual/lightweight/play goal active; action-success tuning deferred.
+
 - 2026-11-02 furniture finishes: tables and bins share the existing visual surface contract and single/mixed editing, preserving physical material, default looks, rubber feet and arrangement format.
   534 distinct scoped pytest cases,7 same-runtime framework cases, fresh locked offline installed smoke/430-file equivalence,4 install and fixed ABBA4×7 viewer budgets pass; wheel4151883B(+446), no new assets/dependencies/shaders.
   Actual Malo/Go2 four flows pass;26 native frames form18 correlated exact fullRGBA pairs,4 fully decoded sampled films retain48 acquired JPEGs;24 decoded samples and4 native control images inspected.
