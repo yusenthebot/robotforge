@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import ipaddress
 import json
 import logging
 import math
 import time
+import unicodedata
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -49,6 +51,29 @@ REPORT_EVERY = 5.0  # s between log reports of a failing tick
 
 # Revalidate on every load (cheap 304s) so an upgraded robotforge never shows a stale UI.
 NO_CACHE = {"Cache-Control": "no-cache"}
+
+
+def _camera_scope(source: str) -> str | None:
+    """Identify a saved source across reloads without exposing another filesystem path."""
+    if not source or source.startswith(("<", "lesson:")):
+        return None
+    try:
+        path = Path(source).resolve(strict=True)
+        if not path.is_file():
+            return None
+    except (OSError, RuntimeError, ValueError):
+        return None
+    canonical = str(path)
+    folded = unicodedata.normalize("NFC", canonical).casefold()
+    try:
+        # Resolve alone preserves caller casing on case-insensitive macOS volumes.
+        # Verify the alias so case-sensitive volumes never conflate different files.
+        if Path(folded).samefile(path):
+            canonical = folded
+    except (OSError, ValueError):
+        pass  # the unmodified resolved path still identifies this existing source
+    encoded = canonical.encode("utf-8", errors="surrogatepass")
+    return hashlib.sha256(b"robotforge.camera-view-scope.v1\0" + encoded).hexdigest()
 
 
 def safe_host(host_header: str) -> bool:
@@ -168,8 +193,11 @@ class ViewerHub:
             return
         with s.lock:
             version = s.version
+            source = s.source
             payload = scene.build_mesh_payload(s.model)
             message = scene.describe(s.model, version, payload.entries, payload.hfields, payload.textures)
+        # Bind the identity to this model snapshot; filesystem work happens once per version.
+        message["view_scope"] = _camera_scope(source)
         compressed = b""
         if payload.texture_blob:
             import gzip

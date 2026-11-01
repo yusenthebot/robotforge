@@ -1,5 +1,12 @@
 # STATUS
 
+- 2026-11-01 saved camera views: bounded named free-camera poses persist per browser/origin/source and restore manually after exploration, refresh and fresh server/Chrome reopen; existing Back/follow/edit boundaries and interfaces retained.
+  Frozen805 inputs:4305default+124scoped actualChrome+9graphics/sensor=4438distinct passes;129default skips excluded,7same-runtime framework cases, source/fresh427-file installed smoke and original4install+four7viewer fixedABBA budgets pass.
+  Wheel4,145,465B(+6,014),no new assets/dependencies;24native static stages/20non-self exactRGBA pairs,six fully decoded films/36samples and4UI stills inspected.
+  Go2 diagnostic target delta5.55e-17m exposed overstrict comparator metadata; post-capture v2 applies existing1e-9 to two actual-target fields only, retains168raw audits and original failure; othercamera/fog/pixels exact. Malo2native path-array exceptions proved, Go2all481exact.
+  All13WIP/791CMF/796unpromoted/799PR68/two801runtime/78native inputs exact; native desktop tool still locked, no fresh zoom/Windows/full-unselected-browser claim. [Report](docs/bench/2026-11-01-saved-camera-views.md).
+  Broad goal active; fixed DEFLATE9 savings below admission gate, no packaging/policy/material change promoted; assess shared resources/content by measured cost and visible benefit, action-success tuning deferred.
+
 - 2026-11-01 fixed concrete compact screen: exact lossless detail passes image/module caps (69,989/81,920 B and 93,948/114,688 B), but actual module-only wheel4,210,423 B exceeds original4MiB by16,119 B before glue; candidate remains unpromoted, no scene/video/visual-gain claim.
   Independent offline426/427-file package checks and Pillow RGB/RGBA equality pass;23fresh scoped tests(21default+2actualChrome on accepted wood/grass), source/helper review and Ruff/format pass; initial ZIP-directory inventory failure retained and corrected without re-encoding.
   All801accepted inputs plus13WIP/791CMF/796unpromoted/799PR68/78native inputs exact; today's desktop connection still reports locked, no fresh native-zoom pass. [Report](docs/bench/2026-11-01-concrete-compact-screen.md).

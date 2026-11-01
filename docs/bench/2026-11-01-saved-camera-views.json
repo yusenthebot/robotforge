@@ -1,0 +1,497 @@
+{
+  "date": "2026-11-01T12:02:03.054419+00:00",
+  "status": "local_acceptance_passed",
+  "base_commit": "d196caa970034004b86976b906c053e5dcd42ad0",
+  "evidence_root": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views",
+  "source_count": 805,
+  "source_freeze_sha256": "f803349c1f9b031159994f955c494dbda114c212f95ebec234bbf18594defa93",
+  "tests": {
+    "groups": {
+      "full-default-v2": {
+        "passed": 4305,
+        "skipped": 129,
+        "xml_sha256": "73c40bc709a12697ff288a9f21851e41972186d8c0ad78bea7c44ff198049f92"
+      },
+      "browser-regression-v1": {
+        "passed": 124,
+        "skipped": 0,
+        "xml_sha256": "95d7eda32accdbba95bb87e9fdee88eeee0da3b2eb084e6736c36ee34f930954"
+      },
+      "graphics-sensors-v1": {
+        "passed": 9,
+        "skipped": 0,
+        "xml_sha256": "b7b324569e037b64d6abd6ae29b10505314562bd4b87fb65584cbbcbb8da7fef"
+      }
+    },
+    "distinct_passed": 4438,
+    "default_skipped_excluded": 129
+  },
+  "package": {
+    "source_root": "/Users/yusenthebot/dev/robotforge-camera-views",
+    "wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/wheels-v1/robotforge-0.0.1-py3-none-any.whl",
+    "wheel_bytes": 4145465,
+    "wheel_sha256": "3c7c82c5a8eeb27af2e49cf084af1d20970b5c64bad2befec76b1994052dcb9b",
+    "package_files": 427,
+    "all_source_wheel_installed_files_equal": true,
+    "installed_imports": {
+      "root": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/wheel-env-v1/lib/python3.12/site-packages/robotforge/__init__.py",
+      "handler": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/wheel-env-v1/lib/python3.12/site-packages/robotforge/viewer/server.py",
+      "static": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/wheel-env-v1/lib/python3.12/site-packages/robotforge/viewer/static"
+    },
+    "fresh_locked_offline_smoke_passed": true
+  },
+  "wheel_increment_bytes": 6014,
+  "wheel_limit_bytes": 4194304,
+  "wheel_headroom_bytes": 48839,
+  "new_assets": 0,
+  "new_dependencies": 0,
+  "framework": {
+    "cases": 7,
+    "status": "pass",
+    "issues": [],
+    "source_changed_informational": {
+      "active_source_sha256": {
+        "baseline": "01073681a03fe78b294e8c13a2f8e8dec98b0cd2a6c32f7a1ff7df2c5e2f9f37",
+        "candidate": "0c03dd20b49d6d1e5a0d272d982a5446f3b4162ebe7e0c5e24a25065d1f2094e"
+      },
+      "git_commit": {
+        "baseline": "aa7a9ae9037ae80f9e597f183df18a1c5e767936",
+        "candidate": "d196caa970034004b86976b906c053e5dcd42ad0"
+      },
+      "git_dirty": {
+        "baseline": false,
+        "candidate": true
+      }
+    }
+  },
+  "install": {
+    "metrics": {
+      "wheel_kb": 4048.3057,
+      "installed_mb": 164.0549,
+      "packages": 42.0,
+      "download_mb": 52.5149
+    },
+    "budgets": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok"
+    },
+    "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/install-budgets-v1/2026-11-01-d196caa-dirty-partial.json",
+    "sha256": "b9a6de2fee19bca55fae2742245e06fe6c204feba32bcb86f134df8c845e785b"
+  },
+  "viewer_abba": [
+    {
+      "cohort": "baseline",
+      "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/viewer-0-baseline-v1/2026-11-01-aa7a9ae-partial.json",
+      "sha256": "5bd6491b77885c84cedb618d628ec4ae01f79915e746189abae4ff55708aa300",
+      "metrics": {
+        "cold_start_s": 0.8204,
+        "fps": 60.1329,
+        "frame_ms": 3.1,
+        "assets_fps": 60.1309,
+        "assets_frame_ms": 5.2,
+        "server_peak_mb": 133.6,
+        "idle_cpu_pct": 4.6
+      },
+      "budgets": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      }
+    },
+    {
+      "cohort": "candidate",
+      "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/viewer-1-candidate-v1/2026-11-01-d196caa-dirty-partial.json",
+      "sha256": "26be401b3e468398160a1c7507fad99515e85335ad470686aa51f33647ad6fd5",
+      "metrics": {
+        "cold_start_s": 0.8231,
+        "fps": 60.1009,
+        "frame_ms": 4.2,
+        "assets_fps": 60.2751,
+        "assets_frame_ms": 5.2,
+        "server_peak_mb": 133.9,
+        "idle_cpu_pct": 4.8
+      },
+      "budgets": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      }
+    },
+    {
+      "cohort": "candidate",
+      "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/viewer-2-candidate-v1/2026-11-01-d196caa-dirty-partial.json",
+      "sha256": "9603d3cee19b2d64ae0b9ab41bfaffd34e8ff9e1880569b65fc10792f1c3df17",
+      "metrics": {
+        "cold_start_s": 0.8289,
+        "fps": 60.089,
+        "frame_ms": 3.0,
+        "assets_fps": 60.1209,
+        "assets_frame_ms": 5.3,
+        "server_peak_mb": 134.0,
+        "idle_cpu_pct": 4.4
+      },
+      "budgets": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      }
+    },
+    {
+      "cohort": "baseline",
+      "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/viewer-3-baseline-v1/2026-11-01-aa7a9ae-partial.json",
+      "sha256": "b5eca173763cbff8d0feb8ff481662ef569871b069ff3a6b573b4fcacca9b684",
+      "metrics": {
+        "cold_start_s": 0.822,
+        "fps": 60.2069,
+        "frame_ms": 2.9,
+        "assets_fps": 60.3193,
+        "assets_frame_ms": 5.3,
+        "server_peak_mb": 134.1,
+        "idle_cpu_pct": 4.6
+      },
+      "budgets": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      }
+    }
+  ],
+  "native": [
+    {
+      "world": "malo",
+      "comparison": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/comparison-malo-v2.json",
+      "comparison_sha256": "8abf8556dacd4c6718ec567db94cee76e9639a41bcf156b747b68cfccc0ee01d",
+      "canonical_pixel_controls_passed": true,
+      "raw_static_stages": 12,
+      "nonself_exact_rgba_pairs": 10,
+      "model_arrays_bitwise_equal": 479,
+      "model_arrays_different": [
+        "_sizes",
+        "mesh_pathadr"
+      ],
+      "actual_target_audits": 84,
+      "nonexact_actual_target_audits": 0,
+      "maximum_actual_target_delta_m": 0,
+      "actual_target_tolerance_m": 1e-09,
+      "all_other_camera_and_canonical_fog_fields_exact": true
+    },
+    {
+      "world": "go2",
+      "comparison": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/comparison-go2-v2.json",
+      "comparison_sha256": "7658beb3979def43ec6d4371b77fc0312050559714817cd511bbdb72bd8ca081",
+      "canonical_pixel_controls_passed": true,
+      "raw_static_stages": 12,
+      "nonself_exact_rgba_pairs": 10,
+      "model_arrays_bitwise_equal": 481,
+      "model_arrays_different": [],
+      "actual_target_audits": 84,
+      "nonexact_actual_target_audits": 12,
+      "maximum_actual_target_delta_m": 5.551115123125783e-17,
+      "actual_target_tolerance_m": 1e-09,
+      "all_other_camera_and_canonical_fog_fields_exact": true
+    }
+  ],
+  "media": [
+    {
+      "world": "malo",
+      "cohort": "baseline",
+      "phase": "first",
+      "raw_frame_count": 251,
+      "decoded_frame_count": 216,
+      "duration_seconds": 7.2,
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-baseline-malo-v1/first/workflow.mp4",
+      "video_sha256": "b8a39ee6b241f099033e5af0d04b5bb6786ecee3249e7c172b34f9c97f31c6f8"
+    },
+    {
+      "world": "malo",
+      "cohort": "candidate",
+      "phase": "first",
+      "raw_frame_count": 702,
+      "decoded_frame_count": 673,
+      "duration_seconds": 22.433333,
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-candidate-malo-v1/first/workflow.mp4",
+      "video_sha256": "63de5fe8b68c181de87a27d88a7a3e485dc6beb6ce3c48304035a0c0b40e2426"
+    },
+    {
+      "world": "malo",
+      "cohort": "candidate",
+      "phase": "reopen",
+      "raw_frame_count": 162,
+      "decoded_frame_count": 246,
+      "duration_seconds": 8.2,
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-candidate-malo-v1/reopen/workflow.mp4",
+      "video_sha256": "78361becec149c254578dae0fb7539daef1edab8d3c9245ce7b797e082ce5cf4"
+    },
+    {
+      "world": "go2",
+      "cohort": "baseline",
+      "phase": "first",
+      "raw_frame_count": 251,
+      "decoded_frame_count": 204,
+      "duration_seconds": 6.8,
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-baseline-go2-v1/first/workflow.mp4",
+      "video_sha256": "8c39e8e82f2fd2a3fde5213656286ec4bb1592bc06193d46fdcfc02aebf00ca7"
+    },
+    {
+      "world": "go2",
+      "cohort": "candidate",
+      "phase": "first",
+      "raw_frame_count": 713,
+      "decoded_frame_count": 639,
+      "duration_seconds": 21.3,
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-candidate-go2-v1/first/workflow.mp4",
+      "video_sha256": "568e08ccbe289d19db5ac4a5134307d787263276e797ad93d58459d2ee1646cd"
+    },
+    {
+      "world": "go2",
+      "cohort": "candidate",
+      "phase": "reopen",
+      "raw_frame_count": 160,
+      "decoded_frame_count": 222,
+      "duration_seconds": 7.4,
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-candidate-go2-v1/reopen/workflow.mp4",
+      "video_sha256": "b8218e1bf751902269b3b06463c562efead574590dfc21248d98575cf59f7ccf"
+    }
+  ],
+  "inspection": {
+    "contact_sheets": [
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-baseline-malo-v1/first/decoded-contact.jpg",
+        "sha256": "280664ee32ad88e4629970eb703037779628213ea7f161612d2d81d67ba252b6",
+        "decoded_samples": 6
+      },
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-candidate-malo-v1/first/decoded-contact.jpg",
+        "sha256": "bf0c8d1d1e2c168bf6ad1866948e377823d50e8b598206b5f58392b4573b294b",
+        "decoded_samples": 6
+      },
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-candidate-malo-v1/reopen/decoded-contact.jpg",
+        "sha256": "70912e71f9a5103dc1f3589f621c04f31d2515507ae76cc1f016276b0038ccdc",
+        "decoded_samples": 6
+      },
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-baseline-go2-v1/first/decoded-contact.jpg",
+        "sha256": "5808c41ac045b0ed17182dc5488fbba18521648a8fea8b80650805d726c4f15b",
+        "decoded_samples": 6
+      },
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-candidate-go2-v1/first/decoded-contact.jpg",
+        "sha256": "e9c3308940d8552f8b54b447654d7da25c09c9b7c2dde03646253c92d521a2c8",
+        "decoded_samples": 6
+      },
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/media-candidate-go2-v1/reopen/decoded-contact.jpg",
+        "sha256": "a73cbdd10b370e78c57b4b40df24984f16a120115dc2a5c73da84cffb764f917",
+        "decoded_samples": 6
+      }
+    ],
+    "decoded_samples": 36,
+    "ui_screenshots": [
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/capture-candidate-malo-v1/reopen/choices-after-reopen.png",
+        "sha256": "b175e6b47d2974839567c75788f4e2d814d2b8f47a40dd47f0e9efc049e7452a"
+      },
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/capture-candidate-malo-v1/first/workflow-end.png",
+        "sha256": "2fc156a79d3f17da581d0d584bbb621e240b8220ae5cf6d68d145d22cf16639d"
+      },
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/capture-candidate-go2-v1/reopen/choices-after-reopen.png",
+        "sha256": "0230bee54e4ae0a61594c17e5f07d88abb347dc9da2babbbfc5b5f0c89c48622"
+      },
+      {
+        "file": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-saved-camera-views/capture-candidate-go2-v1/first/workflow-end.png",
+        "sha256": "fa4c612a320b2ecd600ccf5fea062a9f1f1302b2ef811937b1d4246d2333a10f"
+      }
+    ],
+    "scope": "Root inspected all six decoded contacts and four full native UI screenshots. Entire films fully decoded by encoder. Continuous playback not watched; no smoothness or complete UI readability claim."
+  },
+  "accepted_stage_receipts": [
+    {
+      "name": "build-wheel-v1",
+      "sha256": "e3b69bcbb735d2f100672d44f7534f15e9f3041cee4f06169fcc5d2bd3d05726",
+      "seconds": 0.9351994160097092
+    },
+    {
+      "name": "build-sdist-v1",
+      "sha256": "54104bec8b83e3ed0e507b33ac6b068004c413feb774a82504d6ce3e47402ef2",
+      "seconds": 0.9406426670029759
+    },
+    {
+      "name": "build-extracted-sdist-v1",
+      "sha256": "83e0861c6eb3e8ed3ffe5d230217b8e104565ce80ef1b98770fe394f9a2acf6e",
+      "seconds": 0.9260639999993145
+    },
+    {
+      "name": "installed-smoke-v1",
+      "sha256": "3262cf04a08dc903713bd3073c4496639f65cc28929a52600bbadddec0780005",
+      "seconds": 23.220226916950196
+    },
+    {
+      "name": "source-smoke-v1",
+      "sha256": "7c589d13d4985f87d8e73b645b1b23fed36f61a69c485b0989e43da0f2ba6255",
+      "seconds": 5.592260166013148
+    },
+    {
+      "name": "lint-v1",
+      "sha256": "132976742c0a3357291793a3d5295b443508665cf8fb4f7e75c3c9884f8caaa5",
+      "seconds": 1.2847047080285847
+    },
+    {
+      "name": "format-v1",
+      "sha256": "5c0e6fb9165e7b7d4ab0303a0f3e383dcfb51a327d37540ce00c431c6a25d0c6",
+      "seconds": 0.7984446249902248
+    },
+    {
+      "name": "full-default-v2",
+      "sha256": "c5c8d1213f0163d337e1d0cffed4efc67e66353dff2084d5783a96e5d611dd51",
+      "seconds": 1824.099767083011
+    },
+    {
+      "name": "browser-regression-v1",
+      "sha256": "539a7e6a52ad4933aec3dc54436840de56eb0dc7f1288fd97c12a11c64070b78",
+      "seconds": 566.0554473329685
+    },
+    {
+      "name": "graphics-sensors-v1",
+      "sha256": "ae68e06aafd66d78fafcfaefab0ee8646245001e6b73a95b2e8755b5a95f4484",
+      "seconds": 49.29208570800256
+    },
+    {
+      "name": "framework-baseline-v1",
+      "sha256": "6d02b1c61e9e9bd103012fd31703ad326fca2f8e1d8d6f9df85cad03a3188547",
+      "seconds": 3.465515540970955
+    },
+    {
+      "name": "framework-candidate-v1",
+      "sha256": "5ee8f062c77b7d8beeae6883acd436f7680b4026bf5f0354c2dc386eca8bff4a",
+      "seconds": 3.38545600004727
+    },
+    {
+      "name": "install-budgets-v1",
+      "sha256": "5e3804aacf28e0d14bf1f5268a029ce628959dfbbf1ac6d2c32df082be814c89",
+      "seconds": 2.478908707969822
+    },
+    {
+      "name": "viewer-0-baseline-v1",
+      "sha256": "204249354f746647837fd7d6587a6240b55f04daa8dd80372dfe5ab69f51dff1",
+      "seconds": 31.1771396669792
+    },
+    {
+      "name": "viewer-1-candidate-v1",
+      "sha256": "1264885369a14a0da35079e19c29f1cbc77d98e74cce6d511c0557276b863995",
+      "seconds": 30.66944120900007
+    },
+    {
+      "name": "viewer-2-candidate-v1",
+      "sha256": "b88d9fb4efa3fc71bed31531ec3c726523dcfb4c40bbbd7f5c3081e6651a7255",
+      "seconds": 31.123773584025912
+    },
+    {
+      "name": "viewer-3-baseline-v1",
+      "sha256": "5bddfc7e2c2366189a7780cb74679242a124cde41853ba5ab1a4001c7fe4c675",
+      "seconds": 30.554643291048706
+    },
+    {
+      "name": "capture-baseline-malo-v1",
+      "sha256": "22922ef373831945278c8f24f9349332ae69d17fa61fc2ebdf226d862499ac02",
+      "seconds": 18.824968624976464
+    },
+    {
+      "name": "capture-baseline-go2-v1",
+      "sha256": "ca00a93297d8599c347e7bc651b5b105402c1fb5c26a08f3bac6c73dd23e2172",
+      "seconds": 15.432808290992398
+    },
+    {
+      "name": "capture-candidate-malo-v1",
+      "sha256": "bdcb32c680f11f5b6c77c250d1f91b017c7a16d571d9f2f5ff183120251af0bc",
+      "seconds": 54.8252025420079
+    },
+    {
+      "name": "capture-candidate-go2-v1",
+      "sha256": "404f343b6fb2f314668958d007758f7a816ecd02e92a8fdcd0e5e6ff426fc7a2",
+      "seconds": 43.881860165973194
+    },
+    {
+      "name": "compare-malo-v2",
+      "sha256": "f089e97ef866ec247671e64b4a3fd0b8c850f8c2ccfa1b1c525fb33f0f62c55f",
+      "seconds": 1.2669804589822888
+    },
+    {
+      "name": "compare-go2-v2",
+      "sha256": "16b2656d9520ac7858d0c5fa0abafbb0a5b161be81500f71ddc623d790ad647c",
+      "seconds": 1.1799315829994157
+    },
+    {
+      "name": "media-baseline-malo-v1",
+      "sha256": "2713fab234a68ba75b7731eca69c9fbb176b7f004234afe038705f80d844c67a",
+      "seconds": 6.154026583011728
+    },
+    {
+      "name": "media-baseline-go2-v1",
+      "sha256": "249904e4cfc7ec93487d354c492fceefe44832c84d2d3fc70045b5a3bbc1a52b",
+      "seconds": 6.591305874986574
+    },
+    {
+      "name": "media-candidate-malo-v1",
+      "sha256": "265c3196ea762adff370418715fcb358b05a31321c35971f13708f63f9e83488",
+      "seconds": 14.098050542001147
+    },
+    {
+      "name": "media-candidate-go2-v1",
+      "sha256": "059b7a4045c9a08b68afe24721a5c8654fdda9edba5e84768ab2d680cb87596e",
+      "seconds": 16.752130542008672
+    }
+  ],
+  "protected_counts": {
+    "original_wip": 13,
+    "retained_cmf": 791,
+    "unpromoted_mesh": 796,
+    "pr68": 799,
+    "accepted_runtime": 801,
+    "pr70_report_runtime": 801,
+    "native_files": 78
+  },
+  "retained_failures": [
+    "First browser proxy setup: 502 before NO_PROXY correction; no product fix",
+    "Initial full-default run stopped at1190 passes before its900s wrapper limit; full3600s-bound rerun passed",
+    "Direct archive PEP517 build lacked offline uv_build; actual extracted sdist bundled uv rebuild byte-identical",
+    "Go2 comparatorv1 incorrectly demanded exact diagnostic actual targets; post-capture v2 explicitly applies existing1e-9 to two vectors only, keeps all raw deltas and all other controls/pixels exact",
+    "Wrapper timeout self-check reaped direct child but group probe/kill reported EPERM; no detached-descendant cleanup claim",
+    "Native desktop access still reports locked; no fresh native zoom acceptance"
+  ],
+  "limits": [
+    "Local macOS real Chrome including emulated mobile; no physical phone or Windows CI claim",
+    "Full default plus scoped124 browser and9 graphics cases; not all deselected slow/browser tests",
+    "Six films fully decoded and36 decoded samples plus4 UI screenshots inspected; continuous playback not watched, no smoothness or complete-readability claim",
+    "Camera convenience feature; no material/light/physics or action-success change; broad goal remains active",
+    "Optional bandit,pip-audit,mypy,pyright not installed; no download or full security/type-scan pass claimed"
+  ],
+  "resource_screen": {
+    "representation": "fixed DEFLATE9 of accepted wheel",
+    "saving_bytes": 16530,
+    "prospective_gate_bytes": 32768,
+    "promoted": false,
+    "evidence": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-resource-packaging/representation-screen-v1.json",
+    "policy_compression": "not implemented: preserve shipped onnx filesystem path contract"
+  }
+}

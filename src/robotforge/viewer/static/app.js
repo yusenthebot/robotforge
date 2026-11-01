@@ -22,6 +22,7 @@ import { createPlacementPreview } from "./placement-preview.js";
 import { createArrangementShelf } from "./arrangements.js";
 import { createScreenDrive } from "./screen-drive.js";
 import { cameraView, cameraArc, arcEye } from "./camera-views.js";
+import { createCameraBookmarks } from "./camera-bookmarks.js";
 import { initRobotSurface } from "./robot-surface.js";
 
 const $ = (id) => document.getElementById(id);
@@ -33,6 +34,7 @@ translatePage();
 
 const canvas = $("view");
 let screenDrive = null;
+let cameraBookmarks = null;
 const creator = initCreation({ start: beginCreation, submit: placeEntity, cancel: cancelCreation,
   change: changePlacementOptions, coordinateChange: changePlacementOptions });
 const creationGesture = createPlacementGesture();
@@ -395,6 +397,7 @@ let layoutRequest = 0, layoutError = "";
 let arrangementShelf = null;
 
 async function applyScene(desc) {
+  cameraBookmarks?.invalidate();
   arrangementShelf?.invalidate();
   cancelInspection();
   screenDrive?.clear(false); // the server already replaced the old scene; never stop its new controllers
@@ -841,8 +844,10 @@ function updateTween() {
 
 function setViewPanel(open) {
   if (open) cancelInspection();
+  else cameraBookmarks?.cancel();
   setOpen("view-toggle", "view-panel", open);
   if (open) {
+    cameraBookmarks?.open();
     stopDriving(); endDrag();
     creationGesture.invalidate();
     if (creator.active()) clearCreationPoint();
@@ -852,6 +857,7 @@ function setViewPanel(open) {
 }
 
 function resetCameraViews() {
+  cameraBookmarks?.invalidate();
   cancelInspection();
   originalCameraView = currentCameraView = null;
   setViewPanel(false);
@@ -885,6 +891,34 @@ for (const button of viewButtons) {
   button.addEventListener("click", () => chooseCameraView(button.dataset.cameraView));
 }
 $("view-back").addEventListener("click", () => chooseCameraView("back"));
+
+function bookmarkContext() {
+  const ready = !!(sceneReadyToDraw() && hasSize() && renderedVersion === sceneDesc.version
+    && stateVersion === sceneDesc.version && Number.isInteger(stateGeneration)
+    && ws?.readyState === WebSocket.OPEN && !busy && !lessonActive() && !document.hidden
+    && !creator.active() && !selectingObjects && !inspection);
+  return { scope: sceneDesc?.view_scope ?? null, version: sceneDesc?.version ?? null, generation: stateGeneration,
+    ready, canSave: ready && !tween && !follow };
+}
+
+function captureCameraBookmark() {
+  return { eye: camera.position.toArray(), target: controls.target.toArray() };
+}
+
+function restoreCameraBookmark(view) {
+  const damping = controls.enableDamping;
+  controls.enableDamping = false; controls.update(); controls.enableDamping = damping;
+  if (!originalCameraView) originalCameraView = { eye: camera.position.clone(), target: controls.target.clone() };
+  cancelInspection(); freeDriveCamera(); stopDriving(); endDrag();
+  creationGesture.invalidate();
+  creationClickUntil = performance.now() + (reduceMotion ? 60 : TWEEN_MS + 60);
+  currentCameraView = null;
+  setViewPanel(false);
+  moveCamera(new THREE.Vector3().fromArray(view.eye), new THREE.Vector3().fromArray(view.target), true, true);
+  renderCameraControls();
+  canvas.focus();
+}
+
 function cancelInspection() {
   if (!inspection) return;
   const previous = inspection;
@@ -1297,6 +1331,7 @@ function connect() {
     setConnected(true);
   };
   ws.onclose = () => {
+    cameraBookmarks?.invalidate();
     screenDrive?.clear(false); // the server's bounded hold expires even when no stop can cross this socket
     follow = null;
     if (driveCameraIntent === "follow") driveCameraIntent = "auto";
@@ -1643,6 +1678,7 @@ function applyState(s) {
       lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null; cancelCreation(true);
     }
     stateGeneration = s.generation; // retain changes during our own edit, then reconcile against its reply
+    if (changed) cameraBookmarks?.invalidate();
     if (changed && !layoutMutating) {
       layoutConfirmation = null;
       if (layoutCatalog?.generation !== stateGeneration) {
@@ -1871,6 +1907,7 @@ function freeDriveCamera() {
 }
 
 function renderCameraControls() {
+  cameraBookmarks?.update();
   const disabled = !sceneReadyToDraw() || renderedVersion !== sceneDesc?.version || busy || ws?.readyState !== WebSocket.OPEN;
   if (inspection && (disabled || inspection.version !== sceneDesc?.version || inspection.generation !== stateGeneration)) cancelInspection();
   $("view-toggle").disabled = disabled;
@@ -2262,7 +2299,10 @@ window.addEventListener("keydown", (e) => {
     return; // Inspection owns input until a qualified surface tap or explicit cancel.
   }
   if (!$("view-panel").hidden) {
-    if (e.key === "Escape") { setViewPanel(false); $("view-toggle").focus(); e.preventDefault(); }
+    if (e.key === "Escape") {
+      if (!cameraBookmarks?.cancel()) { setViewPanel(false); $("view-toggle").focus(); }
+      e.preventDefault();
+    }
     return; // The picker owns keyboard focus; selecting a view cannot start driving.
   }
   if (e.key === "Escape" && layoutConfirmation) {
@@ -3727,6 +3767,7 @@ function loop() {
     updateFollow();
   }
   controls.update();
+  if (!$("view-panel").hidden) cameraBookmarks?.update();
   if (ready) {
     updateRing();
     updatePathWidths();
@@ -3886,6 +3927,9 @@ initGamepad({
     sendDrive();
   },
 });
+
+cameraBookmarks = createCameraBookmarks({ element: $("camera-bookmarks"), context: bookmarkContext,
+  capture: captureCameraBookmark, restore: restoreCameraBookmark, t });
 
 connect();
 loop();
