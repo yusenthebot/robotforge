@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-01 rock color variance screen: nine fixed CPU levels and both actual Chrome prototype controls pass, but all four ordinary-view pairs are neutral in root and independent blinded review; candidate rejected, runtime unchanged.
+  Sixteen native frames, eight non-self exact baseline/OFF/RESTORE pairs,54 actual linked shader rows and481 native arrays per run reconcile; original numeric/browser failures and narrow post-diagnostic overlay counter correction retained.
+  No candidate motion video, DPR2, cost, package/install or fresh pytest claim; all805accepted/13WIP/791CMF/796mesh/799PR68/two801trees/78native inputs exact. [Report](docs/bench/2026-11-01-rock-color-screen.md).
+  Broad goal active; next plan is explicit selected-prop row arrangement using existing preview/placement/Undo, retaining compatible defaults, original budgets and prior visual rejections; action-success tuning deferred.
+
 - 2026-11-01 sand prerequisite: eight actual Malo-floor/Go2-dock baseline frames pass source/physics/material/visibility/owned-cleanup controls, but root and independent ordinary-view review establish no shared content deficit; stop before a candidate.
   Each derived run preserves481 model arrays and full observed state; original friction/ten physical arrays match. Source805 and13WIP/791CMF/796unpromoted/799PR68/two801trees/78native inputs exact.
   Initial plane-projection visibility failure retained; reviewed fresh-v2 correction changes no pixels in four exact Malo pairs. Isolated cache metadata refresh is hash-proved, zero staging attempts; no product edit, new tests/movie/build/budget or remote CI claim.

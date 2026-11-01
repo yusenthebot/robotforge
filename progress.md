@@ -1,5 +1,13 @@
 # progress
 
+## 2026-11-01: Rock color variance screen
+
+- Fixed color-only compensation passes nine CPU levels: maximum mean error0.04249%, clipped positions0.62294%, phase-variance spread reduction37.93/33.21/32.02% at LOD0–2; this is not GPU or visual acceptance.
+- Both actual Malo/Go2 Chrome prototype runs pass:16 full native frames,8 non-self exact baseline/OFF/RESTORE pairs,54 actual linked shader rows,481 native model arrays per run and owned cleanup reconcile.
+- Root and independent blinded full-frame review find all4 pairs neutral, so reject the candidate without retuning or product integration; no new movie/DPR2/cost/package/install/pytest claim.
+- Numeric cancellation failure and browser non-rock-version failure retained; the narrow post-diagnostic correction accounts for only three proved overlays using every setter event and exact renderer callsites.
+- Runtime805 and protected13WIP/791CMF/796mesh/799PR68/two801trees/78native inputs unchanged. Report:docs/bench/2026-11-01-rock-color-screen.md/.json. Broad visual/lightweight/play goal active; next plan is explicit selected-prop row arrangement with existing preview/placement/Undo, action-success tuning deferred.
+
 ## 沙地内容前置观察（2026-11-01）
 
 真实Malo地面与Go2既有坡道的八张固定普通视角完成，保持原有效摩擦和暂停状态；两人逐张检查未确认可归因于共享沙地内容的明显缺陷，停止进入候选。
