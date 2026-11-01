@@ -1,0 +1,640 @@
+{
+  "schema_version": 1,
+  "accepted": true,
+  "scope": "Lossless wood/grass detail encoding; unchanged decoded material appearance and runtime interfaces; broad goal active",
+  "baseline_remote_main": "acd4c2c89ea6f371acac21b23bdc63a74d8e21a6",
+  "candidate_freeze_sha256": "ef7f406e3aee24b8528ca27c0c2d7611f49fa0ee269f1d8ef2620dd38f02fb18",
+  "candidate_inputs": 801,
+  "baseline_freeze_sha256": "9f8e2e3a22aa9dbdf12cb81ba234526f7ee7dd8c4dd845982e1a893bbe3cf3da",
+  "baseline_inputs": 799,
+  "initial_to_final_test_bridge": {
+    "only_changed_file": "tests/test_viewer_compact_ground_browser.py",
+    "reason": "Read window.__qaErrors instead of unused Tab.errors",
+    "all_product_scripts_and_default_tests_exact": true
+  },
+  "encoding": {
+    "options": {
+      "lossless": true,
+      "quality": 100,
+      "method": 6,
+      "exact": true
+    },
+    "rows": [
+      {
+        "style": "wood",
+        "source_sha256": "f8a54f222c3197e2c7fdbb2010ba607794379590435efbc53c8e7a0ceaced38e",
+        "output_sha256": "fd7e9db4b72ffe13cdcc7b80a247599de63b8528c48c76f9e6df54bb4891bc73",
+        "bytes": 26374,
+        "rgba_sha256": "48039c51a4638ac3a7e213fbd61125e3da47b5de91471c7d8aa95d7f6bc54dfa"
+      },
+      {
+        "style": "grass",
+        "source_sha256": "b0db64526e3b0f76c7308ebf1d8e92f6943ea154c3977ccc053a7dc5ced108f8",
+        "output_sha256": "71e9e218db6a39f483d8cced9a85274ce6b741928b669fdb81549179fe2d4389",
+        "bytes": 39004,
+        "rgba_sha256": "40f0ec20a41e4b4f80e1ce699dee876753dde9e60db330daafd413737ec84442"
+      }
+    ]
+  },
+  "module_body_saving_bytes": 41174,
+  "module_body_saving_threshold_bytes": 40960,
+  "package": {
+    "wheel_bytes": 4139451,
+    "wheel_sha256": "3c75e615a2be39986c4a4733924d865b75c8c804ff8828c6f813b79ebb37ab7c",
+    "package_files": 426,
+    "all_source_wheel_installed_files_equal": true,
+    "fresh_locked_offline_smoke_passed": true
+  },
+  "baseline_wheel_bytes": 4170262,
+  "wheel_saving_bytes": 30811,
+  "wheel_saving_threshold_bytes": 28672,
+  "original_wheel_cap_bytes": 4194304,
+  "wheel_headroom_bytes": 54853,
+  "dependencies_added": 0,
+  "texture_dimensions_or_gpu_slots_changed": false,
+  "tests": {
+    "focused_default_passed": 130,
+    "actual_browser_passed": 52,
+    "surface_gl_passed": 4,
+    "distinct_passed": 186,
+    "full_default_suite_rerun": false
+  },
+  "checks": {
+    "build-v1": {
+      "sha256": "7507ec879b5882c4381974e6b0fb94a57f838e48caad2d204c83fd4d40c23437",
+      "returncode": 0
+    },
+    "focused-default-v1": {
+      "sha256": "1a7ce69185d6cc22343bb5d41198ec36bd8143d309ca417657417738cf769864",
+      "returncode": 0
+    },
+    "browser-v1": {
+      "sha256": "237d11a0a96d212a68b7b45373dc8308f693f102a014d6bdbfc8f18142009975",
+      "returncode": 0
+    },
+    "surface-gl-v1": {
+      "sha256": "4ab75d2466107f4042cf2fc7b5164b59bca2f63996d0705b38bb87f618b470f1",
+      "returncode": 0
+    },
+    "installed-smoke-v1": {
+      "sha256": "f8c34df6832e2d2e256ff9d40ab0608462089aa6cf3ff209d2ddf0cac0b6ef4e",
+      "returncode": 0
+    },
+    "source-smoke-v1": {
+      "sha256": "61648fb429c22475738f9a92666a1d7ea7dcc474e8017091fd2d203c3d44c37b",
+      "returncode": 0
+    },
+    "reproduce-v1": {
+      "sha256": "717275e1e1b30f71a0891298786692c33024aacabc91e4e0b5b6c12d6cefe0a4",
+      "returncode": 0
+    },
+    "install-budgets-v1": {
+      "sha256": "6d9f457ea94b5678a4eaa85e9953bb1be9c88ea8ea97aa58980c2700c2e0f470",
+      "returncode": 0
+    },
+    "comparison-v2": {
+      "sha256": "1885b279362b671222f53fb0912fb1cfeffd225cab010a2fa09d1f3749a3064e",
+      "returncode": 0
+    }
+  },
+  "reproduction_receipt_sha256": "af14f7488194c1da8887c7189da84df51e4151b7931491cd4455f4ed644d0977",
+  "package_inventory_receipt_sha256": "3b00589026f7991479e049f3a6e00c684531c06a5cee8067edd2fd95e08ea01a",
+  "original_budget_unchanged": true,
+  "budget_file_sha256": "fa15d36e69aa2f9edd9b101d61b24a706021caf46a951d0cf9671031afb382a8",
+  "install_budget_checks": 4,
+  "viewer_budget_checks_per_candidate": 7,
+  "fixed_viewer_cost_sequence": [
+    {
+      "cohort": "baseline",
+      "report_sha256": "3ed762d0439b4c9c0c8e9f8adf480de6bdbc720404fe1950f795efdef1ac57b2",
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5347,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.327
+        },
+        "fps": {
+          "value": 60.1189,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1529,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 2.3,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.300000011920929,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.1,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 561.8
+        },
+        "idle_cpu_pct": {
+          "value": 5.6,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    {
+      "cohort": "candidate",
+      "report_sha256": "7d28838b2222d3bae182fde4a190af63614eef097bf3a5f86a3599c55add4829",
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.54,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.328
+        },
+        "fps": {
+          "value": 60.1089,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.7,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.699999988079071,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1269,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 4.4,
+          "unit": "ms",
+          "better": "lower",
+          "median": 4.399999976158142,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.8,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 558.6
+        },
+        "idle_cpu_pct": {
+          "value": 5.4,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    {
+      "cohort": "candidate",
+      "report_sha256": "b36d35c0344f3b77ea5fc14f95e2961a0b283e06c73f5f0e9ec0779aa68e6fb4",
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5299,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.326
+        },
+        "fps": {
+          "value": 60.093,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.4,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.400000035762787,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1769,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 2.0,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 133.5,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 561.0
+        },
+        "idle_cpu_pct": {
+          "value": 6.0,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    {
+      "cohort": "baseline",
+      "report_sha256": "e59581665c279cdff823c88700bdd9c539fdcd7f8652b203de1037e9c839c65e",
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5165,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.323
+        },
+        "fps": {
+          "value": 60.3293,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.4,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.400000035762787,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.1209,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 4.8,
+          "unit": "ms",
+          "better": "lower",
+          "median": 4.800000011920929,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 134.0,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 560.2
+        },
+        "idle_cpu_pct": {
+          "value": 5.4,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    }
+  ],
+  "native": {
+    "captures": 12,
+    "cross_cohort_pairs": 10,
+    "full_rgba_phase_pairs": 40,
+    "comparison_sha256": "33af464cfcbf3c15bf51f719307557d2c738351d5e1f89f26aa55040b2542ec7",
+    "helper_sha256": "470b12cf0be275f2b0b2d016c6fa74bd98b3aa1f52b7b25a6485a31bffa224a9",
+    "method_sha256": "5e0ee34bce1ba353f33c07abf275fa12aef867896b865e0fdc08d1ddc4b6d836",
+    "original_worlds": 2,
+    "floor_only_variants": [
+      "Malo wood",
+      "Go2 grass"
+    ],
+    "css": [
+      1280,
+      800
+    ],
+    "dpr": 2,
+    "native_rgba": [
+      2560,
+      1600
+    ],
+    "meaningful_native_state_exact": true,
+    "malo_raw_model_arrays_equal": 479,
+    "malo_raw_model_array_count": 481,
+    "malo_different_raw_arrays": [
+      "_sizes",
+      "mesh_pathadr"
+    ],
+    "malo_exception": "Each final run validates original raw path bytes, NUL offsets, npaths/_sizes[82], first isolated-home generated STL role and identical current file payloads. All other paths and 479 model arrays exact. No all-array bitwise claim.",
+    "go2_raw_model_arrays_equal": 481,
+    "go2_raw_model_array_count": 481,
+    "timing_observations": [
+      {
+        "tag": "native-00-baseline-malo-wood-v2",
+        "cohort": "baseline",
+        "kind": "malo",
+        "style": "wood",
+        "observed_navigation_seconds": 0.4178368749562651,
+        "raf_median_ms": 16.600000023841858,
+        "explicit_render_cpu_median_ms": 0.40000003576278687
+      },
+      {
+        "tag": "native-01-candidate-malo-wood-v2",
+        "cohort": "candidate",
+        "kind": "malo",
+        "style": "wood",
+        "observed_navigation_seconds": 0.45416033297078684,
+        "raf_median_ms": 16.69999998807907,
+        "explicit_render_cpu_median_ms": 0.3999999761581421
+      },
+      {
+        "tag": "native-02-candidate-malo-wood-v2",
+        "cohort": "candidate",
+        "kind": "malo",
+        "style": "wood",
+        "observed_navigation_seconds": 0.4145050410297699,
+        "raf_median_ms": 16.650000005960464,
+        "explicit_render_cpu_median_ms": 0.5
+      },
+      {
+        "tag": "native-03-baseline-malo-wood-v2",
+        "cohort": "baseline",
+        "kind": "malo",
+        "style": "wood",
+        "observed_navigation_seconds": 0.4276852500042878,
+        "raf_median_ms": 16.600000023841858,
+        "explicit_render_cpu_median_ms": 0.5
+      },
+      {
+        "tag": "native-04-baseline-go2-grass-v2",
+        "cohort": "baseline",
+        "kind": "go2",
+        "style": "grass",
+        "observed_navigation_seconds": 0.43868550000479445,
+        "raf_median_ms": 16.600000023841858,
+        "explicit_render_cpu_median_ms": 0.7000000476837158
+      },
+      {
+        "tag": "native-05-candidate-go2-grass-v2",
+        "cohort": "candidate",
+        "kind": "go2",
+        "style": "grass",
+        "observed_navigation_seconds": 0.430595708952751,
+        "raf_median_ms": 16.69999998807907,
+        "explicit_render_cpu_median_ms": 0.30000001192092896
+      },
+      {
+        "tag": "native-06-candidate-go2-grass-v2",
+        "cohort": "candidate",
+        "kind": "go2",
+        "style": "grass",
+        "observed_navigation_seconds": 0.42356570897391066,
+        "raf_median_ms": 16.69999998807907,
+        "explicit_render_cpu_median_ms": 0.6000000238418579
+      },
+      {
+        "tag": "native-07-baseline-go2-grass-v2",
+        "cohort": "baseline",
+        "kind": "go2",
+        "style": "grass",
+        "observed_navigation_seconds": 0.41345645900582895,
+        "raf_median_ms": 16.600000023841858,
+        "explicit_render_cpu_median_ms": 0.6000000238418579
+      },
+      {
+        "tag": "native-08-baseline-malo-original-v2",
+        "cohort": "baseline",
+        "kind": "malo",
+        "style": "original",
+        "observed_navigation_seconds": 0.439753542013932,
+        "raf_median_ms": 16.69999998807907,
+        "explicit_render_cpu_median_ms": 0.30000001192092896
+      },
+      {
+        "tag": "native-09-candidate-malo-original-v2",
+        "cohort": "candidate",
+        "kind": "malo",
+        "style": "original",
+        "observed_navigation_seconds": 0.4126413330086507,
+        "raf_median_ms": 16.69999998807907,
+        "explicit_render_cpu_median_ms": 0.5
+      },
+      {
+        "tag": "native-10-baseline-go2-original-v2",
+        "cohort": "baseline",
+        "kind": "go2",
+        "style": "original",
+        "observed_navigation_seconds": 0.4403894169954583,
+        "raf_median_ms": 16.69999998807907,
+        "explicit_render_cpu_median_ms": 0.6000000238418579
+      },
+      {
+        "tag": "native-11-candidate-go2-original-v2",
+        "cohort": "candidate",
+        "kind": "go2",
+        "style": "original",
+        "observed_navigation_seconds": 0.42127066699322313,
+        "raf_median_ms": 16.69999998807907,
+        "explicit_render_cpu_median_ms": 0.699999988079071
+      }
+    ],
+    "timing_scope": "Descriptive fresh navigation/128-RAF and explicit render-submission observations; no native causal speed or GPU-speed claim."
+  },
+  "fog_control": {
+    "initial_failed_capture": "native-02-candidate-malo-wood-v1",
+    "initial_max_channel_difference": 1,
+    "initial_changed_pixels": 1693,
+    "diagnostic_baseline_and_candidate_failed": true,
+    "diagnostic_only_changed_inputs": "fog near/far and actual GL fogNear/fogFar uniforms; direct canonical camera pin had omitted camera-derived fog update.",
+    "causal_probe_passed": true,
+    "causal_probe_receipt_sha256": "a4ab79435a496d200db256ba9334f7ed80ac5a86691552de7a5ada42bf2e0fa8",
+    "expected_and_observed_hashes": [
+      "e33f38c85f2a63666d1083f412e70ec912ff00b7b0b0b653be4fec4355cbadf9",
+      "0c9bee1b32cfae335f7f3a03fd8ad91b5283202960456c567817b43bc2016082",
+      "e33f38c85f2a63666d1083f412e70ec912ff00b7b0b0b653be4fec4355cbadf9"
+    ],
+    "other_causal_state_exact": true,
+    "corrected_series": "All12 fresh v2 captures pass with separately pinned canonical camera-derived fog formula, original raw before/delta observations retained, strict pixel equality unchanged. Product fog behavior not modified.",
+    "causal_v1_overall_failure_retained": "Causal phases passed, then helper draw-local a shadowed argparse a; corrected only variable names/method reference in v2 and reran once."
+  },
+  "media": [
+    {
+      "name": "media-baseline-malo-v2",
+      "receipt_sha256": "bce8434f1d2c6524d646115411d1fd0f68ee3c0a6d7d7bb9518e97ec7e43e58b",
+      "video_sha256": "7db84d4aef285a70e26489ae36c26f0152413235628d0572e19af09e4bdc67b2",
+      "video_bytes": 1842859,
+      "duration_seconds": 7.133333,
+      "raw_frame_count": 212,
+      "decoded_frame_count": 214,
+      "decode_exit_code": 0
+    },
+    {
+      "name": "media-candidate-malo-v2",
+      "receipt_sha256": "3537c8a2f83951e65b608f445aa45a3a4942d86a8dbe97f8f8e8d3d3946a0450",
+      "video_sha256": "c8c01bb63e25bf5204b91be57bf49a52ace81fe355c86e25138a6976bcbe75ae",
+      "video_bytes": 1833594,
+      "duration_seconds": 7.133333,
+      "raw_frame_count": 212,
+      "decoded_frame_count": 214,
+      "decode_exit_code": 0
+    },
+    {
+      "name": "media-baseline-go2-v2",
+      "receipt_sha256": "eaf6f6e93d331700e86bae61452d6e817ee05b543e28723b6d3cc1fc81110e29",
+      "video_sha256": "d5f410c9c6c0a3fc41109bfddca9113393234b97f7d368711c873e70f3797e2b",
+      "video_bytes": 3669352,
+      "duration_seconds": 7.133333,
+      "raw_frame_count": 212,
+      "decoded_frame_count": 214,
+      "decode_exit_code": 0
+    },
+    {
+      "name": "media-candidate-go2-v2",
+      "receipt_sha256": "c704a4c2d8aa9c077d09062c4d8c5cafe4cfbeb9aff55e395e964d1ab57fd60f",
+      "video_sha256": "2b6002bbe6282379adb13c1e7ca7cea78ca6811fda8f5c9c39d5f8e3bc57d7e1",
+      "video_bytes": 3667525,
+      "duration_seconds": 7.133333,
+      "raw_frame_count": 212,
+      "decoded_frame_count": 214,
+      "decode_exit_code": 0
+    }
+  ],
+  "visual_review": {
+    "decoded_contact_sheets": 4,
+    "sample_frames_viewed": 24,
+    "full_movie_visual_review_claimed": false,
+    "full_decode_passed": true
+  },
+  "protection": {
+    "original_wip_files": 13,
+    "retained_cmf_inputs": 791,
+    "unpromoted_mesh_inputs": 796,
+    "baseline_inputs": 799,
+    "native_asset_files": 78,
+    "unchanged": true,
+    "exact_native_owned_profiles_absent": 19,
+    "profile_audit_sha256": "cc107e0f287e2324dd18b10a2021b6ec09b5abb24b9adc15176f0bc976f2639f"
+  },
+  "static_checks": {
+    "ruff_check": "passed",
+    "ruff_format_files": 782,
+    "python_ast_review": "passed",
+    "unavailable_tools": [
+      "mypy",
+      "pyright",
+      "bandit",
+      "pip-audit"
+    ]
+  },
+  "limits": [
+    "No new shading or action-success improvement claimed.",
+    "Existing lazy modules, independent1000ms atomic pair deadlines, late-cache/fallback behavior, JPEGs, rock bytes, shader/filtering/UV/material/physics source remain unchanged.",
+    "Scoped regression only; no full-default/framework repeat, native RGB/depth/segmentation equivalence, Windows, physical mobile or paid CI certification.",
+    "Only original install/viewer formal budget sections measured; size savings do not imply lower GPU storage or universal startup improvement."
+  ],
+  "next": "Use compact lossless encoding to assess the fixed natural-concrete content against unchanged original content/byte and actual ordinary-view gates; preserve rejected recipes and defer action-success tuning."
+}

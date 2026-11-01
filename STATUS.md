@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-01 compact ground detail: fixed losslessWebP preserves wood/grass RGBA and all runtime interfaces; module bodies−41,174B, wheel4,139,451B(−30,811), original4MiB headroom54,853B, no assets/dependencies added.
+  186scoped passes(130default+52actualChrome+4GL), source/fresh426file installed smoke and exact offline reproduction, original4install+both7viewer fixed repeats pass; no full-default/framework repeat.
+  12native captures/40fullRGBA phase pairs,4fully decoded films/24samples; raw2Malo path-storage arrays explicitly proved, Go2all481exact. Initialfog/diagnostic/QA-variable failures retained; causalON-stale-ON and prospectively corrected fullseries pass without relaxing pixels or changing productfog.
+  13WIP/791CMF/796unpromoted/799baseline/78nativeinputs exact; [report](docs/bench/2026-11-01-compact-materials.md). Broad goal active; assess fixed naturalconcrete with compact encoding next, action-success deferred.
+
 - 2026-11-01 persistent prop arrangements: paused2–16 supported props save into a bounded shared named library, survive map/client/fresh-process reopen and insert with owned outlines, rotation, occupied retry and latest group Undo; authored finishes/physics preserved.
   Final799inputs: 4281default+130complete actualChrome+4surfaceGL=4415distinct passes;129default skips excluded,7same-runtime framework, source/fresh offline60-tool-list smoke and426exact source/wheel/installed files pass.
   Original4install budgets plus both fixed7viewer repeats pass; first6.2%CPU overrun retained, repeat baseline/candidate/candidate/baseline6.0/5.8/5.8/6.0, no budget change; wheel4,170,262B(+14,586), no assets/dependencies added.

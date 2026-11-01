@@ -86,7 +86,14 @@ def generate(source: Path, output: Path) -> None:
     detail[:, :, 1] = np.round(np.clip(ROUGHNESS_MEAN + 0.1 * (roughness - roughness.mean()), 0, 1) * 255)
     color_file, detail_file = io.BytesIO(), io.BytesIO()
     Image.fromarray(gray).save(color_file, format="JPEG", quality=90, optimize=True)
-    Image.fromarray(detail).save(detail_file, format="PNG", optimize=True)
+    Image.fromarray(detail).save(detail_file, format="WEBP", lossless=True, quality=100, method=6, exact=True)
+    with Image.open(io.BytesIO(detail_file.getvalue())) as decoded:
+        if not np.array_equal(np.asarray(decoded.convert("RGB")), detail):
+            raise ValueError("lossless detail must round-trip exactly")
+    if hashlib.sha256(detail_file.getvalue()).hexdigest() != (
+        "71e9e218db6a39f483d8cced9a85274ce6b741928b669fdb81549179fe2d4389"
+    ):
+        raise ValueError("encoded grass detail differs; use locked Pillow/libwebp")
     with Image.open(io.BytesIO(color_file.getvalue())) as decoded:
         mean = linear(np.asarray(decoded, dtype=float) / 255).mean()
     if abs(mean / TARGET_MEAN - 1) >= 0.01:
@@ -94,7 +101,9 @@ def generate(source: Path, output: Path) -> None:
     if color_file.tell() + detail_file.tell() > 96 * 1024:
         raise ValueError("grass image byte budget exceeded")
     module = MODULE.replace("COLOR_DATA", "data:image/jpeg;base64," + base64.b64encode(color_file.getvalue()).decode())
-    module = module.replace("DETAIL_DATA", "data:image/png;base64," + base64.b64encode(detail_file.getvalue()).decode())
+    module = module.replace(
+        "DETAIL_DATA", "data:image/webp;base64," + base64.b64encode(detail_file.getvalue()).decode()
+    )
     if len(module.encode("utf-8")) > 128 * 1024:
         raise ValueError("grass module byte budget exceeded")
     output.write_text(module, encoding="utf-8")
