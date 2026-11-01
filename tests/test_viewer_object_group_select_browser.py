@@ -288,6 +288,11 @@ def test_busy_supported_query_blocks_native_selection_changes(viewer):  # noqa: 
         await tab.run("window.__holdCarried=true")
         await click(tab, "#object-select-carried")
         await tab.until("!!window.__releaseCarried")
+        camera = await tab.eval(CAMERA)
+        assert await tab.eval("document.getElementById('object-focus').disabled")
+        await tab.run("document.getElementById('object-focus').dispatchEvent(new MouseEvent('click'))")
+        assert not await tab.eval("window.__robotforge.tweening()")
+        assert await tab.eval(CAMERA) == pytest.approx(camera, abs=1e-9)
         await click(tab, "#world-toggle")
         for name in ("top", "base"):
             selector = f'[data-edit-object="{name}"]'
@@ -299,6 +304,14 @@ def test_busy_supported_query_blocks_native_selection_changes(viewer):  # noqa: 
         await tab.run("window.__releaseCarried()")
         await tab.until(f"{HIGHLIGHTS}===4 && !window.__robotforge.busy().busy")
         assert state(server) == before
+        assert not await tab.eval("document.getElementById('object-focus').disabled")
+        await click(tab, "#btn-reset")
+        await tab.until("document.getElementById('object-edit-bar').hidden")
+        await settle_camera(tab)
+        camera = await tab.eval(CAMERA)
+        await tab.run("document.getElementById('object-focus').dispatchEvent(new MouseEvent('click'))")
+        assert not await tab.eval("window.__robotforge.tweening()")
+        assert await tab.eval(CAMERA) == pytest.approx(camera, abs=1e-9)
         assert not tab.errors
 
     viewer("laptop", "en", scenario, world=carried_world)

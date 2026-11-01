@@ -53,8 +53,10 @@ def test_tabletop_group_ghost_cancel_rotate_copy_and_all_member_undo(viewer, siz
           node=>node.name==='object-group-member-highlight'&&node.visible).length""")
             == 3
         )
-        assert await tab.eval("""['object-move','object-copy','object-remove','object-surface'].every(
+        assert await tab.eval("""['object-move','object-copy','object-remove'].every(
           id=>document.getElementById(id).hidden)""")
+        assert await tab.eval("""!document.getElementById('object-surface').hidden &&
+          !document.getElementById('object-surface').disabled""")
         await click(tab, "#object-group-copy")
         await tab.until("!document.getElementById('placement-bar').hidden && !window.__robotforge.busy().busy")
         assert await tab.eval("document.querySelector('.repeat-placement').hidden")
