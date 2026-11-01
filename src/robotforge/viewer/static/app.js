@@ -1691,9 +1691,13 @@ function applyState(s) {
     if (creator.active() && !busy && placementGeneration === null) placementGeneration = s.generation;
     resolveCreatedRobot();
   }
-  if (paused !== s.paused) arrangementShelf?.invalidate();
+  const pauseChanged = paused !== s.paused;
+  if (pauseChanged) {
+    arrangementShelf?.invalidate();
+    if (objectGroupQuery) objectGroupEpoch++;
+  }
   paused = s.paused;
-  if (selectingObjectGroup) renderObjectSelectionControls();
+  if (selectingObjectGroup || (selectingObjects && pauseChanged)) renderObjectSelectionControls();
   arrangementShelf?.render();
   renderScreenDrive();
   renderRobotStart();
@@ -2196,7 +2200,12 @@ showCoach();
 // Any first touch counts, a button as much as the canvas: opening Learn left the hint floating over the panel.
 document.addEventListener("pointerdown", dismissCoach, { capture: true });
 
-const togglePlay = () => { arrangementShelf?.invalidate(); if (!paused) stopDriving(); send({ type: "cmd", cmd: paused ? "play" : "pause" }); };
+const togglePlay = () => {
+  arrangementShelf?.invalidate();
+  if (objectGroupQuery) objectGroupEpoch++;
+  if (!paused) stopDriving();
+  send({ type: "cmd", cmd: paused ? "play" : "pause" });
+};
 $("btn-play").addEventListener("click", togglePlay);
 function resetWorld() {
   stopDriving();
@@ -2445,6 +2454,7 @@ let lastAddition = null, creationSurface = null, creationAnchor = null;
 const supportRay = new THREE.Raycaster();
 let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null, lastRobotEdit = null, lastTerrainEdit = null;
 let selectingObjectGroup = false, objectGroupEpoch = 0, objectRowEpoch = 0;
+let objectGroupQuery = null;
 const objectGroupSelection = new Map(), objectGroupHighlights = new Map();
 let surfaceReselect = null;
 let terrainHighlight = null, terrainListKey = null;
@@ -2764,6 +2774,8 @@ function objectSelectionCurrent() {
 
 function renderObjectSelectionControls() {
   const group = selectingObjectGroup;
+  $("object-select-carried").hidden = group || !objectSelection;
+  $("object-select-carried").disabled = busy || !paused || !objectSelection || !objectSelectionCurrent();
   for (const id of ["object-focus", "object-move", "object-copy", "object-remove"]) {
     $(id).hidden = group;
     $(id).disabled = busy || !objectSelection;
@@ -2824,7 +2836,7 @@ function beginObjectSelection(entry = null) {
   cancelCreation(); stopDriving(); endDrag();
   freeDriveCamera();
   placementVersion = sceneDesc.version; placementGeneration = stateGeneration;
-  selectingObjects = true; objectSelection = entry;
+  selectingObjects = true; objectSelection = entry; objectGroupEpoch++;
   creationClickUntil = 0; // An explicit edit-mode choice starts a new deliberate interaction.
   setWorldPanel(false); setDrawer(false); setHelp(false); canvas.focus();
   $("object-edit-title").textContent = entry?.name || t("select_prop");
@@ -2894,6 +2906,51 @@ function pickObjectForEdit(point) {
 
 $("edit-objects").addEventListener("click", () => beginObjectSelection());
 $("select-object-group").addEventListener("click", beginObjectGroupSelection);
+async function selectCarriedObjects() {
+  if (busy || !paused || !objectSelection || selectingObjectGroup || !objectSelectionCurrent()
+      || creationGesture.active()) return;
+  const entry = objectSelection;
+  const guard = { version: placementVersion, generation: placementGeneration, world_sha256: sceneDesc.object_edit.world_sha256 };
+  creationGesture.invalidate();
+  const query = { epoch: objectGroupEpoch, pointerEpoch: creationGesture.epoch(), socket: ws, sceneRequest };
+  objectGroupQuery = query;
+  stopDriving(); endDrag();
+  try {
+    await runChoice($("object-select-carried"), { type: "world", action: "select_object_group", name: entry.name, ...guard }, {
+      done: (data) => {
+        const entries = editableObjects(), byName = new Map(entries.map((member) => [member.name, member]));
+        if (!busy || objectGroupQuery !== query || !selectingObjects || selectingObjectGroup || objectSelection !== entry
+            || objectGroupEpoch !== query.epoch || creationGesture.epoch() !== query.pointerEpoch || creationGesture.active()
+            || ws !== query.socket || ws?.readyState !== WebSocket.OPEN || sceneRequest !== query.sceneRequest
+            || !paused || !objectSelectionCurrent() || sceneDesc.object_edit?.world_sha256 !== guard.world_sha256
+            || !data || data.name !== entry.name || data.version !== guard.version || data.generation !== guard.generation
+            || data.world_sha256 !== guard.world_sha256 || !Array.isArray(data.names) || !data.names.length || data.names.length > 16
+            || !data.names.includes(entry.name) || new Set(data.names).size !== data.names.length
+            || data.names.some((name) => typeof name !== "string" || !byName.has(name))
+            || entries.filter((member) => data.names.includes(member.name)).some((member, index) => member.name !== data.names[index])) {
+          throw new Error(t("create_scene_changed"));
+        }
+        if (data.names.length === 1) { toast(t("no_carried_props")); return; }
+        // Validate the complete reply before replacing the single selection or any outline.
+        const highlights = data.names.map((name) => {
+          const highlight = new THREE.Box3Helper(new THREE.Box3(), theme.amber);
+          highlight.name = "object-group-member-highlight"; highlight.material.depthTest = false;
+          return [name, highlight];
+        });
+        scene3.remove(objectHighlight); objectHighlight.geometry.dispose(); objectHighlight.material.dispose(); objectHighlight = null;
+        objectSelection = null; selectingObjectGroup = true; objectGroupEpoch++;
+        for (const [name, highlight] of highlights) {
+          objectGroupSelection.set(name, byName.get(name)); objectGroupHighlights.set(name, highlight); scene3.add(highlight);
+        }
+        syncObjectSurfaceChoice(); showObjectSurface(false);
+        updateObjectHighlight(); renderEditableObjects(); renderObjectSelectionControls();
+      },
+    });
+  } finally {
+    if (objectGroupQuery === query) objectGroupQuery = null;
+  }
+}
+$("object-select-carried").addEventListener("click", selectCarriedObjects);
 function objectRowGap() {
   const input = $("object-row-gap"), gap = input.valueAsNumber;
   return input.value.trim() && Number.isFinite(gap) && gap >= 0.05 && gap <= 2 ? gap : null;
@@ -2982,7 +3039,7 @@ $("object-group-copy").addEventListener("click", () => beginObjectGroup("copy"))
 $("object-group-move").addEventListener("click", () => beginObjectGroup("move"));
 $("object-group-row").addEventListener("click", () => beginObjectGroup("move", "row"));
 function finishObjectSelection() {
-  if (busy) return;
+  if (busy && !objectGroupQuery) return;
   clearObjectSelection(); updateUndo(); updateEmpty(); renderDrive(); canvas.focus();
 }
 $("object-edit-done").addEventListener("click", finishObjectSelection);
