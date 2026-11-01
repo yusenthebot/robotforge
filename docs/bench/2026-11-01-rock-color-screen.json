@@ -1,0 +1,525 @@
+{
+  "recorded_at": "2026-11-01T13:57:31.184352+00:00",
+  "base_main": "311ed3472a715a52dfa52b94e931c14e54cd5814",
+  "runtime_changed": false,
+  "decision": {
+    "candidate_sha256": "4464550f116904ceb83f58e85c81646403c49516546b4801cf2e32cee3a4354c",
+    "numeric_admission_passed": true,
+    "prototype_control_runs_passed": true,
+    "visual_admission_passed": false,
+    "decision": "rejected; retain current accepted stochastic rock",
+    "reason": "Both actual worlds neutral in root and independent blinded ordinary-view judgments; fixed per-world structural benefit gate not met",
+    "decoded_pairs": [
+      {
+        "id": 1,
+        "world": "malo",
+        "view": "front",
+        "left": "accepted",
+        "right": "candidate"
+      },
+      {
+        "id": 2,
+        "world": "malo",
+        "view": "oblique",
+        "left": "accepted",
+        "right": "candidate"
+      },
+      {
+        "id": 3,
+        "world": "go2",
+        "view": "front",
+        "left": "candidate",
+        "right": "accepted"
+      },
+      {
+        "id": 4,
+        "world": "go2",
+        "view": "oblique",
+        "left": "candidate",
+        "right": "accepted"
+      }
+    ],
+    "accepted_wins": 0,
+    "candidate_wins": 0,
+    "neutral_pairs": 4,
+    "further_stages_executed": [],
+    "not_performed": [
+      "DPR2 candidate capture",
+      "camera-motion candidate movies",
+      "candidate performance",
+      "product integration",
+      "candidate wheel/fresh installation",
+      "candidate regression suite"
+    ],
+    "product_runtime_unchanged": true,
+    "broad_goal_remains_active": true
+  },
+  "evidence_root": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance",
+  "accepted_runtime_inputs": 805,
+  "source_freeze_sha256": "f803349c1f9b031159994f955c494dbda114c212f95ebec234bbf18594defa93",
+  "report_runtime_matches_freeze": true,
+  "protected_input_counts": {
+    "cmf": 791,
+    "original": 13,
+    "unpromoted_mesh": 796,
+    "baseline": 799,
+    "accepted_801": 801,
+    "report_801": 801,
+    "native_assets": 78
+  },
+  "native_inputs": 78,
+  "numeric": {
+    "recorded_at": "2026-11-01T13:22:21.940544+00:00",
+    "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/numeric-admission-v2/manifest.json",
+    "manifest_sha256": "f7a469a6eb5e4ca422995a57d25289c03c21a0c4005b3d596ada8347d45777de",
+    "passed_numeric_admission": true,
+    "levels": [
+      {
+        "lod": 0,
+        "mean_relative_error_max": 0.000286054131145523,
+        "clipping_rate": 0.006229400634765625,
+        "sd_ratio_rgb": [
+          0.9966089775667323,
+          0.9966089775667323,
+          0.9966089775667323
+        ],
+        "sd_eligible_rgb": [
+          true,
+          true,
+          true
+        ],
+        "phase_relative_reduction_rgb": [
+          0.37926266295668865,
+          0.37926266295668865,
+          0.37926266295668865
+        ],
+        "passed": true
+      },
+      {
+        "lod": 1,
+        "mean_relative_error_max": 0.0003501988960416259,
+        "clipping_rate": 0.00244140625,
+        "sd_ratio_rgb": [
+          0.9956749373555254,
+          0.9956749373555254,
+          0.9956749373555254
+        ],
+        "sd_eligible_rgb": [
+          true,
+          true,
+          true
+        ],
+        "phase_relative_reduction_rgb": [
+          0.33213181377572987,
+          0.33213181377572987,
+          0.33213181377572987
+        ],
+        "passed": true
+      },
+      {
+        "lod": 2,
+        "mean_relative_error_max": 0.00041887232520328713,
+        "clipping_rate": 0.000713348388671875,
+        "sd_ratio_rgb": [
+          0.9969257053805651,
+          0.9969257053805651,
+          0.9969257053805651
+        ],
+        "sd_eligible_rgb": [
+          true,
+          true,
+          true
+        ],
+        "phase_relative_reduction_rgb": [
+          0.3201665709597512,
+          0.3201665709597512,
+          0.3201665709597512
+        ],
+        "passed": true
+      },
+      {
+        "lod": 3,
+        "mean_relative_error_max": 0.00042490573754923794,
+        "clipping_rate": 1.52587890625e-05,
+        "sd_ratio_rgb": [
+          0.9955690827223731,
+          0.9955690827223731,
+          0.9955690827223731
+        ],
+        "sd_eligible_rgb": [
+          true,
+          true,
+          true
+        ],
+        "phase_relative_reduction_rgb": null,
+        "passed": true
+      },
+      {
+        "lod": 4,
+        "mean_relative_error_max": 0.00042421993538413656,
+        "clipping_rate": 0.0,
+        "sd_ratio_rgb": [
+          0.9982055471547695,
+          0.9982055471547695,
+          0.9982055471547695
+        ],
+        "sd_eligible_rgb": [
+          true,
+          true,
+          true
+        ],
+        "phase_relative_reduction_rgb": null,
+        "passed": true
+      },
+      {
+        "lod": 5,
+        "mean_relative_error_max": 0.0004016266477917566,
+        "clipping_rate": 0.0,
+        "sd_ratio_rgb": [
+          0.9970116159708031,
+          0.9970116159708031,
+          0.9970116159708031
+        ],
+        "sd_eligible_rgb": [
+          true,
+          true,
+          true
+        ],
+        "phase_relative_reduction_rgb": null,
+        "passed": true
+      },
+      {
+        "lod": 6,
+        "mean_relative_error_max": 0.0002809098499497199,
+        "clipping_rate": 0.0,
+        "sd_ratio_rgb": [
+          0.9964062049570729,
+          0.9964062049570729,
+          0.9964062049570729
+        ],
+        "sd_eligible_rgb": [
+          true,
+          true,
+          true
+        ],
+        "phase_relative_reduction_rgb": null,
+        "passed": true
+      },
+      {
+        "lod": 7,
+        "mean_relative_error_max": 1.2583085418230965e-05,
+        "clipping_rate": 0.0,
+        "sd_ratio_rgb": [
+          0.998988872781859,
+          0.998988872781859,
+          0.998988872781859
+        ],
+        "sd_eligible_rgb": [
+          true,
+          true,
+          true
+        ],
+        "phase_relative_reduction_rgb": null,
+        "passed": true
+      },
+      {
+        "lod": 8,
+        "mean_relative_error_max": 1.3595577417855455e-16,
+        "clipping_rate": 0.0,
+        "sd_ratio_rgb": [
+          null,
+          null,
+          null
+        ],
+        "sd_eligible_rgb": [
+          false,
+          false,
+          false
+        ],
+        "phase_relative_reduction_rgb": null,
+        "passed": true
+      }
+    ],
+    "source_bytes_added": 493,
+    "arithmetic_audit": {
+      "bytes": 120120689,
+      "calls": 936,
+      "exact_range_violation_points": 119808,
+      "exact_range_violation_scalars": 239616,
+      "file": "arithmetic-audit.jsonl",
+      "maximum_range_residual": 1.1101816593906743e-15,
+      "maximum_range_residual_hex": "0x1.3ffcf2a200000p-50",
+      "mutation": "none; raw weights, gain, samples and outputs unchanged",
+      "scalar_range_checks": 30818304,
+      "sha256": "28e739f1c3c2113fcdfa72c6f7e537abd0f37aaa5486de514b103fd71794848c",
+      "tolerance": 1e-12
+    },
+    "scope": "Fixed CPU model only; no browser/GPU/appearance/product integration or performance acceptance",
+    "first_failed_manifest_sha256": "9b04342cea2ecc6cbea0175a237d8278aff1910385171dd21ed2c801b034f96a"
+  },
+  "actual_capture": {
+    "passed": true,
+    "scope": "Retained actual Chrome prototype receipts and exact PNG/raw/shader reconciliation, not visual/cost/product acceptance",
+    "worlds": {
+      "malo": {
+        "manifest_sha256": "67606e513a92d6524de8358dd48bd8465a3b34f6d7872f2b8455bdd930b7db8f",
+        "parent_sha256": "aa066fd1a2b9d781f950af55f8d348fc8becdea25f14cbd813e6c928ca3b6baf",
+        "stages": 8,
+        "exact_nonself_pairs": 4,
+        "native_arrays": 481,
+        "elapsed_seconds": 10.175480542005971,
+        "final_setter_events": 960
+      },
+      "go2": {
+        "manifest_sha256": "bca58470dec232f35adec87983df8f84fc11e1bfbe73816bf7c19159fe04fdeb",
+        "parent_sha256": "3c72d85d2e89890bddd3c01c9181631c6c30758aa1d624f582215050f9e0221f",
+        "stages": 8,
+        "exact_nonself_pairs": 4,
+        "native_arrays": 481,
+        "elapsed_seconds": 9.77849741600221,
+        "final_setter_events": 680
+      }
+    },
+    "frames_verified": 16,
+    "nonself_exact_rgba_pairs": 8,
+    "actual_shader_rows_reconciled": 54,
+    "private_mapping_sha256": "60a337902ed1ffda33c3f8a2c65f55416ed89781d71bfc46deba9d34f1135249"
+  },
+  "frames": [
+    {
+      "world": "malo",
+      "label": "front-baseline",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-malo-v3/front-baseline.png",
+      "png_sha256": "5af9fad664c2e32d0a225e6480fdfef0a48440ef559e9fe01f0432086101c634",
+      "rgba_sha256": "c9d680c4193a89cb4f2ecccab3a3f548d59ea02fadc8e7820c4c7a19522f1a41",
+      "primary_visible": true
+    },
+    {
+      "world": "malo",
+      "label": "oblique-baseline",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-malo-v3/oblique-baseline.png",
+      "png_sha256": "a456a854c1a97ed9b9b5fa801c57d2dd63b7b01b438d54bb1642d5f9b3637765",
+      "rgba_sha256": "52e4806938faae112b479a32048bf5184c5420212e301ee82e353904dfecf5f4",
+      "primary_visible": true
+    },
+    {
+      "world": "malo",
+      "label": "front-off",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-malo-v3/front-off.png",
+      "png_sha256": "5af9fad664c2e32d0a225e6480fdfef0a48440ef559e9fe01f0432086101c634",
+      "rgba_sha256": "c9d680c4193a89cb4f2ecccab3a3f548d59ea02fadc8e7820c4c7a19522f1a41",
+      "primary_visible": true
+    },
+    {
+      "world": "malo",
+      "label": "front-on",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-malo-v3/front-on.png",
+      "png_sha256": "30103e9902bd4e437c5784d358e3b75482d4a19ceac300225a54ab38257847ea",
+      "rgba_sha256": "2a103b89082ac706f61abfb0a927a6d4e615e75f4d2612912270c33b294c3032",
+      "primary_visible": true
+    },
+    {
+      "world": "malo",
+      "label": "front-restore",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-malo-v3/front-restore.png",
+      "png_sha256": "5af9fad664c2e32d0a225e6480fdfef0a48440ef559e9fe01f0432086101c634",
+      "rgba_sha256": "c9d680c4193a89cb4f2ecccab3a3f548d59ea02fadc8e7820c4c7a19522f1a41",
+      "primary_visible": true
+    },
+    {
+      "world": "malo",
+      "label": "oblique-off",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-malo-v3/oblique-off.png",
+      "png_sha256": "a456a854c1a97ed9b9b5fa801c57d2dd63b7b01b438d54bb1642d5f9b3637765",
+      "rgba_sha256": "52e4806938faae112b479a32048bf5184c5420212e301ee82e353904dfecf5f4",
+      "primary_visible": true
+    },
+    {
+      "world": "malo",
+      "label": "oblique-on",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-malo-v3/oblique-on.png",
+      "png_sha256": "fc830bb114378cdaf45a0735afdc5378182279ca307b2c79ff1f5cd832b92801",
+      "rgba_sha256": "3ccac386541d1df7a926477f7521153af798b154eab67d8a22d593608280dd84",
+      "primary_visible": true
+    },
+    {
+      "world": "malo",
+      "label": "oblique-restore",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-malo-v3/oblique-restore.png",
+      "png_sha256": "a456a854c1a97ed9b9b5fa801c57d2dd63b7b01b438d54bb1642d5f9b3637765",
+      "rgba_sha256": "52e4806938faae112b479a32048bf5184c5420212e301ee82e353904dfecf5f4",
+      "primary_visible": true
+    },
+    {
+      "world": "go2",
+      "label": "front-baseline",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-go2-v3/front-baseline.png",
+      "png_sha256": "d0f747b4f991124c5b00383554ad0765974518064676e59c7d7078f70cd27743",
+      "rgba_sha256": "40c61119801a28c0f2d3ab5ada82a3813684ca1b3de1a32ae8333d24ef22a0b2",
+      "primary_visible": true
+    },
+    {
+      "world": "go2",
+      "label": "oblique-baseline",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-go2-v3/oblique-baseline.png",
+      "png_sha256": "16125598038ab707f237b2b6ef8d7ad61a87c7353cc864a2485e7f9b53d3e5b7",
+      "rgba_sha256": "e8177524bac1971b6cb98c5872a96dc2573f6239fb59686adb5d93ef0722571b",
+      "primary_visible": true
+    },
+    {
+      "world": "go2",
+      "label": "front-off",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-go2-v3/front-off.png",
+      "png_sha256": "d0f747b4f991124c5b00383554ad0765974518064676e59c7d7078f70cd27743",
+      "rgba_sha256": "40c61119801a28c0f2d3ab5ada82a3813684ca1b3de1a32ae8333d24ef22a0b2",
+      "primary_visible": true
+    },
+    {
+      "world": "go2",
+      "label": "front-on",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-go2-v3/front-on.png",
+      "png_sha256": "e456916d37b56aa48a94222e079b9ffbc08e130e9ba5dad9b5181983ae496cdd",
+      "rgba_sha256": "c4feb059baefe4738fdbb4355a602239bef54b012a313b2b95e7f2bb484f78cb",
+      "primary_visible": true
+    },
+    {
+      "world": "go2",
+      "label": "front-restore",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-go2-v3/front-restore.png",
+      "png_sha256": "d0f747b4f991124c5b00383554ad0765974518064676e59c7d7078f70cd27743",
+      "rgba_sha256": "40c61119801a28c0f2d3ab5ada82a3813684ca1b3de1a32ae8333d24ef22a0b2",
+      "primary_visible": true
+    },
+    {
+      "world": "go2",
+      "label": "oblique-off",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-go2-v3/oblique-off.png",
+      "png_sha256": "16125598038ab707f237b2b6ef8d7ad61a87c7353cc864a2485e7f9b53d3e5b7",
+      "rgba_sha256": "e8177524bac1971b6cb98c5872a96dc2573f6239fb59686adb5d93ef0722571b",
+      "primary_visible": true
+    },
+    {
+      "world": "go2",
+      "label": "oblique-on",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-go2-v3/oblique-on.png",
+      "png_sha256": "d56a693fda89e4c754913f3670f26f1aebc28eadb87ae3ac938a9394f0cd72a4",
+      "rgba_sha256": "ceeb29c788fb4d72cc320f6391641612b66aea1c6f327de6840a5789516abcee",
+      "primary_visible": true
+    },
+    {
+      "world": "go2",
+      "label": "oblique-restore",
+      "png": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-rock-color-variance/rock-color-go2-v3/oblique-restore.png",
+      "png_sha256": "16125598038ab707f237b2b6ef8d7ad61a87c7353cc864a2485e7f9b53d3e5b7",
+      "rgba_sha256": "e8177524bac1971b6cb98c5872a96dc2573f6239fb59686adb5d93ef0722571b",
+      "primary_visible": true
+    }
+  ],
+  "root_judgment": {
+    "scope": "Root source-informed fullframe inspection using opaque copies before decoding side mapping; no crop or pixel transform",
+    "peer_final_arrived_before_persisting_this_record": true,
+    "pairs": [
+      {
+        "id": 1,
+        "judgment": "no meaningful difference",
+        "confidence": "high",
+        "reason": "Right has darker small-scale marks, but foreground irregular boundaries and crack continuity are not more distinctly separable; contrast preference alone is insufficient."
+      },
+      {
+        "id": 2,
+        "judgment": "no meaningful difference",
+        "confidence": "high",
+        "reason": "Both retain similar broad directional stone pattern and soft overlapping boundaries; right is tonally stronger without a clear additional readable surface plane."
+      },
+      {
+        "id": 3,
+        "judgment": "no meaningful difference",
+        "confidence": "high",
+        "reason": "Left slab veins look slightly stronger, but slab separation and crack traceability remain equivalent at this ordinary view."
+      },
+      {
+        "id": 4,
+        "judgment": "no meaningful difference",
+        "confidence": "high",
+        "reason": "Small rock patch has indistinguishable practical boundary and surface readability."
+      }
+    ],
+    "new_artifact_established": false
+  },
+  "independent_blind_judgment": {
+    "reviewer": "rock_blind_quality73",
+    "scope": "Independent fork-none reviewer saw only eight opaque fullframe PNGs and appearance rubric, no mapping/source/algorithm hints",
+    "pairs": [
+      {
+        "id": 1,
+        "judgment": "no meaningful difference",
+        "confidence": "high",
+        "reason": "Foreground cracks and irregular stone planes remain equally readable; no clear structural improvement."
+      },
+      {
+        "id": 2,
+        "judgment": "no meaningful difference",
+        "confidence": "high",
+        "reason": "Broad floor fissures have comparable continuity and separation, including lower-right; tonal differences do not give structural benefit."
+      },
+      {
+        "id": 3,
+        "judgment": "no meaningful difference",
+        "confidence": "high",
+        "reason": "Slab outlines, front faces and top-surface veins similarly distinguishable; no additional structure."
+      },
+      {
+        "id": 4,
+        "judgment": "no meaningful difference",
+        "confidence": "high",
+        "reason": "Small slabs retain comparable edge separation and detail at this distance."
+      }
+    ],
+    "new_artifact_established": false
+  },
+  "evidence_files": {
+    "NUMERIC-ADMISSION-v1.md": "b6d5077e2fcf03b0444bb292da9e1efea8538aa64834540c3850034b95049982",
+    "NUMERIC-ADMISSION-v2.md": "5e246556397c1e67378a9524408e55601f0add73f67ae290008f6e9919a8f156",
+    "numeric_admission_v1.py": "791828eadcec05a0d11bea7cf5a0bd3dd3a00a0be4e979815e0ad5005f58384f",
+    "numeric_admission_v2.py": "b865bb0ba98377312897b6bdcde7d89987c2b109164caf1bf7f89589a01c9104",
+    "references-v1.json": "21961f9e3887f6b5c6c25d374014acd255f40803cf0f4c6b3bcd1ebe3334d3e8",
+    "ground-stochastic-candidate-v1.js": "4464550f116904ceb83f58e85c81646403c49516546b4801cf2e32cee3a4354c",
+    "numeric-summary-v1.json": "f7b5954ae02b8c6553b584cb92c1164fdd43ffda24918bfe4e10164303dacb85",
+    "arithmetic-audit-check-v1.json": "c21f135373e50fd4bb7d3c3f088cfadd4e1061d7c8ec394b6e02b69e73bd629f",
+    "partition-diagnostic-v1.json": "322b6a1896b24b4dee62c17f803f09e0e8284d0c6f549c0a751b18cce22f6339",
+    "numeric-admission-v1/manifest.json": "9b04342cea2ecc6cbea0175a237d8278aff1910385171dd21ed2c801b034f96a",
+    "numeric-admission-v2/manifest.json": "f7a469a6eb5e4ca422995a57d25289c03c21a0c4005b3d596ada8347d45777de",
+    "numeric-admission-v1.parent.json": "8ca0c2048accaa7bbcdd97b55bed2e2c129ae106215df460ff5ce14c9c546989",
+    "numeric-admission-v2.parent.json": "b02ff9585a9eb4f28e83377013f23d1147453d55479abad2e25202b1f25cad15",
+    "rock_color_capture_v1.py": "ad37bc6ec05deb75963f6eeb6899f9a62a93eb42c6bbee237a1a8952b5355760",
+    "rock_color_capture_v2.py": "adaca25ea277e3e35f587d2703386cddf55f96d22d2939096fb7cc30416a47d1",
+    "rock_color_capture_v3.py": "02c0bd1562ff6492403dffc34ccdc419295061db2a9f99ac39eefd5e55160666",
+    "ROCK-COLOR-CAPTURE-v1.md": "02c1716086b90a35d53131698c7fef30de85e323b6606b28c492df1dfb32c74f",
+    "ROCK-COLOR-CAPTURE-v2.md": "688faa133dc05a4c2cab463853e11f824f3d0708334da8117db11a259883171f",
+    "ROCK-COLOR-CAPTURE-v3.md": "17ab78415070d8e9496d68e8f8cd5c33b964000cd14bc2c1b915ab6d8d59e976",
+    "capture-refs-v1.json": "aa9f5b2dda63aba9633a61d9183f80d25c3af986bced138caa6a298c748e8877",
+    "capture-refs-v2.json": "bf4eb303ac62257e166e9025289f226703014bf6e6556a7eca88db014af8327a",
+    "capture-refs-v3.json": "082f5e9909f5d3c48151ea4464cdc5ed3822b0a9263be1044ea4cc0f8071d3ee",
+    "rock-color-malo-v1/manifest.json": "5b5ebb047642122872790e0e35f3070b90e38e044a5b80f14966f8518bb177a9",
+    "rock-color-malo-v2/manifest.json": "3dfdac8912ac235b97b88b11ce3e672057061eb91edb828039362584aa238fd5",
+    "rock-color-malo-v3/manifest.json": "67606e513a92d6524de8358dd48bd8465a3b34f6d7872f2b8455bdd930b7db8f",
+    "rock-color-go2-v3/manifest.json": "bca58470dec232f35adec87983df8f84fc11e1bfbe73816bf7c19159fe04fdeb",
+    "rock-color-malo-v1.parent.json": "748fa40759ee61ca7e58b25ad15b39671757934bd85985aaee11db4473c5ca1c",
+    "rock-color-malo-v2.parent.json": "1ebb0d4d9841c0bdf4aca2eee9b7f1a8790a422d96982e3fa289c7749b51f1d2",
+    "rock-color-malo-v3.parent.json": "aa066fd1a2b9d781f950af55f8d348fc8becdea25f14cbd813e6c928ca3b6baf",
+    "rock-color-go2-v3.parent.json": "3c72d85d2e89890bddd3c01c9181631c6c30758aa1d624f582215050f9e0221f",
+    "BLIND-REVIEW-v1.md": "bc421c299ff877d72f4b7221b9a4aabaf615cb0dccefe7981970f53bbd9db6f7",
+    "material-version-diagnostic-check-v1.json": "63cea5c92d83e93496896fc6a4e35cb92aa88ea3949e0b9827d8d2ca2b7e4847",
+    "capture-check-and-private-copies-v1.json": "9df8035bc0696263647d7b98ed51dc34ad8d59b13814cad75e70f6249ef692e6",
+    "root-visual-judgment-v1.json": "272d2a36388604916acc3e3f47c27012d4d630f9b39a561132eb5c985712be14",
+    "independent-blind-judgment-v1.json": "f7330512cc11e6208e694a810ab4bf2b6e71e330b1a580b0d2beef45d5ad144a",
+    "visual-decision-v1.json": "6bb6d10eaa244dc78e536fd9556bafa8460f66ce459c50715a3896fb563860fe"
+  },
+  "fresh_pytest_count": 0,
+  "new_movies": [],
+  "candidate_runtime_benchmark": null,
+  "candidate_package": null,
+  "remote_ci_run": false,
+  "native_desktop_zoom_run": false,
+  "verification_scope": "Numerical model and actual external Chrome prototype controls only; fixed ordinary-view quality gate failed; product runtime unchanged"
+}
