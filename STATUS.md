@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-02 crate joint prerequisite: analytical overlap exists, but ordinary warehouse/harbor stills and sampled camera motion do not establish a salient shared deficit; no geometry candidate or product change.
+  Frozen809 inputs;39 source geometry cases,five actual world captures/481 unchanged native arrays each,20 native stills/10 exact repeat pairs and8 correlated cross-helper comparisons pass; two fully decoded3.333s films/32 original JPEG samples retained.
+  Root and independent visual inspection remain discrete; no flicker exclusion, fresh pytest/package/budget/Windows/CI claim. [Report](docs/bench/2026-11-02-crate-joint-screen.md).
+  Broad goal active; next reproduce and improve explicit selection of a support plus carried objects for existing group move/copy/save/Undo; action-success tuning deferred.
+
 - 2026-11-02 driving dock: keyboard hints stay above playback controls, fixing inventory-open Reset/Play obstruction and the 821px closed-panel boundary.
   124 distinct scoped Chrome cases, fresh locked offline installed smoke/428-file equivalence, four install and fixed ABBA four-by-seven viewer budgets pass; wheel4148876B(-21), no new assets/dependencies.
   Actual Malo/Go2 four flows, two trusted Resets per candidate,481 unchanged native arrays/state per run and six strict fullRGBA pairs pass; four decoded sampled films/100rawJPEGs,24contact samples and4UI files inspected.
