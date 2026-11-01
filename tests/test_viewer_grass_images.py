@@ -18,11 +18,11 @@ from PIL import Image
 def test_bundled_grass_pair_has_verified_bytes_dimensions_and_bounded_tint():
     module = files("robotforge.viewer").joinpath("static/ground-grass.js").read_text()
     assert len(module.encode()) <= 128 * 1024
-    images = re.findall(r"data:image/(jpeg|png);base64,([^\"]+)", module)
-    assert [kind for kind, _ in images] == ["jpeg", "png"]
+    images = re.findall(r"data:image/(jpeg|webp);base64,([^\"]+)", module)
+    assert [kind for kind, _ in images] == ["jpeg", "webp"]
     expected = [
         "5c76596cd17b2b516514a8ec4068e88ea8b0d07d4988af88c47b6574a5fde1ed",
-        "b0db64526e3b0f76c7308ebf1d8e92f6943ea154c3977ccc053a7dc5ced108f8",
+        "71e9e218db6a39f483d8cced9a85274ce6b741928b669fdb81549179fe2d4389",
     ]
     total = 0
     for (kind, encoded), checksum in zip(images, expected, strict=True):
