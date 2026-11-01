@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-02 driving dock: keyboard hints stay above playback controls, fixing inventory-open Reset/Play obstruction and the 821px closed-panel boundary.
+  124 distinct scoped Chrome cases, fresh locked offline installed smoke/428-file equivalence, four install and fixed ABBA four-by-seven viewer budgets pass; wheel4148876B(-21), no new assets/dependencies.
+  Actual Malo/Go2 four flows, two trusted Resets per candidate,481 unchanged native arrays/state per run and six strict fullRGBA pairs pass; four decoded sampled films/100rawJPEGs,24contact samples and4UI files inspected.
+  Capture projection/query-audit corrections, two failed export clocks and source-only parser rejection remain documented; native desktop zoom/Windows/remoteCI not claimed. [Report](docs/bench/2026-11-02-drive-dock.md).
+  Broad goal active; next screen shared thin-edge/joint artifacts in warehouse/harbor ordinary views before a geometry candidate; single-action success unchanged.
+
 - 2026-11-02 prop row arrangement: paused2–16 independent upright props use explicit edge gap, complete owned preview, whole-row rotation, guarded single publication and atomic Undo; legacy group defaults/payloads retained.
   Fixed the new taller selection sheet covering inventory choices at320px. Phased4365default+134relatedChrome+9GL/sensor=4508distinct pytest passes,7same-environment framework cases,source/fresh-offline-installed60tool smoke,428product files and original install/viewer budgets pass.
   Real Malo/Go2 ten captures pass;44phase-aligned fullRGBA pairs,36native comparisons, six fully decoded sampled films/474rawJPEGs,36root-viewed samples and6native UI endpoints. Wheel4148897B(+3432),HTTP+4176B/unchanged34requests,unchanged draw/memory/program counts.

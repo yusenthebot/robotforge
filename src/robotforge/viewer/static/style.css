@@ -751,7 +751,6 @@ canvas.inspecting { cursor: crosshair; }
 .screen-drive [data-direction]:disabled { opacity: .45; }
 .drive-hud .drive { max-width: 100%; }
 @media (min-width: 821px) {
-  .drive-hud:has(#screen-drive[hidden]):not(:has(.undo-actions button:not([hidden]))) { bottom: calc(var(--gutter) + 8px); }
   /* Keep driving/Undo reachable without covering the open scene inventory. */
   #world-panel:not([hidden]) ~ .drive-hud { left: calc(320px + var(--gutter) * 2); max-width: calc(100% - 320px - var(--gutter) * 3); }
 }
