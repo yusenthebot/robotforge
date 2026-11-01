@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "status": "local_acceptance_passed",
+  "delivery": "Pending at report creation; commit/push/merge not yet verified. Verify separately in external delivery receipt.",
+  "goal_status": "active",
+  "base_commit": "c4a723b14ab2bf02fc6a303ea94c701af93d9621",
+  "feature": "Explicit selected-prop row arrangement; legacy group interfaces retained",
+  "candidate_freezes": [
+    {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/candidate-source-v1.json",
+      "sha256": "a74e7baf89259ffb9193da6f57c7c6b84f2e6401d5393078aeb108cd5a954890"
+    },
+    {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/candidate-source-v2.json",
+      "sha256": "d65d1d979018366485022a0d4dc4817731e00e3f047c095844b64e86b7f92342"
+    }
+  ],
+  "final_source_inputs": 808,
+  "product_files": 428,
+  "pytest": {
+    "distinct_passed": 4508,
+    "default_skipped": 129,
+    "phased": true,
+    "default_source": "v1; final v2 changes CSS only, Python/tests/dependencies exact",
+    "groups": [
+      {
+        "name": "full-default-v1",
+        "passed": 4365,
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/full-default-v1.xml",
+        "sha256": "315dfa28bc0b0f67c999a75b045642888e98b218a18abacf10f4fa6c28f0f766"
+      },
+      {
+        "name": "scoped-browser-v2",
+        "passed": 134,
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/scoped-browser-v2.xml",
+        "sha256": "c908f43d3e61c1de87481b2fcb52e7e21cb90256f2c97d98ec0cda9a659ccbc3"
+      },
+      {
+        "name": "graphics-sensors-v1",
+        "passed": 9,
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/graphics-sensors-v1.xml",
+        "sha256": "c090303dfed7c802f5d582baf34de2b00c7dcd5935f4f954ea3ffd047b1e7a24"
+      }
+    ]
+  },
+  "framework_cases": 7,
+  "receipts": {
+    "full-default-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/full-default-v1.receipt.json",
+      "sha256": "037a76e4798c767e7a3b4281429a6de91a6aa4c1d0bece2f9d1e1d300af49578",
+      "seconds": 1309.6651367499726,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "scoped-browser-v2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/scoped-browser-v2.receipt.json",
+      "sha256": "ddc7f1fcf3de58fca78bccad72eb47cbb7aece178699650527b350998fa9ebaa",
+      "seconds": 912.4564702500356,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "graphics-sensors-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/graphics-sensors-v1.receipt.json",
+      "sha256": "04bae0bfe780038e12ab1452532b1409c98c223328f4236a7d161efe1d4d4073",
+      "seconds": 42.04973108298145,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "framework-baseline-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/framework-baseline-v1.receipt.json",
+      "sha256": "ee018ec94b5db0b1d372f25d8bc7734d6b7f50b20731abb8965a1b42315712f9",
+      "seconds": 2.5778418330010027,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "framework-candidate-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/framework-candidate-v1.receipt.json",
+      "sha256": "0dd40f6a7464b4b514f7247d9aa20ac6e38801838c040fe919a87f4f77acb1d8",
+      "seconds": 2.7087376670097,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "source-smoke-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/source-smoke-v1.receipt.json",
+      "sha256": "2fdf2c4f3003b28a88af6f33f4e15dcfb743a6a75fec07c64254a14ed6689a51",
+      "seconds": 5.386675750021823,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "build-wheel-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/build-wheel-v1.receipt.json",
+      "sha256": "d0c268490ca1c1bf0d71663ed3f348985cf1ac28f0a22595f2525f85c964b0b0",
+      "seconds": 0.6770848329761066,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "installed-smoke-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/installed-smoke-v1.receipt.json",
+      "sha256": "5a0c791a741eff14220cc68ff040a8de05299b82d13253607a2e001d22802493",
+      "seconds": 21.676700249954592,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "install-budgets-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/install-budgets-v1.receipt.json",
+      "sha256": "2d03ea4fac508e476b75a0024405562671ca2fbf75657859f256286aee322eb8",
+      "seconds": 1.6475561669794843,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "viewer-a0-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/viewer-a0-v1.receipt.json",
+      "sha256": "7425fa34e956aabb70487ee8e8565081aeb9e614ca573e445b257dab9c256482",
+      "seconds": 25.566226208989974,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "viewer-b1-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/viewer-b1-v1.receipt.json",
+      "sha256": "cf17843e330f6a69340c442aa49487588cabcfd1317acc019e10c51e2d228d22",
+      "seconds": 28.580501959018875,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "viewer-b2-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/viewer-b2-v1.receipt.json",
+      "sha256": "4bad4571b880181bb6d0c5cc82f2b299989a8d74063691a59af056af388ff750",
+      "seconds": 28.538856416009367,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "viewer-a3-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/viewer-a3-v1.receipt.json",
+      "sha256": "6f6985220cb7dc21fa7f86262eb008606dd70c357a71ffc2af15de9dd0a8e60b",
+      "seconds": 25.52868029102683,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    },
+    "row-latency-v1": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/row-latency-v1.receipt.json",
+      "sha256": "96058bf5c0db64ff3f9c9b9457a6bdc4a7301cf26a975e959bf6a6f63f9dccf7",
+      "seconds": 4.241420959006064,
+      "source_unchanged": true,
+      "protected_unchanged": true
+    }
+  },
+  "package": {
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/wheels-v1/robotforge-0.0.1-py3-none-any.whl",
+    "sha256": "a13d2a9320bd98afe70878dd6a2694814afc88fbfd2b83b4bc317f255818f346",
+    "bytes": 4148897,
+    "delta_bytes": 3432,
+    "original_cap_bytes": 4194304,
+    "headroom_bytes": 45407,
+    "source_wheel_installed_product_files_exact": 428,
+    "new_dependencies": 0,
+    "new_assets": 0
+  },
+  "comparisons": {
+    "malo": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/malo-comparison-v2.json",
+      "sha256": "9b12bea7a050658e3d2f3f9424aa16f6a25a4196755fa6cf96d954f2e5a9c1e5",
+      "strict_phase_aligned_rgba_pairs": 22,
+      "native_comparisons": 18,
+      "material_source_counter_proofs": 34,
+      "cross_reload_pixel_invariance_claim": false
+    },
+    "go2": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/go2-comparison-v2.json",
+      "sha256": "5337aa7c2361bf0127af06dbfcd1c73ac332365c249bf3a37e099c13d49a333d",
+      "strict_phase_aligned_rgba_pairs": 22,
+      "native_comparisons": 18,
+      "material_source_counter_proofs": 34,
+      "cross_reload_pixel_invariance_claim": false
+    }
+  },
+  "resource_audit": {
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/resource-audit-v1.json",
+    "sha256": "d728a4b78d1148fac1dd4966a5976d9780492fde847767089f2b67e79f899f85"
+  },
+  "formal_viewer_panel": {
+    "order": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline"
+    ],
+    "cold_seconds": [
+      0.572,
+      0.937,
+      0.9261,
+      0.563
+    ],
+    "all_original_budgets_passed": true,
+    "universal_speedup_claim": false
+  },
+  "supplemental_balanced_empty_cache": {
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/balanced-cache-panel-v1/manifest.json",
+    "sha256": "cdc715cb555d9aade3c06c0d2b8296e721b4cdabdc11fb7deebbc5231382b603",
+    "scope": "same cold path with global source-backed caches redirected empty; does not replace formal panel or prove causality",
+    "medians_seconds": {
+      "baseline": 1.367350145475939,
+      "candidate": 1.368088124989299
+    }
+  },
+  "media_receipts": [
+    {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/malo-manual-media-v1/media-manifest.json",
+      "sha256": "603cd8be500ed85183b27e3781631f827e2b7bc87edf292fb762cec29a66464b"
+    },
+    {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/malo-row-media-v1/media-manifest.json",
+      "sha256": "65af64eb239256b30bc34c06669e6ee64b916d52817fa867f80a606e9592eb64"
+    },
+    {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/go2-manual-media-v1/media-manifest.json",
+      "sha256": "b4e12db48bf85eb1aa953e1623c51548b1b98ad656aee7dd0b900aa90bb30d86"
+    },
+    {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/go2-row-media-v1/media-manifest.json",
+      "sha256": "8eeb8218399316bd68aaf0c9532d726f8328a454e6b103cd63289b63878d2038"
+    }
+  ],
+  "films": [
+    {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/malo-manual-media-v1/first/workflow.mp4",
+      "sha256": "ae03eb1a99fedaa25532e0762885988e70901d8462e8532669c6352d656df1a7",
+      "duration_seconds": 19.266667,
+      "decoded_frames": 578,
+      "raw_sample_frames": 67,
+      "phase": "first"
+    },
+    {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/malo-row-media-v1/first/workflow.mp4",
+      "sha256": "7dadf70f2efc16870292c26b9e8aff9cdb951037c65d4f1444f58bdead9d78a7",
+      "duration_seconds": 45.0,
+      "decoded_frames": 1350,
+      "raw_sample_frames": 132,
+      "phase": "first"
+    },
+    {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/malo-row-media-v1/reopen/workflow.mp4",
+      "sha256": "bf21e401d53f1abaea041da7abbd7e5e745295bef009c5b314e0dec792b267e5",
+      "duration_seconds": 7.433333,
+      "decoded_frames": 223,
+      "raw_sample_frames": 23,
+      "phase": "reopen"
+    },
+    {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/go2-manual-media-v1/first/workflow.mp4",
+      "sha256": "70ccec9ae5fb710e6ac9d5053db67cc632683c282e8de4df74aad35214b3a80a",
+      "duration_seconds": 20.166667,
+      "decoded_frames": 605,
+      "raw_sample_frames": 75,
+      "phase": "first"
+    },
+    {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/go2-row-media-v1/first/workflow.mp4",
+      "sha256": "4690a11c24b72f0ee384fab6cfc3eb6682af54a3c9ef7a1315a78cd2510eee6c",
+      "duration_seconds": 47.833333,
+      "decoded_frames": 1435,
+      "raw_sample_frames": 154,
+      "phase": "first"
+    },
+    {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/go2-row-media-v1/reopen/workflow.mp4",
+      "sha256": "f4c99071b60d1dec569e40e0e819ffa3925b22847b7740926fd2aaf6f19c9b9d",
+      "duration_seconds": 7.033333,
+      "decoded_frames": 211,
+      "raw_sample_frames": 23,
+      "phase": "reopen"
+    }
+  ],
+  "root_visual_review": {
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/root-visual-review-v1.json",
+    "sha256": "25f5713c2018782af58ffe5ace783bc14e730c1ea7a5726d22ff10eabacebb34"
+  },
+  "native_desktop_availability": {
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/native-desktop-availability-v1.json",
+    "sha256": "b81c27bfd3544d80a1b0037c66b53eaedef1b6b71b27397e159c390ecb95109e"
+  },
+  "static_checks": {
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/final-static-v1.json",
+    "sha256": "b198ee7cc94c56074f3a97e3251c6ced733f66c43ef3a71538feb89bb7037478"
+  },
+  "retained_failures": {
+    "formal_comparisons": [
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/malo-comparison-v1.json",
+        "sha256": "7dab19cee40e72862c4ad9fdca0b0384597cccab76ce1430c528a5d510af81de"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/go2-comparison-v1.json",
+        "sha256": "95ccd451c83fdf15d61a385581c55b667a87084d22dd18c27e822016e1d77f65"
+      }
+    ],
+    "capture_and_source_revisions": "All prior failed captures and rejected unexecuted helper revisions retained in external evidence root"
+  },
+  "limitations": [
+    "macOS Chrome/Metal and MuJoCo only; no fresh native OS zoom, Windows or remote CI claim",
+    "Six sampled recordings at maximum10Hz; native input/reload gaps; CFR encoding may repeat/drop display frames",
+    "Root inspected36 decoded samples and6native UI endpoints, not continuous playback",
+    "Manual UI coordinates are rounded; separate API bridge supplies full-precision state comparison without UI-count/film claim",
+    "Post-observation comparison amendments explicitly recorded; no cross-reload pixel-invariance claim",
+    "Existing driving HUD may cover Reset while inventory is open; trusted documented R shortcut used, button issue uncorrected",
+    "bandit,pip-audit,mypy,pyright unavailable; not installed or claimed passed",
+    "No robot navigation/manipulation success or new shader/material quality gain claim"
+  ]
+}

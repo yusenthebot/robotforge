@@ -118,13 +118,13 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     repeat.checked = false; syncRepeat();
     material.value = "";
     $("prop-material-control").hidden = kind !== "object" || entry.name === "table";
-    $("placement-hint").textContent = t(kind === "arrangement-insert" ? "arrangement_place_hint" : kind === "group-move" ? "prop_group_move_hint" : kind === "group-copy" ? "prop_group_place_hint" : kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
+    $("placement-hint").textContent = t(kind === "group-move" && entry.layout === "row" ? "prop_row_place_hint" : kind === "arrangement-insert" ? "arrangement_place_hint" : kind === "group-move" ? "prop_group_move_hint" : kind === "group-copy" ? "prop_group_place_hint" : kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     showHeading();
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
     for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = isObjectGroup(item) || kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
     $("placement-bar").querySelector(".repeat-placement").hidden = !canRepeat(kind);
-    $("placement-title").textContent = isObjectGroup(item) ? t(kind === "arrangement-insert" ? "arrangement_place_named" : kind === "group-move" ? "move_named_prop_group" : "copy_named_prop_group", { count: entry.members.length, name: entry.name })
+    $("placement-title").textContent = isObjectGroup(item) ? t(kind === "group-move" && entry.layout === "row" ? "arrange_named_prop_row" : kind === "arrangement-insert" ? "arrangement_place_named" : kind === "group-move" ? "move_named_prop_group" : "copy_named_prop_group", { count: entry.members.length, name: entry.name })
       : t(kind === "terrain-edit" ? "move_named_terrain" : kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;

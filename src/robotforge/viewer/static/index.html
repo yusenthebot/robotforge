@@ -339,6 +339,11 @@
     <button class="pill" id="object-copy" type="button" data-i18n="copy_prop">Duplicate</button>
     <button class="pill" id="object-group-copy" type="button" data-i18n="copy_prop_group" hidden>Copy this group</button>
     <button class="pill" id="object-group-move" type="button" data-i18n="move_prop_group" hidden>Move / rotate this group</button>
+    <button class="pill" id="object-group-row" type="button" data-i18n="arrange_prop_row" hidden>Arrange in a row</button>
+    <label class="prop-material-control" id="object-row-gap-control" hidden><span data-i18n="prop_row_gap">Gap (m)</span>
+      <input id="object-row-gap" type="number" min="0.05" max="2" step="any" value="0.25" inputmode="decimal" aria-describedby="object-row-gap-hint">
+      <span class="note" id="object-row-gap-hint" data-i18n="prop_row_gap_hint">Between edges · 0.05–2 m</span>
+    </label>
     <button class="pill" id="arrangement-save-open" type="button" hidden data-i18n="arrangement_save_open">Save arrangement</button>
     <form id="arrangement-save-form" class="arrangement-save-form" hidden novalidate>
       <label for="arrangement-name" data-i18n="arrangement_name">Arrangement name</label>

@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import mujoco
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from robotforge.design.store import ApplyArtifacts, _directory_identity
 from robotforge.design.world import ObjectEntry
@@ -21,6 +21,7 @@ from robotforge.sim import carry
 from robotforge.sim.session import fresh_data
 from robotforge.viewer.creation import Coordinate, Heading, _parse
 from robotforge.viewer.layout_state import BuiltinLayoutState, check_supported_restore
+from robotforge.viewer.object_arrange import qualify_sources, row_offsets, unchanged_row
 from robotforge.viewer.object_edit import SHAPES, Digest, UndoEdit, _bounds, _guard, _owners, _supported, _task_users
 
 if TYPE_CHECKING:
@@ -48,6 +49,17 @@ class Guard(BaseModel):
 class Prepare(Guard):
     names: list[str] = Field(min_length=2, max_length=16)
     mode: Literal["copy", "move"] = "copy"
+    layout: Literal["preserve", "row"] = "preserve"
+    gap: float | None = Field(default=None, ge=0.05, le=2, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def valid_layout(self) -> Prepare:
+        if self.layout == "row":
+            if self.mode != "move" or self.gap is None:
+                raise ValueError("row arrangement requires move mode and an explicit gap")
+        elif "gap" in self.model_fields_set:
+            raise ValueError("gap is only accepted for row arrangement")
+        return self
 
     @field_validator("names")
     @classmethod
@@ -82,6 +94,9 @@ class PreparedGroup:
     anchor: tuple[float, float, float]
     members: tuple[Member, ...]
     mode: Literal["copy", "move"]
+    layout: Literal["preserve", "row"] = "preserve"
+    gap: float | None = None
+    target_offsets: tuple[tuple[float, float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -334,6 +349,10 @@ def _prepare(pg, request: Prepare):
         saved = fresh_data(model)
         _collisions(model, saved, world, names)
         _support_graph(model, saved, world, names)
+    offsets = ()
+    if request.layout == "row":
+        qualify_sources(pg, world, request.names)
+        offsets = row_offsets(model, data, members, anchor, request.gap)
     prepared = PreparedGroup(
         store,
         request.version,
@@ -344,10 +363,14 @@ def _prepare(pg, request: Prepare):
         anchor,
         members,
         request.mode,
+        request.layout,
+        request.gap,
+        offsets,
     )
     pg._play_group = prepared
     return {
         "mode": prepared.mode,
+        **({"layout": "row", "gap": prepared.gap} if prepared.layout == "row" else {}),
         "token": prepared.token,
         "pose_sha256": prepared.pose_sha256,
         "anchor": list(anchor),
@@ -363,8 +386,9 @@ def _prepare(pg, request: Prepare):
                 "yaw": member.yaw,
                 "geoms": list(member.geoms),
                 "offset": [member.pos[i] - anchor[i] for i in range(3)],
+                **({"target_offset": list(offsets[index])} if prepared.layout == "row" else {}),
             }
-            for member in members
+            for index, member in enumerate(members)
         ],
     }
 
@@ -384,14 +408,23 @@ def _check_prepared(pg, request, prepared, mode="copy"):
     mujoco.mj_forward(pg.session.model, data)
     if _pose_digest(pg.session.model, data, prepared.members) != prepared.pose_sha256:
         raise PlaygroundError("the selected layout pose changed; select the props again")
+    if prepared.layout == "row":
+        names = [member.entry.name for member in prepared.members]
+        _movable(pg, world, set(names))
+        qualify_sources(pg, world, names)
     return world
 
 
 def _transformed(member, prepared, request, name, *, moving=False) -> ObjectEntry:
     angle = math.radians(request.yaw)
     rot = np.array([[math.cos(angle), -math.sin(angle)], [math.sin(angle), math.cos(angle)]])
-    xy = rot @ (np.array(member.pos[:2]) - prepared.anchor[:2]) + request.pos[:2]
-    pos = [float(xy[0]), float(xy[1]), member.pos[2] + request.pos[2] - prepared.anchor[2]]
+    if isinstance(prepared, PreparedGroup) and prepared.layout == "row":
+        offset = prepared.target_offsets[prepared.members.index(member)]
+        xy = rot @ offset[:2] + request.pos[:2]
+        pos = [float(xy[0]), float(xy[1]), offset[2] + request.pos[2]]
+    else:
+        xy = rot @ (np.array(member.pos[:2]) - prepared.anchor[:2]) + request.pos[:2]
+        pos = [float(xy[0]), float(xy[1]), member.pos[2] + request.pos[2] - prepared.anchor[2]]
     if not all(math.isfinite(value) and abs(value) <= 100 for value in pos):
         raise PlaygroundError("the transformed layout extends beyond the supported coordinates")
     yaw = member.yaw
@@ -652,7 +685,19 @@ def _move(pg, request: Duplicate):
     world = _check_prepared(pg, request, prepared, "move")
     names = {member.entry.name for member in prepared.members}
     _movable(pg, world, names)
-    if np.allclose(request.pos, prepared.anchor, rtol=0, atol=1e-9) and abs(math.remainder(request.yaw, 360)) < 1e-9:
+    targets = None
+    if prepared.layout == "row":
+        targets = {
+            member.entry.name: _transformed(member, prepared, request, member.entry.name, moving=True)
+            for member in prepared.members
+        }
+        unchanged = unchanged_row(pg, world, targets)
+    else:
+        unchanged = (
+            np.allclose(request.pos, prepared.anchor, rtol=0, atol=1e-9)
+            and abs(math.remainder(request.yaw, 360)) < 1e-9
+        )
+    if unchanged:
         return {
             "objects": [obj.name for obj in world.objects if obj.name in names],
             "moved": True,
@@ -661,10 +706,11 @@ def _move(pg, request: Duplicate):
             "generation": pg.session.generation,
             "paused": True,
         }
-    targets = {
-        member.entry.name: _transformed(member, prepared, request, member.entry.name, moving=True)
-        for member in prepared.members
-    }
+    if targets is None:
+        targets = {
+            member.entry.name: _transformed(member, prepared, request, member.entry.name, moving=True)
+            for member in prepared.members
+        }
     # Replacement preserves every original index, regardless of selection order.
     entries = tuple(targets[obj.name] for obj in world.objects if obj.name in names)
     source = carry.take(pg.session.model, pg.session.data)
@@ -682,7 +728,16 @@ def _move(pg, request: Duplicate):
         _movable(pg, world, names)
         _validate_targets(pg, candidate, compiled, names, pos=request.pos)
 
-    return _commit(pg, prepared.store, request, change, validate, entries, moving=before)
+    return _commit(
+        pg,
+        prepared.store,
+        request,
+        change,
+        validate,
+        entries,
+        moving=before,
+        check_current=(lambda: _check_prepared(pg, request, prepared, "move")) if prepared.layout == "row" else None,
+    )
 
 
 def _undo_move(pg, receipt: GroupMove, guard, world):

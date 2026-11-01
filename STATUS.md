@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-02 prop row arrangement: paused2–16 independent upright props use explicit edge gap, complete owned preview, whole-row rotation, guarded single publication and atomic Undo; legacy group defaults/payloads retained.
+  Fixed the new taller selection sheet covering inventory choices at320px. Phased4365default+134relatedChrome+9GL/sensor=4508distinct pytest passes,7same-environment framework cases,source/fresh-offline-installed60tool smoke,428product files and original install/viewer budgets pass.
+  Real Malo/Go2 ten captures pass;44phase-aligned fullRGBA pairs,36native comparisons, six fully decoded sampled films/474rawJPEGs,36root-viewed samples and6native UI endpoints. Wheel4148897B(+3432),HTTP+4176B/unchanged34requests,unchanged draw/memory/program counts.
+  Original ABBA cold.572/.563s vs.937/.926s retained; supplemental balanced empty-cache ABBA medians1.36735/1.36809s diagnose cache sensitivity,not universal speedup. Failures and post-observation comparator corrections remain documented.
+  Existing inventory-open driving HUD can cover Reset; trusted R shortcut verified,button obstruction uncorrected. Native desktop tool still locked,no fresh OS zoom/Windows/remoteCI claim. [Report](docs/bench/2026-11-01-prop-row.md). Broad material/lightweight/play goal active; single-action success unchanged.
+
 - 2026-11-01 rock color variance screen: nine fixed CPU levels and both actual Chrome prototype controls pass, but all four ordinary-view pairs are neutral in root and independent blinded review; candidate rejected, runtime unchanged.
   Sixteen native frames, eight non-self exact baseline/OFF/RESTORE pairs,54 actual linked shader rows and481 native arrays per run reconcile; original numeric/browser failures and narrow post-diagnostic overlay counter correction retained.
   No candidate motion video, DPR2, cost, package/install or fresh pytest claim; all805accepted/13WIP/791CMF/796mesh/799PR68/two801trees/78native inputs exact. [Report](docs/bench/2026-11-01-rock-color-screen.md).
