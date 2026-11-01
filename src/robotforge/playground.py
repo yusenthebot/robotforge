@@ -340,6 +340,7 @@ class Playground:
                 "prepare_object_group",
                 "duplicate_object_group",
                 "move_object_group",
+                "select_object_group",
             }:
                 return self.edit_object_for_play(msg)
             if action in {"add_object", "undo_add"}:
@@ -592,6 +593,11 @@ class Playground:
     @_one_edit_at_a_time
     def edit_object_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
         """Reposition/copy/remove an exact existing rigid prop, or undo that one edit."""
+        if message.get("action") == "select_object_group":
+            from robotforge.viewer.object_selection import handle
+
+            return handle(self, message)
+
         from robotforge.viewer.object_edit import duplicate, edit, undo
         from robotforge.viewer.object_group import GroupCopy
         from robotforge.viewer.object_group import handle as group

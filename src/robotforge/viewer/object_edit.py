@@ -135,23 +135,52 @@ def _bounds(model, data, g):
     return center - half, center + half
 
 
-def _supported(model, data, name, owners):
-    """Upward near-contacts, including static pairs missing from the native contact list."""
-    mujoco.mj_forward(model, data)
-    supported = set()
+@dataclass
+class _SupportContext:
+    """One posed state, with lazy upward owner edges and reusable geometry bounds."""
+
+    model: mujoco.MjModel
+    data: mujoco.MjData
+    owners: dict[int, str]
+    solid: list[int]
+    boxes: dict[int, tuple[np.ndarray, np.ndarray]]
+    owner_geoms: dict[str, list[int]]
+    contacts: dict[str, set[str]]
+    edges: dict[str, frozenset[str]]
+
+    def supported(self, name: str) -> frozenset[str]:
+        if name not in self.edges:
+            self.edges[name] = frozenset(_supported_in_state(self, name))
+        return self.edges[name]
+
+
+def _support_context(model, data, owners, *, forwarded=False) -> _SupportContext:
+    """Prepare once; callers own the model/data and must keep this state unchanged."""
+    if not forwarded:
+        mujoco.mj_forward(model, data)
+    contacts: dict[str, set[str]] = {}
     for contact in data.contact[: data.ncon]:
         a, b = int(contact.geom1), int(contact.geom2)
-        if a < 0 or b < 0 or contact.dist > 0.008:
+        if a < 0 or b < 0 or contact.dist > 0.008 or owners[a] == owners[b]:
             continue
-        if owners[a] == name and owners[b] != name and contact.frame[2] > 0.2:
-            supported.add(owners[b])
-        if owners[b] == name and owners[a] != name and contact.frame[2] < -0.2:
-            supported.add(owners[a])
+        if contact.frame[2] > 0.2:
+            contacts.setdefault(owners[a], set()).add(owners[b])
+        if contact.frame[2] < -0.2:
+            contacts.setdefault(owners[b], set()).add(owners[a])
     solid = [g for g in range(model.ngeom) if model.geom_contype[g] or model.geom_conaffinity[g]]
-    boxes = {g: _bounds(model, data, g) for g in solid}
-    for a in solid:
-        if owners[a] != name:
-            continue
+    owner_geoms: dict[str, list[int]] = {}
+    for geom in solid:
+        owner_geoms.setdefault(owners[geom], []).append(geom)
+    return _SupportContext(
+        model, data, owners, solid, {g: _bounds(model, data, g) for g in solid}, owner_geoms, contacts, {}
+    )
+
+
+def _supported_in_state(context: _SupportContext, name: str) -> set[str]:
+    model, data, owners = context.model, context.data, context.owners
+    solid, boxes = context.solid, context.boxes
+    supported = set(context.contacts.get(name, ()))
+    for a in context.owner_geoms.get(name, ()):
         low, high = boxes[a]
         for b in solid:
             if owners[b] == name or model.geom_type[b] in (mujoco.mjtGeom.mjGEOM_PLANE, mujoco.mjtGeom.mjGEOM_HFIELD):
@@ -184,6 +213,11 @@ def _supported(model, data, name, owners):
             if (rot @ normal)[2] > 0.2 and top[2] > points[2] and bottom[2] >= points[2] - 0.008:
                 supported.add(owners[b])
     return supported
+
+
+def _supported(model, data, name, owners):
+    """Upward near-contacts, including static pairs missing from the native contact list."""
+    return set(_support_context(model, data, owners).supported(name))
 
 
 def _task_users(world, name):

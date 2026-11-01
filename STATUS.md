@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-02 carried-prop selection: one explicit button includes all recursively supported rigid props, up to16, for existing group move/copy/save; legacy interfaces and movement admission remain.
+  388distinct scoped pytest cases,7same-runtime framework cases, fresh locked offline installed smoke/429-file equivalence,4install and fixedABBA4×7viewer budgets pass; wheel4151437B(+2561), no new assets/dependencies.
+  Actual Malo/Go2 baseline/manual and candidate/query→move→Undo flows pass;10diagnostic frames form8exact fullRGBA comparisons,4fully decoded sampled films retain40JPEGs,24decoded contacts inspected.
+  Failed test assumptions, detached MuJoCo getter ownership, blocked/offscreen targets and real dock rejection remain documented; native desktop zoom/Windows/remoteCI/fullsuite/bandwidth claims excluded. [Report](docs/bench/2026-11-02-carried-selection.md).
+  Broad goal active; next assess existing furniture finish coverage (tables/bins), real-view benefit and original budgets; action-success tuning deferred.
+
 - 2026-11-02 crate joint prerequisite: analytical overlap exists, but ordinary warehouse/harbor stills and sampled camera motion do not establish a salient shared deficit; no geometry candidate or product change.
   Frozen809 inputs;39 source geometry cases,five actual world captures/481 unchanged native arrays each,20 native stills/10 exact repeat pairs and8 correlated cross-helper comparisons pass; two fully decoded3.333s films/32 original JPEG samples retained.
   Root and independent visual inspection remain discrete; no flicker exclusion, fresh pytest/package/budget/Windows/CI claim. [Report](docs/bench/2026-11-02-crate-joint-screen.md).
