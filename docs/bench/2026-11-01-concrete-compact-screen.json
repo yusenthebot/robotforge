@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "kind": "fixed-concrete-compact-previsual-resource-screen",
+  "date": "2026-11-01",
+  "baseCommit": "f66433eefe7f1519a249be57a294938466813470",
+  "runtimeCommit": "aa7a9ae9037ae80f9e597f183df18a1c5e767936",
+  "decision": "rejected-actual-wheel-budget-before-scene-rendering",
+  "broadGoal": "active",
+  "productionChanged": false,
+  "candidateIntegrated": false,
+  "actionSuccessTuning": false,
+  "candidateSceneImages": 0,
+  "newVideos": 0,
+  "gates": {
+    "encoded_pair": {
+      "bytes": 69989,
+      "limit": 81920,
+      "passed": true,
+      "shortfall_bytes": 0
+    },
+    "module": {
+      "bytes": 93948,
+      "limit": 114688,
+      "passed": true,
+      "shortfall_bytes": 0
+    },
+    "actual_wheel": {
+      "bytes": 4210423,
+      "limit": 4194304,
+      "passed": false,
+      "shortfall_bytes": 16119
+    }
+  },
+  "codec": {
+    "pillow": "12.3.0",
+    "libwebp": "1.6.0",
+    "lossless": true,
+    "quality": 100,
+    "method": 6,
+    "exact": true
+  },
+  "detail": {
+    "oldBytes": 86552,
+    "newBytes": 63420,
+    "sha256": "46609c90f1bb3d6821b05ebd3a6fada653bb2e0bb52eb307c1c500123033b3f1",
+    "rgbSha256": "9ae4b5473decc0e568f89f38764c9f6630d8fe76ce7beee7e4dd8a74970a11c4",
+    "rgbaSha256": "f308b339221b30ce70ba4b87aa3b785e9161413f9db4201e8c025c972bbd75ef",
+    "PillowRoundTripExact": true,
+    "freshChromeDecoderAcceptance": false
+  },
+  "color": {
+    "bytes": 6569,
+    "sha256": "771ea2ac4c693ab006528f8f0f16bbbb97ce9cb883036248ae8223846282b2ee",
+    "untouchedJpeg": true
+  },
+  "module": {
+    "bytes": 93948,
+    "sha256": "33072acee6e8fb453ed14360a6d3d0276a0cbbdd0ed911f68f960e6e94ac545f"
+  },
+  "wheels": {
+    "baseline_wheel": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/wheel-baseline-v2/robotforge-0.0.1-py3-none-any.whl",
+      "bytes": 4139451,
+      "sha256": "3c75e615a2be39986c4a4733924d865b75c8c804ff8828c6f813b79ebb37ab7c",
+      "packageFileCount": 426
+    },
+    "candidate_wheel": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/wheel-candidate-v2/robotforge-0.0.1-py3-none-any.whl",
+      "bytes": 4210423,
+      "sha256": "c226ac21d8aaf2b15059f9cf577c2d4325e5622d4caf684a1382314f165d052b",
+      "packageFileCount": 427
+    }
+  },
+  "incrementalWheelBytes": 70972,
+  "integrationGlueIncluded": false,
+  "finalDeliveryWheel": {
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/wheel-delivery-v1/robotforge-0.0.1-py3-none-any.whl",
+    "bytes": 4139451,
+    "sha256": "3c75e615a2be39986c4a4733924d865b75c8c804ff8828c6f813b79ebb37ab7c",
+    "exactPackageFiles": 426
+  },
+  "verification": {
+    "scopedDefaultPassed": 21,
+    "actualChromePassed": 2,
+    "distinctPassed": 23,
+    "skips": 0,
+    "actualChromeScope": "Accepted wood/grass modules, not rejected concrete.",
+    "fullSuiteRerun": false,
+    "frameworkRerun": false,
+    "freshInstalledSmoke": false,
+    "formalPerformanceBudgetsRerun": false,
+    "sourceInputsExact": 801,
+    "ruffProjectAndHelpers": true,
+    "formatProjectAndHelpers": true,
+    "pythonSourceReview": true,
+    "optionalToolsUnavailable": [
+      "mypy",
+      "pyright",
+      "bandit",
+      "pip-audit"
+    ]
+  },
+  "protected": {
+    "originalWipFiles": 13,
+    "retainedCmfInputs": 791,
+    "unpromotedMeshInputs": 796,
+    "acceptedPr68Inputs": 799,
+    "nativeAssetAndWorldFiles": 78,
+    "allExact": true
+  },
+  "failuresRetained": [
+    {
+      "run": "admission-v1",
+      "exit": 1,
+      "reason": "Archive directory entries incorrectly included in file inventory."
+    },
+    {
+      "run": "admission-v2",
+      "exit": 2,
+      "reason": "Completed resource screen rejects wheel by 16119B."
+    }
+  ],
+  "nativeDesktop": {
+    "userReportedUnlocked": true,
+    "toolStillReportedLocked": true,
+    "nativeInputsSent": false,
+    "freshZoomPassed": false,
+    "earlierCompletedZoomReport": "docs/bench/2026-10-28-surface-inspection.md"
+  },
+  "evidenceRoot": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact",
+  "evidence": {
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/RESOURCE-CONTRACT-v1.md": {
+      "bytes": 2669,
+      "sha256": "1725c4d38f93215d272e86bd54ad5a6044e56cee75c9a4e7b94a0d59d987b399"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/PACKAGING-CORRECTION-v2.md": {
+      "bytes": 1007,
+      "sha256": "8d752074fdb6f15caaa38aba765dd1e8809a10af3bb5e823a517167d4d3649fe"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/admit_v1.py": {
+      "bytes": 10622,
+      "sha256": "bfb040b8992b98f30d13dae8095367d828c6b3a2ec1748951be314c881472acf"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/admit_v2.py": {
+      "bytes": 11185,
+      "sha256": "d2a41dac291c4b40e53ed6fd84c9f10eaa5939e7785d90ce96f453774d440232"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/receipt-v2.json": {
+      "bytes": 188482,
+      "sha256": "1378de1c27e085b070ed77d694452d45b54ac1003bb1c55098caef5700dd1e0b"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/native-access-v1.json": {
+      "bytes": 571,
+      "sha256": "d6f777172ab2c311b6269f21d63c2b967fb5ecab95a3367043c89b38a46a4ed7"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/generated-v1/color.jpg": {
+      "bytes": 6569,
+      "sha256": "771ea2ac4c693ab006528f8f0f16bbbb97ce9cb883036248ae8223846282b2ee"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/generated-v1/detail.webp": {
+      "bytes": 63420,
+      "sha256": "46609c90f1bb3d6821b05ebd3a6fada653bb2e0bb52eb307c1c500123033b3f1"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/generated-v1/candidate-tiles.js": {
+      "bytes": 93948,
+      "sha256": "33072acee6e8fb453ed14360a6d3d0276a0cbbdd0ed911f68f960e6e94ac545f"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/wheel-baseline-v1/build.log": {
+      "bytes": 179,
+      "sha256": "fbf5a1bcaa99d77a81928a2e8a2f62ac46583ecca51daae6b4b3483af7835fac"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/wheel-baseline-v2/build.log": {
+      "bytes": 179,
+      "sha256": "77aeec56cca64f575dc210e8fcf653546d77507df7f8ee58b98344ef7bcbd08e"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-concrete-compact/wheel-candidate-v2/build.log": {
+      "bytes": 180,
+      "sha256": "a740b203933a6699436b5aa34cf331e91d762e2e3eadd5ede92fc4e296a7033b"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-admission-v1.log": {
+      "bytes": 868,
+      "sha256": "c0c99e177904ea7a30cb163a2d8b6749bda9d472bdcff5f22206d91450673477"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-admission-v1.receipt.json": {
+      "bytes": 90803,
+      "sha256": "eaac667b41dd3579c90f8d30bbe58c3859eb96e580a4c3a8aef80ecd9707e50f"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-admission-v2.log": {
+      "bytes": 333,
+      "sha256": "469ccdf76f319165554e25f44c0a5d410d9f6f36a16192c7f8976fb3bdf7fcd7"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-admission-v2.receipt.json": {
+      "bytes": 90803,
+      "sha256": "1021b4de75df5be162e08b826f33810d5dc4a58d04e8bfefb3211e255b1e7748"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-scoped-tests-v1.log": {
+      "bytes": 99,
+      "sha256": "7c0a701ba3de12f2e426d502c5f88bb732d62b60ae8f0613593f7e00eb403631"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-scoped-tests-v1.receipt.json": {
+      "bytes": 90631,
+      "sha256": "b6e351cdb00722e6a7bba1c81c8e106483fe5daba383057b2ac1c4df60517d42"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-delivery-build-v1.log": {
+      "bytes": 179,
+      "sha256": "286ba5b82532a4fc68be173466af2aed5a413dd20a755481ff3156870f5f3013"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-delivery-build-v1.receipt.json": {
+      "bytes": 90137,
+      "sha256": "28ec67417afcdd72094a85ebfcb5f0c7ee150908a89a83100b048c90b6d30ec3"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-project-lint-v1.log": {
+      "bytes": 19,
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-project-lint-v1.receipt.json": {
+      "bytes": 90018,
+      "sha256": "0e5946898f097735fb499e36857944df6081c2407e193754500f4ca8fe7d5f51"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-project-format-v1.log": {
+      "bytes": 28,
+      "sha256": "cd40ca199b90d0d4d0907e7207cdf336395b23b6c62444e5bd1ed0f93de2124c"
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/concrete-compact-project-format-v1.receipt.json": {
+      "bytes": 90033,
+      "sha256": "3658f0ab2df31e7961cdb047e52e2341a0ed71d0521b70593071f1cc627b8fb3"
+    }
+  },
+  "paidCiDispatched": false,
+  "nextStep": "Independently measure general resource packaging and reuse; no image retuning or gate relaxation."
+}
