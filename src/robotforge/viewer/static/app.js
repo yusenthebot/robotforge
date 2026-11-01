@@ -1361,7 +1361,8 @@ function onScene(desc) {
     layoutConfirmation = null;
     if (!$("world-panel").hidden) refreshLayouts();
   }
-  clearObjectSelection();
+  const pendingSurface = surfaceReselect && busy && desc.version === surfaceReselect.sourceVersion + 1;
+  clearObjectSelection(pendingSurface);
   clearTerrainHighlight();
   if (lastTerrainEdit?.version !== desc.version) lastTerrainEdit = null;
   if (lastObjectEdit?.version !== desc.version) lastObjectEdit = null;
@@ -2366,12 +2367,21 @@ function setPanelBusy(on) {
   renderScreenDrive();
   renderRobotStart();
   renderObjectSelectionControls();
-  const surface = surfaceReselect;
-  surfaceReselect = null;
-  if (!on && surface && surface.version === sceneDesc?.version && surface.version === stateVersion
-      && surface.generation === stateGeneration) {
-    const entry = editableObjects().find((o) => o.name === surface.name);
-    if (entry) { beginObjectSelection(entry); showObjectSurface(true); }
+  if (!on) {
+    const surface = surfaceReselect;
+    surfaceReselect = null;
+    if (surface && surface.version === sceneDesc?.version && surface.version === stateVersion
+        && surface.generation === stateGeneration && sceneReadyToDraw()
+        && renderedVersion === surface.version && posedVersion === surface.version) {
+      const entries = surface.names.map((name) => editableObjects().find((o) => o.name === name));
+      if (entries.every((entry) => entry && Object.hasOwn(entry, "surface_material"))) {
+        if (surface.group) {
+          beginObjectGroupSelection();
+          for (const entry of entries) toggleObjectGroupMember(entry);
+        } else beginObjectSelection(entries[0]);
+        showObjectSurface(true);
+      }
+    }
   }
 }
 
@@ -2673,7 +2683,8 @@ function renderEditableObjects() {
   }));
 }
 
-function clearObjectSelection() {
+function clearObjectSelection(preserveSurface = false) {
+  if (!preserveSurface) surfaceReselect = null;
   selectingObjects = false; objectSelection = null;
   selectingObjectGroup = false; objectGroupEpoch++; objectGroupSelection.clear();
   for (const highlight of objectGroupHighlights.values()) {
@@ -2701,8 +2712,13 @@ function renderObjectSelectionControls() {
     $(id).hidden = group;
     $(id).disabled = busy || !objectSelection;
   }
-  $("object-surface").hidden = group || !objectSelection || !Object.hasOwn(objectSelection, "surface_material");
-  for (const id of ["object-surface", "object-surface-apply", "object-surface-material"]) $(id).disabled = busy || !objectSelection;
+  const surfaceMembers = group ? [...objectGroupSelection.values()] : objectSelection ? [objectSelection] : [];
+  const eligible = surfaceMembers.length > 0 && surfaceMembers.every((entry) => Object.hasOwn(entry, "surface_material"));
+  const surfaceReady = eligible && (!group || (paused && surfaceMembers.length >= 2 && objectSelectionCurrent()));
+  $("object-surface").hidden = !eligible;
+  for (const id of ["object-surface", "object-surface-material"]) $(id).disabled = busy || !surfaceReady;
+  $("object-surface-apply").disabled = busy || !surfaceReady || !["", "plastic", "wood", "steel"].includes($("object-surface-material").value);
+  if (!eligible) showObjectSurface(false);
   $("object-edit-done").disabled = busy;
   for (const id of ["object-group-copy", "object-group-move"]) {
     $(id).hidden = !group;
@@ -2710,7 +2726,8 @@ function renderObjectSelectionControls() {
   }
   if (group) {
     $("object-edit-title").textContent = t("prop_group_count", { count: objectGroupSelection.size });
-    $("object-edit-hint").textContent = t(paused ? "prop_group_hint" : "prop_group_pause_hint");
+    $("object-edit-hint").textContent = t(surfaceMembers.length && !eligible ? "surface_group_unsupported"
+      : paused ? "prop_group_hint" : "prop_group_pause_hint");
   } else $("object-edit-hint").textContent = t("edit_prop_hint");
 }
 
@@ -2724,6 +2741,7 @@ function beginObjectGroupSelection() {
 
 function toggleObjectGroupMember(entry) {
   if (busy || !selectingObjectGroup || !objectSelectionCurrent()) return;
+  surfaceReselect = null;
   creationGesture.invalidate(); objectGroupEpoch++;
   if (objectGroupSelection.has(entry.name)) {
     objectGroupSelection.delete(entry.name);
@@ -2737,6 +2755,7 @@ function toggleObjectGroupMember(entry) {
     highlight.name = "object-group-member-highlight"; highlight.material.depthTest = false;
     scene3.add(highlight); objectGroupHighlights.set(entry.name, highlight);
   }
+  syncObjectSurfaceChoice();
   updateObjectHighlight(); renderEditableObjects(); renderObjectSelectionControls();
 }
 
@@ -2751,7 +2770,7 @@ function beginObjectSelection(entry = null) {
   $("object-edit-title").textContent = entry?.name || t("select_prop");
   $("object-edit-bar").hidden = false;
   $("object-surface").hidden = !entry || !Object.hasOwn(entry, "surface_material");
-  $("object-surface-material").value = entry?.surface_material || "";
+  syncObjectSurfaceChoice();
   showObjectSurface(false);
   for (const id of ["object-surface", "object-surface-apply", "object-surface-material"]) $(id).disabled = !entry;
   $("object-focus").disabled = $("object-move").disabled = $("object-copy").disabled = $("object-remove").disabled = !entry;
@@ -2874,36 +2893,65 @@ function showObjectSurface(open) {
   $("object-surface-controls").hidden = !open;
   $("object-surface").setAttribute("aria-expanded", String(open));
 }
+function syncObjectSurfaceChoice() {
+  const entries = selectingObjectGroup ? [...objectGroupSelection.values()] : objectSelection ? [objectSelection] : [];
+  const finishes = new Set(entries.map((entry) => entry.surface_material || ""));
+  $("object-surface-material").value = finishes.size > 1 ? "mixed" : [...finishes][0] || "";
+}
+$("object-surface-material").addEventListener("change", renderObjectSelectionControls);
 $("object-surface").addEventListener("click", () => {
-  if (!busy && objectSelection && Object.hasOwn(objectSelection, "surface_material")) {
+  if (!$("object-surface").disabled && !$("object-surface").hidden) {
     showObjectSurface($("object-surface-controls").hidden);
   }
 });
 $("object-surface-apply").addEventListener("click", async () => {
-  if (busy || !objectSelection || creationGesture.active() || !Object.hasOwn(objectSelection, "surface_material")) return;
-  const entry = objectSelection;
+  const group = selectingObjectGroup;
+  const entries = group ? [...objectGroupSelection.values()] : objectSelection ? [objectSelection] : [];
+  const finish = $("object-surface-material").value;
+  if (busy || !entries.length || creationGesture.active() || !entries.every((entry) => Object.hasOwn(entry, "surface_material"))
+      || !["", "plastic", "wood", "steel"].includes(finish)
+      || (group && (!paused || entries.length < 2 || !objectSelectionCurrent()))) return;
+  const names = entries.map((entry) => entry.name), epoch = objectGroupEpoch;
+  const guard = { version: placementVersion, generation: placementGeneration, world_sha256: sceneDesc.object_edit.world_sha256 };
+  const intent = { names, group, sourceVersion: guard.version };
+  surfaceReselect = intent;
   stopDriving(); endDrag();
-  await runChoice($("object-surface-apply"), { type: "world", action: "set_object_surface", name: entry.name,
-    surface_material: $("object-surface-material").value || null,
-    version: placementVersion, generation: placementGeneration, world_sha256: sceneDesc.object_edit.world_sha256 }, {
+  await runChoice($("object-surface-apply"), { type: "world", action: group ? "set_object_surfaces" : "set_object_surface",
+    ...(group ? { names } : { name: names[0] }), surface_material: finish || null, ...guard }, {
     done: async (data) => {
+      if (group ? !validGroupObjects(data.objects, names.length, names) : data.object !== names[0]) {
+        surfaceReselect = null; throw new Error(t("create_scene_changed"));
+      }
       if (data.unchanged) {
-        if (stateVersion !== data.version || stateGeneration !== data.generation) {
+        surfaceReselect = null;
+        if (ws?.readyState !== WebSocket.OPEN || stateVersion !== data.version || stateGeneration !== data.generation
+            || data.version !== guard.version || data.generation !== guard.generation) {
           lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
           clearObjectSelection(); throw new Error(t("create_scene_changed"));
         }
+        if (!selectingObjects || objectGroupEpoch !== epoch || !objectSelectionCurrent()) {
+          clearObjectSelection(); updateUndo(); throw new Error(t("create_scene_changed"));
+        }
         toast(t("surface_unchanged")); return;
       }
-      lastObjectEdit = data.undo_edit || null;
+      const receipt = group ? groupEditUndo(data, "surface-group") : data.undo_edit || null;
+      if (!receipt) { surfaceReselect = null; throw new Error(t("create_scene_changed")); }
+      lastObjectEdit = null;
       lastAddition = lastRobotEdit = lastTerrainEdit = null;
       try { await waitForCreation(data, true); }
       catch (error) {
-        lastObjectEdit = stateVersion === data.version && stateGeneration === data.generation ? data.undo_edit || null : null;
+        lastObjectEdit = ws?.readyState === WebSocket.OPEN && surfaceReselect === intent
+          && stateVersion === data.version && stateGeneration === data.generation ? receipt : null;
         clearObjectSelection(); updateUndo(); throw error;
       }
-      clearObjectSelection();
-      surfaceReselect = { name: entry.name, version: data.version, generation: data.generation };
-      updateUndo(); toast(t("surface_saved", { name: entry.name }));
+      if (stateVersion !== data.version || stateGeneration !== data.generation) {
+        lastObjectEdit = null; clearObjectSelection(); updateUndo(); throw new Error(t("create_scene_changed"));
+      }
+      lastObjectEdit = receipt;
+      const owned = surfaceReselect === intent;
+      clearObjectSelection(owned);
+      if (owned) Object.assign(intent, { version: data.version, generation: data.generation });
+      updateUndo(); toast(t(group ? "surface_group_saved" : "surface_saved", { count: names.length, name: names[0] }));
     },
   });
 });
@@ -2932,14 +2980,15 @@ $("undo-edit").addEventListener("click", async () => {
   const selectedReceipt = lastTerrainEdit || lastRobotEdit || lastObjectEdit;
   const robotFinish = selectedReceipt.kind === "robot_surface";
   const groupMove = selectedReceipt.kind === "group-move";
+  const groupSurface = selectedReceipt.kind === "surface-group";
   const { kind: _kind, objects: groupObjects, ...receipt } = selectedReceipt;
   await runChoice($("undo-edit"), { type: "world", action: terrainEdit ? "undo_terrain_edit" : robotStart ? "undo_robot_start" : robotFinish ? "undo_robot_surface" : "undo_object_edit", ...receipt }, {
     done: async (data) => {
-      if (groupMove && (data.moved !== true || !validGroupObjects(data.objects, groupObjects?.length, groupObjects))) {
+      if ((groupMove || groupSurface) && ((groupMove && data.moved !== true) || !validGroupObjects(data.objects, groupObjects?.length, groupObjects))) {
         throw new Error(t("create_scene_changed"));
       }
       await waitForCreation(data, true); lastObjectEdit = lastRobotEdit = lastTerrainEdit = null; updateUndo();
-      toast(t(groupMove ? "prop_group_move_undone" : Array.isArray(data.removed) ? "prop_group_removed" : terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : robotFinish ? "robot_surface_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed, count: groupMove ? data.objects.length : data.removed?.length })); canvas.focus();
+      toast(t(groupSurface ? "surface_group_undone" : groupMove ? "prop_group_move_undone" : Array.isArray(data.removed) ? "prop_group_removed" : terrainEdit ? "terrain_edit_undone" : robotStart ? "robot_start_undone" : robotFinish ? "robot_surface_undone" : data.removed ? "prop_removed" : "prop_edit_undone", { name: data.robot || data.object || data.removed, count: groupMove || groupSurface ? data.objects.length : data.removed?.length })); canvas.focus();
     },
   });
 });
@@ -3130,7 +3179,7 @@ async function placeEntity(item, pos) {
 function updateUndo() {
   $("undo-add").hidden = !lastAddition || creator.active() || selectingObjects || !!sceneDesc?.lesson;
   $("undo-edit").hidden = (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit) || creator.active() || selectingObjects || !!sceneDesc?.lesson;
-  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : isObjectGroup(lastObjectEdit) ? lastObjectEdit.kind === "group-move" ? "undo_prop_group_move" : "undo_prop_group" : "undo_object_edit");
+  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : lastObjectEdit?.kind === "surface-group" ? "undo_surface_group" : isObjectGroup(lastObjectEdit) ? lastObjectEdit.kind === "group-move" ? "undo_prop_group_move" : "undo_prop_group" : "undo_object_edit");
   $("undo-edit").disabled = busy;
   $("undo-add").disabled = busy;
   $("undo-add").title = lastAddition?.name || "";

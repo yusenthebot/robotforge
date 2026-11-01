@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 import mujoco
+from pydantic import Field, field_validator
 
 from robotforge.design import layouts, menagerie
 from robotforge.design.world import ObjectEntry, World, compile_world
@@ -16,6 +17,7 @@ from robotforge.sim.session import fresh_data
 from robotforge.viewer.creation import _parse
 from robotforge.viewer.layout_state import BuiltinLayoutState, check_supported_restore
 from robotforge.viewer.object_edit import Selection, UndoEdit, _guard
+from robotforge.viewer.object_group import Guard
 
 if TYPE_CHECKING:
     from robotforge.design.store import WorldStore
@@ -26,6 +28,35 @@ SHAPES = {"box", "sphere", "cylinder"}
 
 class SetSurface(Selection):
     surface_material: Literal["plastic", "wood", "steel"] | None
+
+
+class SetSurfaces(Guard):
+    names: list[str] = Field(min_length=2, max_length=16)
+    surface_material: Literal["plastic", "wood", "steel"] | None
+
+    @field_validator("names")
+    @classmethod
+    def exact_unique_names(cls, names: list[str]) -> list[str]:
+        if len(set(names)) != len(names) or any(not name or len(name) > 32 for name in names):
+            raise ValueError("select 2 to 16 distinct exact prop names")
+        return names
+
+
+@dataclass(frozen=True)
+class SurfaceMember:
+    index: int
+    before: ObjectEntry
+    after: ObjectEntry
+
+
+@dataclass(frozen=True)
+class SurfaceBatchEdit:
+    store: WorldStore
+    version: int
+    generation: int
+    token: str
+    world_sha256: str
+    members: tuple[SurfaceMember, ...]
 
 
 @dataclass(frozen=True)
@@ -40,7 +71,7 @@ class SurfaceEdit:
     index: int
 
 
-def _check(pg: Playground, store: WorldStore, guard: Selection) -> World:
+def _check(pg: Playground, store: WorldStore, guard: Selection | Guard) -> World:
     world = _guard(pg, store, guard.version, guard.generation, guard.world_sha256)
     check_supported_restore(pg, "changing a prop's surface")
     if pg.session.model.nflex:
@@ -51,48 +82,63 @@ def _check(pg: Playground, store: WorldStore, guard: Selection) -> World:
 def handle(pg: Playground, message: dict) -> dict:
     """Keep current poses, then reset motion and pause; never change physical material."""
     undoing = message.get("action") == "undo_object_edit"
-    request = _parse(UndoEdit if undoing else SetSurface, message, "prop surface")
+    batch = message.get("action") == "set_object_surfaces"
+    request = _parse(UndoEdit if undoing else SetSurfaces if batch else SetSurface, message, "prop surface")
     with pg.session.execution.command("viewer_undo_surface" if undoing else "viewer_set_surface"):
         store = pg._require_store()
         with pg.lessons._lock, pg.session.lock:
             if undoing:
                 receipt = pg._play_edit
                 if (
-                    not isinstance(receipt, SurfaceEdit)
+                    not isinstance(receipt, (SurfaceEdit, SurfaceBatchEdit))
                     or receipt.store is not store
                     or (request.token, request.version, request.generation)
                     != (receipt.token, receipt.version, receipt.generation)
                 ):
                     raise PlaygroundError("that surface edit is no longer available to undo")
-                before, after, index = receipt.after, receipt.before, receipt.index
-                guard = Selection(
-                    name=before.name,
+                batch = isinstance(receipt, SurfaceBatchEdit)
+                saved_members = (
+                    receipt.members if batch else (SurfaceMember(receipt.index, receipt.before, receipt.after),)
+                )
+                members = tuple(SurfaceMember(m.index, m.after, m.before) for m in saved_members)
+                guard = Guard(
                     version=receipt.version,
                     generation=receipt.generation,
                     world_sha256=receipt.world_sha256,
                 )
                 world = _check(pg, store, guard)
-                if index >= len(world.objects) or world.objects[index] != before:
+                if any(
+                    m.index < 0 or m.index >= len(world.objects) or world.objects[m.index] != m.before for m in members
+                ):
                     raise PlaygroundError("the prop changed; select it again")
             else:
                 guard = request
                 world = _check(pg, store, guard)
-                index = next((i for i, obj in enumerate(world.objects) if obj.name == request.name), None)
-                if index is None or world.objects[index].shape not in SHAPES:
+                names = request.names if batch else [request.name]
+                by_name = {obj.name: (i, obj) for i, obj in enumerate(world.objects)}
+                if any(name not in by_name or by_name[name][1].shape not in SHAPES for name in names):
                     raise PlaygroundError("select an existing box, ball or cylinder surface")
-                before = world.objects[index]
-                after = ObjectEntry.model_validate(
-                    {**before.model_dump(), "surface_material": request.surface_material}
+                members = tuple(
+                    SurfaceMember(
+                        index,
+                        before,
+                        ObjectEntry.model_validate(
+                            {**before.model_dump(), "surface_material": request.surface_material}
+                        ),
+                    )
+                    for name in names
+                    for index, before in [by_name[name]]
                 )
-                if before == after:
+                if all(m.before == m.after for m in members):
                     return {
-                        "object": before.name,
+                        **({"objects": names} if batch else {"object": names[0]}),
                         "version": pg.session.version,
                         "generation": pg.session.generation,
                         "unchanged": True,
                     }
             candidate = world.model_copy(deep=True)
-            candidate.objects[index] = after
+            for member in members:
+                candidate.objects[member.index] = member.after
             candidate = World.model_validate(candidate.model_dump())
             original = layouts._read(store.file, layouts.MAX_WORLD_BYTES)
             if layouts.sha(original) != guard.world_sha256:
@@ -120,23 +166,29 @@ def handle(pg: Playground, message: dict) -> dict:
                     pg.session.paused = True
                     pg._places = None
                     response = {
-                        "object": before.name,
+                        **(
+                            {"objects": [m.before.name for m in members]}
+                            if batch
+                            else {"object": members[0].before.name}
+                        ),
                         "version": pg.session.version,
                         "generation": pg.session.generation,
                         "paused": True,
                         "undo_edit": None,
                     }
                     if not undoing:
-                        receipt = SurfaceEdit(
+                        receipt_args = (
                             store,
                             pg.session.version,
                             pg.session.generation,
                             uuid4().hex,
                             layouts.sha(prepared.after),
-                            before,
-                            after,
-                            index,
                         )
+                        if batch:
+                            receipt = SurfaceBatchEdit(*receipt_args, members)
+                        else:
+                            member = members[0]
+                            receipt = SurfaceEdit(*receipt_args, member.before, member.after, member.index)
                         pg._play_edit = receipt
                         response["undo_edit"] = {
                             "token": receipt.token,
