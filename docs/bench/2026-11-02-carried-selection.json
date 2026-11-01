@@ -1,0 +1,1262 @@
+{
+  "schema_version": 1,
+  "milestone": "carried-prop-selection",
+  "scope": "Creative-play interaction; no material, physics or action-success tuning",
+  "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json",
+  "source_sha256": "9c04395b07b24c81cb5c3b1d5a213072394638a633b69baee958008a681c2f70",
+  "source_count": 812,
+  "product_files": 429,
+  "pytest": {
+    "distinct_passed": 388,
+    "runs": [
+      {
+        "stage": "selection-unit-related-v3",
+        "passed": 308,
+        "xml": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-related-v3.xml"
+      },
+      {
+        "stage": "selection-browser-v5",
+        "passed": 20,
+        "xml": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v5.xml"
+      },
+      {
+        "stage": "compatibility-browser-v1",
+        "passed": 60,
+        "xml": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/compatibility-browser-v1.xml"
+      }
+    ]
+  },
+  "framework_cases": 7,
+  "stages": {
+    "readonly-diagnostic-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/readonly-diagnostic-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/readonly-diagnostic-v1.log",
+      "seconds": 2.1469995829975232,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v1.json"
+    },
+    "malo-baseline-capture-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-capture-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-capture-v1.log",
+      "seconds": 18.17078337498242,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/baseline-source-v1.json"
+    },
+    "go2-baseline-capture-v3": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-capture-v3.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-capture-v3.log",
+      "seconds": 12.897310875006951,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/baseline-source-v1.json"
+    },
+    "selection-unit-related-v3": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-related-v3.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-related-v3.log",
+      "seconds": 31.949640958046075,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v4.json"
+    },
+    "selection-browser-v5": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v5.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v5.log",
+      "seconds": 116.35100708395476,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "malo-candidate-capture-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-capture-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-capture-v1.log",
+      "seconds": 15.753206458000932,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v5.json"
+    },
+    "go2-candidate-capture-v2": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-capture-v2.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-capture-v2.log",
+      "seconds": 15.43871170800412,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "compatibility-browser-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/compatibility-browser-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/compatibility-browser-v1.log",
+      "seconds": 452.9680423330283,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "framework-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/framework-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/framework-v1.log",
+      "seconds": 2.988285375002306,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "wheel-build-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheel-build-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheel-build-v1.log",
+      "seconds": 0.9553239590022713,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v6.json"
+    },
+    "wheel-install-smoke-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheel-install-smoke-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheel-install-smoke-v1.log",
+      "seconds": 22.000046624976676,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v6.json"
+    },
+    "install-budgets-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/install-budgets-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/install-budgets-v1.log",
+      "seconds": 2.0291645000106655,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "ruff-lint-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/ruff-lint-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/ruff-lint-v1.log",
+      "seconds": 0.9128607499878854,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "ruff-format-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/ruff-format-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/ruff-format-v1.log",
+      "seconds": 0.8635415839962661,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "viewer-a0-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a0-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a0-v1.log",
+      "seconds": 28.86568345798878,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/baseline-source-v1.json"
+    },
+    "viewer-b1-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b1-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b1-v1.log",
+      "seconds": 29.169930332980584,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "viewer-b2-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b2-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b2-v1.log",
+      "seconds": 28.81025325000519,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "viewer-a3-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a3-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a3-v1.log",
+      "seconds": 28.95335199998226,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/baseline-source-v1.json"
+    },
+    "malo-baseline-media-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1.log",
+      "seconds": 3.172274250013288,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v2.json"
+    },
+    "go2-baseline-media-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1.log",
+      "seconds": 3.0429422080051154,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v2.json"
+    },
+    "malo-candidate-media-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1.log",
+      "seconds": 3.297095292015001,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    },
+    "go2-candidate-media-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1.log",
+      "seconds": 3.3617630410008132,
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json"
+    }
+  },
+  "preserved_failed_stages": {
+    "selection-unit-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-v1.log",
+      "preserved_status": "failed"
+    },
+    "selection-unit-v2": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-v2.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-v2.log",
+      "preserved_status": "failed"
+    },
+    "selection-browser-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v1.log",
+      "preserved_status": "failed"
+    },
+    "selection-browser-v2": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v2.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v2.log",
+      "preserved_status": "failed"
+    },
+    "selection-phone-diagnostic-v3": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-phone-diagnostic-v3.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-phone-diagnostic-v3.log",
+      "preserved_status": "failed"
+    },
+    "selection-browser-v4": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v4.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v4.log",
+      "preserved_status": "failed"
+    },
+    "go2-baseline-capture-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-capture-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-capture-v1.log",
+      "preserved_status": "failed"
+    },
+    "go2-baseline-diagnostic-v2": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-diagnostic-v2.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-diagnostic-v2.log",
+      "preserved_status": "failed"
+    },
+    "go2-candidate-capture-v1": {
+      "receipt": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-capture-v1.receipt.json",
+      "log": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-capture-v1.log",
+      "preserved_status": "failed"
+    }
+  },
+  "costs": {
+    "install-budgets-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/install-budgets-v1/2026-11-02-1bae581-dirty-partial.json",
+      "results": {
+        "install": {
+          "wheel_kb": {
+            "value": 4054.1377,
+            "unit": "KB",
+            "better": "lower"
+          },
+          "installed_mb": {
+            "value": 164.0739,
+            "unit": "MB",
+            "better": "lower",
+            "top": [
+              [
+                "mujoco==3.15.0",
+                71.4
+              ],
+              [
+                "numpy==2.5.4",
+                19.6
+              ],
+              [
+                "coacd==1.0.14",
+                14.2
+              ],
+              [
+                "pillow==12.3.0",
+                12.7
+              ],
+              [
+                "cryptography==50.0.2",
+                10.5
+              ],
+              [
+                "robotforge==0.0.1",
+                9.0
+              ],
+              [
+                "pyopengl==3.1.10",
+                7.5
+              ],
+              [
+                "pydantic-core==2.50.1",
+                4.5
+              ]
+            ]
+          },
+          "packages": {
+            "value": 42.0,
+            "unit": "",
+            "better": "lower",
+            "versions": [
+              "absl-py==2.5.1",
+              "annotated-types==0.8.0",
+              "anyio==4.15.1",
+              "attrs==26.1.0",
+              "cffi==2.1.1",
+              "click==8.5.0",
+              "coacd==1.0.14",
+              "cryptography==50.0.2",
+              "etils==1.14.0",
+              "fsspec==2026.9.0",
+              "glfw==2.10.2",
+              "h11==0.16.0",
+              "httpcore2==2.13.1",
+              "httpx2==2.13.1",
+              "idna==3.20",
+              "jsonschema-specifications==2025.9.1",
+              "jsonschema==4.26.0",
+              "mcp-types==2.3.0",
+              "mcp==2.3.0",
+              "mujoco==3.15.0",
+              "numpy==2.5.4",
+              "opentelemetry-api==1.45.1",
+              "pillow==12.3.0",
+              "pycparser==3.11",
+              "pydantic-core==2.50.1",
+              "pydantic==2.14.1",
+              "pyjwt==2.15.1",
+              "pyopengl==3.1.10",
+              "python-multipart==0.0.32",
+              "pyyaml==6.0.3",
+              "referencing==0.37.0",
+              "robotforge==0.0.1",
+              "rpds-py==2026.9.1",
+              "sse-starlette==3.5.0",
+              "starlette==1.8.0",
+              "trimesh==5.1.1",
+              "truststore==0.10.5",
+              "typing-extensions==4.16.0",
+              "typing-inspection==0.4.4",
+              "uvicorn==0.54.0",
+              "websockets==17.2",
+              "zipp==4.1.1"
+            ]
+          },
+          "download_mb": {
+            "value": 52.5149,
+            "unit": "MB",
+            "better": "lower"
+          }
+        }
+      },
+      "checked_budgets": {
+        "install.wheel_kb": "ok",
+        "install.installed_mb": "ok",
+        "install.download_mb": "ok",
+        "install.packages": "ok"
+      },
+      "all_reported_budget_statuses": {
+        "install.wheel_kb": "ok",
+        "install.installed_mb": "ok",
+        "install.download_mb": "ok",
+        "install.packages": "ok",
+        "imports.robotforge_cpu_ms": "not run",
+        "imports.cli_cpu_ms": "not run",
+        "imports.mcp_server_cpu_ms": "not run",
+        "imports.robotforge_heavy": "not run",
+        "imports.cli_heavy": "not run",
+        "imports.mcp_server_heavy": "not run",
+        "physics.dog_idle.steps_per_s": "not run",
+        "physics.dog_idle.controllers_share": "not run",
+        "physics.dog_walk.steps_per_s": "not run",
+        "physics.go2_idle.steps_per_s": "not run",
+        "physics.go2_idle.controllers_share": "not run",
+        "physics.go2_walk.steps_per_s": "not run",
+        "physics.go2_rl_idle.steps_per_s": "not run",
+        "physics.go2_rl_idle.controllers_share": "not run",
+        "physics.humanoid_idle.steps_per_s": "not run",
+        "physics.humanoid_idle.controllers_share": "not run",
+        "physics.arm_pick.steps_per_s": "not run",
+        "physics.warehouse_nav.steps_per_s": "not run",
+        "physics.objects_20.steps_per_s": "not run",
+        "physics.machine.steps_per_s": "not run",
+        "physics.dog_idle.peak_mb": "not run",
+        "physics.go2_walk.peak_mb": "not run",
+        "physics.warehouse_nav.peak_mb": "not run",
+        "viewer.cold_start_s": "not run",
+        "viewer.fps": "not run",
+        "viewer.frame_ms": "not run",
+        "viewer.assets_fps": "not run",
+        "viewer.assets_frame_ms": "not run",
+        "viewer.server_peak_mb": "not run",
+        "viewer.idle_cpu_pct": "not run",
+        "mcp.start_s": "not run",
+        "mcp.new_world_ms": "not run",
+        "mcp.add_robot_ms": "not run",
+        "mcp.move_ms": "not run",
+        "mcp.observe_ms": "not run",
+        "mcp.server_rss_mb": "not run",
+        "mcp.idle_cpu_pct": "not run"
+      }
+    },
+    "viewer-a0-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a0-v1/2026-11-02-85bd0ac-partial.json",
+      "results": {
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.9243,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.689
+          },
+          "fps": {
+            "value": 60.3468,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 1.6,
+            "unit": "ms",
+            "better": "lower",
+            "median": 1.600000023841858,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.1589,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.1,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4.099999964237213,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 143.8,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 568.5
+          },
+          "idle_cpu_pct": {
+            "value": 4.8,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        }
+      },
+      "checked_budgets": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      },
+      "all_reported_budget_statuses": {
+        "install.wheel_kb": "not run",
+        "install.installed_mb": "not run",
+        "install.download_mb": "not run",
+        "install.packages": "not run",
+        "imports.robotforge_cpu_ms": "not run",
+        "imports.cli_cpu_ms": "not run",
+        "imports.mcp_server_cpu_ms": "not run",
+        "imports.robotforge_heavy": "not run",
+        "imports.cli_heavy": "not run",
+        "imports.mcp_server_heavy": "not run",
+        "physics.dog_idle.steps_per_s": "not run",
+        "physics.dog_idle.controllers_share": "not run",
+        "physics.dog_walk.steps_per_s": "not run",
+        "physics.go2_idle.steps_per_s": "not run",
+        "physics.go2_idle.controllers_share": "not run",
+        "physics.go2_walk.steps_per_s": "not run",
+        "physics.go2_rl_idle.steps_per_s": "not run",
+        "physics.go2_rl_idle.controllers_share": "not run",
+        "physics.humanoid_idle.steps_per_s": "not run",
+        "physics.humanoid_idle.controllers_share": "not run",
+        "physics.arm_pick.steps_per_s": "not run",
+        "physics.warehouse_nav.steps_per_s": "not run",
+        "physics.objects_20.steps_per_s": "not run",
+        "physics.machine.steps_per_s": "not run",
+        "physics.dog_idle.peak_mb": "not run",
+        "physics.go2_walk.peak_mb": "not run",
+        "physics.warehouse_nav.peak_mb": "not run",
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok",
+        "mcp.start_s": "not run",
+        "mcp.new_world_ms": "not run",
+        "mcp.add_robot_ms": "not run",
+        "mcp.move_ms": "not run",
+        "mcp.observe_ms": "not run",
+        "mcp.server_rss_mb": "not run",
+        "mcp.idle_cpu_pct": "not run"
+      }
+    },
+    "viewer-b1-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b1-v1/2026-11-02-12d5eea-partial.json",
+      "results": {
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.9312,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.693
+          },
+          "fps": {
+            "value": 60.0989,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 1.8,
+            "unit": "ms",
+            "better": "lower",
+            "median": 1.800000011920929,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.1529,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.3,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4.299999952316284,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 143.8,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 570.5
+          },
+          "idle_cpu_pct": {
+            "value": 4.6,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        }
+      },
+      "checked_budgets": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      },
+      "all_reported_budget_statuses": {
+        "install.wheel_kb": "not run",
+        "install.installed_mb": "not run",
+        "install.download_mb": "not run",
+        "install.packages": "not run",
+        "imports.robotforge_cpu_ms": "not run",
+        "imports.cli_cpu_ms": "not run",
+        "imports.mcp_server_cpu_ms": "not run",
+        "imports.robotforge_heavy": "not run",
+        "imports.cli_heavy": "not run",
+        "imports.mcp_server_heavy": "not run",
+        "physics.dog_idle.steps_per_s": "not run",
+        "physics.dog_idle.controllers_share": "not run",
+        "physics.dog_walk.steps_per_s": "not run",
+        "physics.go2_idle.steps_per_s": "not run",
+        "physics.go2_idle.controllers_share": "not run",
+        "physics.go2_walk.steps_per_s": "not run",
+        "physics.go2_rl_idle.steps_per_s": "not run",
+        "physics.go2_rl_idle.controllers_share": "not run",
+        "physics.humanoid_idle.steps_per_s": "not run",
+        "physics.humanoid_idle.controllers_share": "not run",
+        "physics.arm_pick.steps_per_s": "not run",
+        "physics.warehouse_nav.steps_per_s": "not run",
+        "physics.objects_20.steps_per_s": "not run",
+        "physics.machine.steps_per_s": "not run",
+        "physics.dog_idle.peak_mb": "not run",
+        "physics.go2_walk.peak_mb": "not run",
+        "physics.warehouse_nav.peak_mb": "not run",
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok",
+        "mcp.start_s": "not run",
+        "mcp.new_world_ms": "not run",
+        "mcp.add_robot_ms": "not run",
+        "mcp.move_ms": "not run",
+        "mcp.observe_ms": "not run",
+        "mcp.server_rss_mb": "not run",
+        "mcp.idle_cpu_pct": "not run"
+      }
+    },
+    "viewer-b2-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b2-v1/2026-11-02-12d5eea-partial.json",
+      "results": {
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.9168,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.685
+          },
+          "fps": {
+            "value": 60.1029,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 1.6,
+            "unit": "ms",
+            "better": "lower",
+            "median": 1.5999999642372131,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.1489,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.0,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 143.7,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 567.9
+          },
+          "idle_cpu_pct": {
+            "value": 4.8,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        }
+      },
+      "checked_budgets": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      },
+      "all_reported_budget_statuses": {
+        "install.wheel_kb": "not run",
+        "install.installed_mb": "not run",
+        "install.download_mb": "not run",
+        "install.packages": "not run",
+        "imports.robotforge_cpu_ms": "not run",
+        "imports.cli_cpu_ms": "not run",
+        "imports.mcp_server_cpu_ms": "not run",
+        "imports.robotforge_heavy": "not run",
+        "imports.cli_heavy": "not run",
+        "imports.mcp_server_heavy": "not run",
+        "physics.dog_idle.steps_per_s": "not run",
+        "physics.dog_idle.controllers_share": "not run",
+        "physics.dog_walk.steps_per_s": "not run",
+        "physics.go2_idle.steps_per_s": "not run",
+        "physics.go2_idle.controllers_share": "not run",
+        "physics.go2_walk.steps_per_s": "not run",
+        "physics.go2_rl_idle.steps_per_s": "not run",
+        "physics.go2_rl_idle.controllers_share": "not run",
+        "physics.humanoid_idle.steps_per_s": "not run",
+        "physics.humanoid_idle.controllers_share": "not run",
+        "physics.arm_pick.steps_per_s": "not run",
+        "physics.warehouse_nav.steps_per_s": "not run",
+        "physics.objects_20.steps_per_s": "not run",
+        "physics.machine.steps_per_s": "not run",
+        "physics.dog_idle.peak_mb": "not run",
+        "physics.go2_walk.peak_mb": "not run",
+        "physics.warehouse_nav.peak_mb": "not run",
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok",
+        "mcp.start_s": "not run",
+        "mcp.new_world_ms": "not run",
+        "mcp.add_robot_ms": "not run",
+        "mcp.move_ms": "not run",
+        "mcp.observe_ms": "not run",
+        "mcp.server_rss_mb": "not run",
+        "mcp.idle_cpu_pct": "not run"
+      }
+    },
+    "viewer-a3-v1": {
+      "report": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a3-v1/2026-11-02-85bd0ac-partial.json",
+      "results": {
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.9252,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.687
+          },
+          "fps": {
+            "value": 60.1249,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 1.5,
+            "unit": "ms",
+            "better": "lower",
+            "median": 1.5,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.1549,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.0,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 143.9,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 569.5
+          },
+          "idle_cpu_pct": {
+            "value": 4.8,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        }
+      },
+      "checked_budgets": {
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok"
+      },
+      "all_reported_budget_statuses": {
+        "install.wheel_kb": "not run",
+        "install.installed_mb": "not run",
+        "install.download_mb": "not run",
+        "install.packages": "not run",
+        "imports.robotforge_cpu_ms": "not run",
+        "imports.cli_cpu_ms": "not run",
+        "imports.mcp_server_cpu_ms": "not run",
+        "imports.robotforge_heavy": "not run",
+        "imports.cli_heavy": "not run",
+        "imports.mcp_server_heavy": "not run",
+        "physics.dog_idle.steps_per_s": "not run",
+        "physics.dog_idle.controllers_share": "not run",
+        "physics.dog_walk.steps_per_s": "not run",
+        "physics.go2_idle.steps_per_s": "not run",
+        "physics.go2_idle.controllers_share": "not run",
+        "physics.go2_walk.steps_per_s": "not run",
+        "physics.go2_rl_idle.steps_per_s": "not run",
+        "physics.go2_rl_idle.controllers_share": "not run",
+        "physics.humanoid_idle.steps_per_s": "not run",
+        "physics.humanoid_idle.controllers_share": "not run",
+        "physics.arm_pick.steps_per_s": "not run",
+        "physics.warehouse_nav.steps_per_s": "not run",
+        "physics.objects_20.steps_per_s": "not run",
+        "physics.machine.steps_per_s": "not run",
+        "physics.dog_idle.peak_mb": "not run",
+        "physics.go2_walk.peak_mb": "not run",
+        "physics.warehouse_nav.peak_mb": "not run",
+        "viewer.cold_start_s": "ok",
+        "viewer.fps": "ok",
+        "viewer.frame_ms": "ok",
+        "viewer.assets_fps": "ok",
+        "viewer.assets_frame_ms": "ok",
+        "viewer.server_peak_mb": "ok",
+        "viewer.idle_cpu_pct": "ok",
+        "mcp.start_s": "not run",
+        "mcp.new_world_ms": "not run",
+        "mcp.add_robot_ms": "not run",
+        "mcp.move_ms": "not run",
+        "mcp.observe_ms": "not run",
+        "mcp.server_rss_mb": "not run",
+        "mcp.idle_cpu_pct": "not run"
+      }
+    }
+  },
+  "package": {
+    "source_root": "/Users/yusenthebot/dev/robotforge-carried-selection",
+    "wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheels-v1/robotforge-0.0.1-py3-none-any.whl",
+    "wheel_bytes": 4151437,
+    "wheel_baseline_bytes": 4148876,
+    "wheel_delta_bytes": 2561,
+    "wheel_total_budget_bytes": 4194304,
+    "wheel_sha256": "d88d9ece7285df109a5a5365ddf0f945a32accfdbf9eb2c3b1a78fc01fc0603e",
+    "package_files": 429,
+    "all_source_wheel_installed_files_equal": true,
+    "fresh_locked_offline_smoke_passed": true,
+    "installed_carried_selection_smoke_passed": true,
+    "installed_selection_report_sha256": "173abac852e8fe40ecac79a55cfc91eb55607bd82d97886892e4944f2b818c11"
+  },
+  "captures": {
+    "malo": {
+      "baseline": {
+        "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/manifest.json",
+        "helper_sha256": "5e7152f5611bb50d1de69e9cf7cd282f1865fcf297ae3d8105f1c545c5d13991",
+        "source_sha256": "cb696c4df563b3eaa94db2bed4fdd3c9ff2f928b20fa42d4af888b3b260afa67",
+        "fixture_drop": [
+          3,
+          -1,
+          0
+        ]
+      },
+      "candidate": {
+        "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/manifest.json",
+        "helper_sha256": "097b68772633dc478106f0533fa32e67aec876b87d8bdb97bd274c04bd23ff3f",
+        "source_sha256": "4759d353d21ff3255b04c90a855773832b58d0166e7297752abeb3db4128425f",
+        "fixture_drop": [
+          3,
+          -1,
+          0
+        ]
+      }
+    },
+    "go2": {
+      "baseline": {
+        "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/manifest.json",
+        "helper_sha256": "2bb555f30e11fc6695fb1b4e221f3c11a48cf1b078391b524ba528dc684e2f03",
+        "source_sha256": "be101ce1bc54199db2856ddeb47ed058ff2435b78121ad3fe8f27c9408ae7cd0",
+        "fixture_drop": [
+          3,
+          0,
+          0
+        ]
+      },
+      "candidate": {
+        "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/manifest.json",
+        "helper_sha256": "81d0f17601924bffc01fdc558e39a9983ed84c7819e927c8297ccbaa68f2a35d",
+        "source_sha256": "9c04395b07b24c81cb5c3b1d5a213072394638a633b69baee958008a681c2f70",
+        "fixture_drop": [
+          2,
+          0,
+          0
+        ]
+      }
+    }
+  },
+  "exact_full_rgba_pairs": [
+    {
+      "kind": "baseline-within-run",
+      "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/front-baseline.rgba",
+      "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/front-after-selection-cleared.rgba",
+      "exact": true
+    },
+    {
+      "kind": "candidate-within-run",
+      "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-before-query-cleared.rgba",
+      "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-after-query-cleared.rgba",
+      "exact": true
+    },
+    {
+      "kind": "candidate-within-run",
+      "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-before-query-cleared.rgba",
+      "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-after-undo-cleared.rgba",
+      "exact": true
+    },
+    {
+      "kind": "cross-source-initial",
+      "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/front-baseline.rgba",
+      "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-before-query-cleared.rgba",
+      "exact": true
+    },
+    {
+      "kind": "baseline-within-run",
+      "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/front-baseline.rgba",
+      "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/front-after-selection-cleared.rgba",
+      "exact": true
+    },
+    {
+      "kind": "candidate-within-run",
+      "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-before-query-cleared.rgba",
+      "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-after-query-cleared.rgba",
+      "exact": true
+    },
+    {
+      "kind": "candidate-within-run",
+      "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-before-query-cleared.rgba",
+      "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-after-undo-cleared.rgba",
+      "exact": true
+    },
+    {
+      "kind": "cross-source-initial",
+      "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/front-baseline.rgba",
+      "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-before-query-cleared.rgba",
+      "exact": true
+    }
+  ],
+  "query_latency": {
+    "malo": {
+      "members": 4,
+      "round_trip_ms": [
+        35.700000047683716,
+        18.19999998807907
+      ],
+      "samples": 2,
+      "scope": "Two UI samples; not a distribution or 2/16-member benchmark"
+    },
+    "go2": {
+      "members": 4,
+      "round_trip_ms": [
+        74.89999997615814,
+        69.79999995231628
+      ],
+      "samples": 2,
+      "scope": "Two UI samples; not a distribution or 2/16-member benchmark"
+    }
+  },
+  "resources": {
+    "malo": {
+      "resource_entries": 35,
+      "normalized_paths_equal": false,
+      "transfer_bytes_measured": false,
+      "draw": {
+        "calls": 52,
+        "lines": 8,
+        "points": 0,
+        "triangles": 690762
+      },
+      "memory": {
+        "geometries": 51,
+        "textures": 8
+      },
+      "baseline_resource_entries": 33,
+      "candidate_resource_entries": 35,
+      "extra_candidate_paths": {
+        "/mesh/2.bin": 1,
+        "/mesh/3.bin": 1
+      },
+      "scope": "Different endpoint flows: baseline prepare/cancel; candidate move/Undo. Extra versioned mesh paths correspond to rebuilds by source inspection. No transfer-byte or equal-bandwidth claim."
+    },
+    "go2": {
+      "resource_entries": 35,
+      "normalized_paths_equal": false,
+      "transfer_bytes_measured": false,
+      "draw": {
+        "calls": 157,
+        "lines": 18,
+        "points": 18,
+        "triangles": 487412
+      },
+      "memory": {
+        "geometries": 143,
+        "textures": 6
+      },
+      "baseline_resource_entries": 33,
+      "candidate_resource_entries": 35,
+      "extra_candidate_paths": {
+        "/mesh/2.bin": 1,
+        "/mesh/3.bin": 1
+      },
+      "scope": "Different endpoint flows: baseline prepare/cancel; candidate move/Undo. Extra versioned mesh paths correspond to rebuilds by source inspection. No transfer-byte or equal-bandwidth claim."
+    }
+  },
+  "films": {
+    "malo-baseline-media-v1": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1/workflow.mp4",
+      "video_sha256": "5cf2cdb6b142f440975d6fac42ff841e8d86126d54f5d4cec9d153698a40a827",
+      "video_bytes": 470922,
+      "raw_frame_count": 10,
+      "duration_seconds": 6.633333,
+      "decoded_frame_count": 199,
+      "raw_timestamp_span_seconds": 6.563722707971465,
+      "qa": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1/media-qa.json"
+    },
+    "go2-baseline-media-v1": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1/workflow.mp4",
+      "video_sha256": "10b5a40afaf7957174f64162eda9d0b05ab8527d7b6e016f512fbc7ceca34558",
+      "video_bytes": 641947,
+      "raw_frame_count": 10,
+      "duration_seconds": 7.066667,
+      "decoded_frame_count": 212,
+      "raw_timestamp_span_seconds": 6.984737500024494,
+      "qa": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1/media-qa.json"
+    },
+    "malo-candidate-media-v1": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1/workflow.mp4",
+      "video_sha256": "b034441a77778cadcb5d195f546f9963131cdbb02566c34d2582baf60b70f174",
+      "video_bytes": 596103,
+      "raw_frame_count": 10,
+      "duration_seconds": 8.933333,
+      "decoded_frame_count": 268,
+      "raw_timestamp_span_seconds": 8.848872874979861,
+      "qa": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1/media-qa.json"
+    },
+    "go2-candidate-media-v1": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1/workflow.mp4",
+      "video_sha256": "40b6dadc5d9af3fab42ea2055efcf0f69388404f3a92d4e72da10c5fc4711603",
+      "video_bytes": 756832,
+      "raw_frame_count": 10,
+      "duration_seconds": 9.966667,
+      "decoded_frame_count": 299,
+      "raw_timestamp_span_seconds": 9.898125667008571,
+      "qa": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1/media-qa.json"
+    }
+  },
+  "inspection": {
+    "decoded_contact_sheets": 4,
+    "decoded_stills": 24,
+    "continuous_watch": false,
+    "native_ui_samples": true
+  },
+  "limits": [
+    "Local macOS Chrome/CDP; native desktop zoom still unverified because CUA reports locked after unlock reply",
+    "No Windows or remote CI run",
+    "No material quality or universal speedup claim",
+    "No HTTP transfer-byte or native-model cold-load timing claim",
+    "Go2 baseline and final candidate use different declared destinations",
+    "MuJoCo no-op observed no drift; detached getter ownership is separately source-verified"
+  ],
+  "witness_sha256": {
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/readonly-diagnostic-v1.receipt.json": "69b93682f49dd195258b01d81f6424dc7fccb07e522250875feae267ac90fd0b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/readonly-diagnostic-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-capture-v1.receipt.json": "e3572800ae78de7238367027a1f5b28abe2ed37981602d481b54212b9605ec98",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-capture-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-capture-v3.receipt.json": "2677cd227286b1a772ddc68ca3094ada9d70564f00428937d1f146aca04e24b9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-capture-v3.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-related-v3.receipt.json": "c448d186d1f28b5e30a36667c35cd1cdf2fe43991ce5da8c63d1ff582e430064",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-related-v3.log": "5b0c0faab1aa9772756dc95163629a04ba99b6201973f70bd525bdd385d4def6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v5.receipt.json": "d476554884f45aa40b8016561b9ebcc640487b1a6034fe8525d2dab85e5bb95e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v5.log": "62c18919775ddf25602bb954c514818c2c8408b7f8192a480d8ef0840571c046",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-capture-v1.receipt.json": "50c9a669891c6d02c4e3d0502a62d2c8887c1f0f1d4c60af2b20dd97f72eab69",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-capture-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-capture-v2.receipt.json": "0ccfabc9b6959b672159c6ae392a0b15c3eab87fac4fbfac8f66a53d55940be8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-capture-v2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/compatibility-browser-v1.receipt.json": "d7d129a8a673808520894f3dd5f39ff19137bee2902ed5adf95939bdd5f9f42e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/compatibility-browser-v1.log": "e967f69db4ae6b4b09b462579abdcf5c9100d54e8dc9af78ebe24d859b2e1791",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/framework-v1.receipt.json": "f4f5ed5ceda0a37b319a29746e9e017f728ce3bed9512def10978504417e1ec8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/framework-v1.log": "6e4c7b5fdd3cd5ac803e4278bee2f478c1cdbd78e0dd76b756a71a59d3bd5132",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheel-build-v1.receipt.json": "c8c6f74db645c27d9fa0a73f1a9efbcca9a091fed0876c4b31d3f0f2ee30ba0e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheel-build-v1.log": "535669013fec2f120b6ce7f7c5bc1d8e3cebc478012a02943461ac6ea030a4b9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheel-install-smoke-v1.receipt.json": "038300cde142af220004ce55c9076302a1443c6efb0af0bb793c8248b772920d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/wheel-install-smoke-v1.log": "a05fc5c45a17651a9b814485a2a2c65792a9fbc5a8a85774e7b4fd6ad26913fc",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/install-budgets-v1.receipt.json": "f7da4e97c400bc9bee17c1105752776af1ec1839f3a19d16aa38370915498873",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/install-budgets-v1.log": "8d6393c792e96db437aaa1cf738ca37d188ed8ad1eb524191fa3b39d9ffe086c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/ruff-lint-v1.receipt.json": "c0f4a095bbef379f20b474039dbeb1283bea9e1b2fc633a105d6f7f0b2c969e9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/ruff-lint-v1.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/ruff-format-v1.receipt.json": "c16bc50107e1a6b2b1c618ca2891404c7ffef747e38cdd6a7d01d2de08c7f404",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/ruff-format-v1.log": "d1445c447168e861d525c2bf639b8f169b2673f230e7701c90b34e1b14b0916d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a0-v1.receipt.json": "eb6eef58e5d740e65b9c6b3ff5c885d5c2288dd34dfd8ce3d430a97b37706143",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a0-v1.log": "8f662d1b136d8c4226f01acca5b5bf69f60229ef85a192ad6331cd2b8211a8ae",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b1-v1.receipt.json": "8f99d21ec0977862d20914c52ee7f949ca95b66d66bbfc31dcb6f51149876897",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b1-v1.log": "79be678ae7457c70d10f7632bbf7f076622be94b36481476e31564f972a59d3a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b2-v1.receipt.json": "8913641d9587ecb488558948865bf402dfd4fbfe11da306c724c24d92553eb25",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b2-v1.log": "a65327147fe56ec146ba9c8c32e6892b50d79dd558a6ca50a09b0984518d3049",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a3-v1.receipt.json": "c3a24ea79536b988332a8215dce5fd6ae1a4175bdfbdcf09ca9af68614269e2b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a3-v1.log": "c8af631d1ecf652f0dc253021a9c0bbd40d6384dca63b081cc0939374d7b3bb5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1.receipt.json": "bedaa12fefa42bb7599cda1f248881c0d75651bcfec1329a3a56ff26baecfc47",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1.log": "0c6823c3ddf472857138f3624f046804e76b3f563b4a6f0437b041a541774a43",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1.receipt.json": "598e647569c91681f0a798e83e9fc9ee6ea7ffb4d345778ca6e432221319088e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1.log": "5b37bc20574099fc20a493f4d71df4f27a56f460b3fd64a1d4c9004e184347be",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1.receipt.json": "93a38eb7684f3c55d6548717f6d55d6fd3f568b511be4ed10ee7ef8f7409818a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1.log": "05581ffc589f7da17c495647ebb9e0b56a3cb4292d552ec0ffbca385d79785a8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1.receipt.json": "f4be6a5aca48c9ae4de7895fd411bb4a3d6637596969e78d0e4e31a2f5640415",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1.log": "a00ddbd6ccabfb8742726aec3e8305f684cdedd2543b5576315a8ce03ace2665",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-v1.receipt.json": "e18e826705569e2a3aab35a02700235a67b96d1c2972e3f38f8c835b148de6e2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-v1.log": "bfac268b481e7d0e582b8ba9849e291e6be2796616ac15fdb576eef528826f6c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-v2.receipt.json": "2c1f79fae057a08f38504b2e601993cbf4e1e06a1a8d6660dd4bbae88e19ac67",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-v2.log": "ac7bdc537a72b99d778d44a96bf7a88442ed9aa89e45ad5a3d26b41523e3e6a0",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v1.receipt.json": "ea1172c23618fbc944e0451fe6fb5a32021cc75b16793de17adf3cbeb604ae45",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v1.log": "abaeac9e3dcd03da750afa6048ac7ab29edef4ed38c85d5b798661cf4cf7ff63",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v2.receipt.json": "af20ed75ee9a5682c815a47151eb84dfabb034b634e981d602ea9b1e4b9c0510",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v2.log": "16504b896f750a2beddd0192d564604f772a6c410d3be1a2214edd57a15f17f6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-phone-diagnostic-v3.receipt.json": "5285816e48ab6bdb1c0b522cce26088850643f77a5adf96d609db231bb27e831",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-phone-diagnostic-v3.log": "dee4a1bff1d047a8a5e7635c3fbb0e40769d81f0d847a7324fe0421539b61811",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v4.receipt.json": "4ab1b5435cb7321a573fb8d31aa7ff3cc74e046bd90cf80522e15838c937871f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v4.log": "c61954d7f96c63c81eb4c3aea583ac57082ba5fba6a5a1e91b691274d0e8b83a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-capture-v1.receipt.json": "0a7e88f70cd159be1ff67b660ae68094d8680109f11bfa99d647d74a76539c74",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-capture-v1.log": "0b9d4bb859111282bcf747b17fb78b4308be4155b48c46223018e6e5cf2e8abb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-diagnostic-v2.receipt.json": "54ea089c9ea94026a40a7a230bd3de7c7cec63df9bf550054fcfc12eb499cc68",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-diagnostic-v2.log": "a54e38b184b4dc319ee4c5a7b3ae234e18ecfc09b4ed5b07eb03acafb9a0b52a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-capture-v1.receipt.json": "ccfd592b5801ab30635cad90d16caec03fa641cd1faf487e4a4e2d82a84f9944",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-capture-v1.log": "13b789ee048b6dddae58125ce88edf96608a6974e968d5960f758efe1469ce20",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v1.json": "887a2f732454e942a6559ece0fb67f75d0fe110859b01e54467b691cf1a81b77",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v2.json": "6cf6e347ec4c62694a783c6763ae063ed39d4d0d6c8d22c3edbefa824334ab9a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v3.json": "e63b44f8f050e7773f7a9ef3a440df8156fa969caf199ca8b3c3e27b92819c3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v4.json": "9a04a95386150679b5f0db07d5004a9eb471715f5392cca5600c93813ab7b6a2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v5.json": "4759d353d21ff3255b04c90a855773832b58d0166e7297752abeb3db4128425f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v6.json": "923c6d990fd41f9406d0d58ae237ef29db567d6875b69e1146e01a6cfc34f698",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/candidate-source-v7.json": "9c04395b07b24c81cb5c3b1d5a213072394638a633b69baee958008a681c2f70",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-unit-related-v3.xml": "85ad44982e718b5c7c58763276fb52234f1595b97f5228082488ab0f963e9e35",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/selection-browser-v5.xml": "cd2bd4f3792e0c1bfddb1492650e5342ce53eabb7a43ee9a223e2081fb054d22",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/compatibility-browser-v1.xml": "062ff5135230ba89acfd6333759ce24114656e4420e28d9aaaae4830bdf04521",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/framework-v1/manifest.json": "abcc94c876078cc204e30d88a0b9bba3e8adb25143c598f6c631ee86e6359cf1",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/framework-v1/report.json": "81ebd27d05db784b0abce3119c3ff7e0db9fa730ec287cd5411ecefb072bf448",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/install-budgets-v1/2026-11-02-1bae581-dirty-partial.json": "36e992904828bf4102e6eb92f082e32dd48d1a05d7db43d8c3b412d4d98c9aea",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a0-v1/2026-11-02-85bd0ac-partial.json": "016a258573d633ac848cb493f74a3db9cd068d931fba69a19dc9c1d763db0893",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b1-v1/2026-11-02-12d5eea-partial.json": "cb94343410a3403107bb4333c99868161a226e7eb70d435d80f06832a1e23982",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-b2-v1/2026-11-02-12d5eea-partial.json": "71304371cd3d3262294d88a2d06b36f313a2bc85e19b2b79ea2d51c6fad35897",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/viewer-a3-v1/2026-11-02-85bd0ac-partial.json": "a80f574cbc4f164aa9396e872586a069115a8a81c70d9b510fe504c456985108",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1/media-qa.json": "dd7ad8a142c431848ec1ffb2cac0822c35b664dff99f17268db8a119f7cedf1f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1/manifest.json": "34e61ad50277c921acdd1ff0e7d44b63359d75bd8b4ba2f163fdd6379f2aff86",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1/workflow.mp4": "5cf2cdb6b142f440975d6fac42ff841e8d86126d54f5d4cec9d153698a40a827",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-media-v1/decoded-contact.jpg": "80f192943c0b9fda52412f9c16813d74c8f5aca17429797f27ef74d7f16beeb5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1/media-qa.json": "9d6f47e7a775e68df18a47823704b564f26c66912b634c6008ce05055a59898c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1/manifest.json": "052cff02da9218a89dff7c707496e11101667dde5a0ccfd8d9a312c19fb16535",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1/workflow.mp4": "10b5a40afaf7957174f64162eda9d0b05ab8527d7b6e016f512fbc7ceca34558",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-media-v1/decoded-contact.jpg": "fcf5bb5679d44c600c0ca0d28ccc479a47c193f72540c7ebbce43f09ccea0cba",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1/media-qa.json": "ad313356fd3d9a7fc6cfbd01a17b0add57d237d2e5191605af32caf5abef0b5c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1/manifest.json": "ae237963eddcb092611a9e82543d53ce24310b3c14cbaf1c859ea6f83f68226b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1/workflow.mp4": "b034441a77778cadcb5d195f546f9963131cdbb02566c34d2582baf60b70f174",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-media-v1/decoded-contact.jpg": "76188b4437d266299c6686eaeb8518f9b7b74f46575c4d26fb57b2d77334e913",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1/media-qa.json": "521a8f8446ce1133089e4f8b9d29990413fd3487b7fabc0d455a7ec4a80505c2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1/manifest.json": "9715c4caed801b450c057763952580357f44803f9d9c89ff1a2b0a6f762b172c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1/workflow.mp4": "40b6dadc5d9af3fab42ea2055efcf0f69388404f3a92d4e72da10c5fc4711603",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-media-v1/decoded-contact.jpg": "95215b4f9bbd2bdf96f783b87f49b0ed693d0cc5de986ea4da0c6b5189e8fd06",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/manifest.json": "0d26c21d10f7247cc0431e1877a251686ed7bc923fbef6d357f85cd7685d929d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/front-baseline.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/front-baseline.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/front-after-selection-cleared.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-baseline-v1/front-after-selection-cleared.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/manifest.json": "5b2249b8196ebe060a884ddfebba4c9e2c73b37b8da4b5c0723d1736f5f4741d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-before-query-cleared.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-before-query-cleared.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-after-query-cleared.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-after-query-cleared.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-after-undo-cleared.rgba": "1465357fbdb363d4b624af276841ebcc98b82f0598f1e7a9bbc359d1f99e0322",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/malo-candidate-v1/front-after-undo-cleared.png": "5a6183b4cac8a13ea4f1925a0f5d9f89ab500d2420be2375b97792672c65633b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/manifest.json": "48a008adb2b73dd91d6639d9f52c44e9da909b011785ce6381202273185f1a69",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/front-baseline.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/front-baseline.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/front-after-selection-cleared.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-baseline-v3/front-after-selection-cleared.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/manifest.json": "93a0962e57271ecf853ad2e370731115ba40de75f8ae3cfd24a75ad59b8c2f19",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-before-query-cleared.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-before-query-cleared.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-after-query-cleared.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-after-query-cleared.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-after-undo-cleared.rgba": "9d3749e2f0457289414ad5a953f366cb8e4be65a9f7754fb442128ea1a733a3b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/go2-candidate-v2/front-after-undo-cleared.png": "70ba534277df634203c33de62d8342a1dccaa073324ca2b0aa49dda7e450fbf4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/package-equivalence-v1.json": "ae6e2c3dda97ded5a0b1f8aecb88bc2fb70d47b93ce3220c1337b6aef49894b3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/installed-selection-smoke-v1.json": "173abac852e8fe40ecac79a55cfc91eb55607bd82d97886892e4944f2b818c11",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/install_and_smoke_v1.py": "341e24b68915ff0edea9baee0ef1e6bf788adb320563650c0bee706d75cf285f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/run_guarded_v1.py": "4d9b4c3447671fe70e4abc953f2bf2eeb58e60bfa1fe68796a80a03e28568318",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/capture_baseline_v3.py": "2bb555f30e11fc6695fb1b4e221f3c11a48cf1b078391b524ba528dc684e2f03",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/capture_candidate_v2.py": "81d0f17601924bffc01fdc558e39a9983ed84c7819e927c8297ccbaa68f2a35d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/capture_baseline_v2.py": "7876fe1c63fafbfa2f277987d5a8fba63f2b3857ae8021d12f870399bdaceb53",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/read_only_diagnostic_v1.py": "ab67bde5fa4774d7f4f2f63d5808cfae71b7d90cd68cce0973d2bb29c5b8025a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/capture_baseline_v1.py": "5e7152f5611bb50d1de69e9cf7cd282f1865fcf297ae3d8105f1c545c5d13991",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/capture_candidate_v1.py": "097b68772633dc478106f0533fa32e67aec876b87d8bdb97bd274c04bd23ff3f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/prepare_motion_media_v1.py": "37e22647c4691257f18f7fdceadfbf03a3395b0f76cea60f39c0d580b81bfd2a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/CAPTURE-BASELINE-v2.md": "1e0c5a116fc8c4173ddb49d62ce0dad85018642b711464a9c1f2983634d60e33",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/CAPTURE-CANDIDATE-v2.md": "c7a5319475337a6326f8c9e4aec178c0626ec2d53a7f9ed21a03f39b466a8bf6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/CAPTURE-BASELINE-v3.md": "28cffab941153e9c9c446a8561986fab55047fe5476a1465f77e4f8ad7fc68ee",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/REPORT-DRAFT.md": "06c1c5fc8acceb32c75dd2880f5eee97a0924d99baa7d06127bd2406a88299a6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/CAPTURE-CANDIDATE-v1.md": "09cbe9f380d278dbc0941a3c11fdb5189e802e6122a01d39a2374e67e30ae7f8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/METHOD-READONLY-v1.md": "c454f59ae88a8e10a868382f005cfff322d776d92e33020e4266794bce26adea",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/CAPTURE-BASELINE-v1.md": "a61a9b7263e5292489fe41b9fe532c2a6a24d668737ea501bc4939372a990d0f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/references-v1.json": "9f364258e1993e6f5b5326a9896eaa404832cbcb66e1d61642f097b9e89c25d9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/readonly-diagnostic-v1/manifest.json": "7c819370473dc47913bcd9e847abeb8a22a1fb9112ef33138d03f47085be2a3f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/report-assembly-attempt-v1.json": "5365f6df2892f9c16c239590298a621540ccae8cfd869fd70e649c5866e29b64"
+  },
+  "unavailable_scanners": [
+    "bandit",
+    "pip_audit",
+    "mypy",
+    "pyright"
+  ],
+  "browser_path": {
+    "browser_plugin": "not available",
+    "fallback": "Repository actual Chrome/CDP test and capture harness"
+  },
+  "original_budget_sha256": "fa15d36e69aa2f9edd9b101d61b24a706021caf46a951d0cf9671031afb382a8",
+  "feature_commit": "12d5eeacbfd38f9869ac08bf470e90edbc7f3821",
+  "status": "all_scoped_checks_passed"
+}
