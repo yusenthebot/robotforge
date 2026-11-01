@@ -19,6 +19,7 @@ import { canMove, moveAxes, moveSpeed } from "./padmap.js";
 import { createPlacementGesture, initCreation, isObjectGroup } from "./creation.js";
 import { placementCoordinates } from "./placement-coordinate.js";
 import { createPlacementPreview } from "./placement-preview.js";
+import { createArrangementShelf } from "./arrangements.js";
 import { createScreenDrive } from "./screen-drive.js";
 import { cameraView, cameraArc, arcEye } from "./camera-views.js";
 import { initRobotSurface } from "./robot-surface.js";
@@ -391,8 +392,10 @@ let loadingScene = false;
 let pendingRobotInfo = null;
 let layoutCatalog = null, layoutConfirmation = null, layoutMutating = false, layoutLoading = false;
 let layoutRequest = 0, layoutError = "";
+let arrangementShelf = null;
 
 async function applyScene(desc) {
+  arrangementShelf?.invalidate();
   cancelInspection();
   screenDrive?.clear(false); // the server already replaced the old scene; never stop its new controllers
   const request = ++sceneRequest;
@@ -1303,6 +1306,7 @@ function connect() {
     renderScreenDrive();
     renderRobotStart();
     setConnected(false);
+    arrangementShelf?.invalidate({ clear: true });
     for (const p of pending.values()) p.reject(new Error(t("disconnected")));
     pending.clear();
     layoutCatalog = layoutConfirmation = null;
@@ -1634,7 +1638,7 @@ function applyState(s) {
   if (Number.isInteger(s.version)) stateVersion = s.version;
   if (Number.isInteger(s.generation)) {
     const changed = stateGeneration !== s.generation;
-    if (changed) screenDrive?.clear(false);
+    if (changed) { screenDrive?.clear(false); arrangementShelf?.invalidate(); }
     if (stateGeneration !== null && stateGeneration !== s.generation && !busy) {
       lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null; cancelCreation(true);
     }
@@ -1651,8 +1655,10 @@ function applyState(s) {
     if (creator.active() && !busy && placementGeneration === null) placementGeneration = s.generation;
     resolveCreatedRobot();
   }
+  if (paused !== s.paused) arrangementShelf?.invalidate();
   paused = s.paused;
   if (selectingObjectGroup) renderObjectSelectionControls();
+  arrangementShelf?.render();
   renderScreenDrive();
   renderRobotStart();
   rtf = s.rtf;
@@ -1978,6 +1984,7 @@ function storageSet(key, value) {
 }
 
 function setOpen(toggleId, panelId, open) {
+  if (panelId === "world-panel" && !open) arrangementShelf?.invalidate();
   $(panelId).hidden = !open;
   $(toggleId).setAttribute("aria-expanded", String(open));
 }
@@ -1997,7 +2004,7 @@ function setDrawer(open) {
 function setWorldPanel(open) {
   setOpen("world-toggle", "world-panel", open);
   if (open) renderGround();
-  if (open) refreshLayouts();
+  if (open) { refreshLayouts(); arrangementShelf?.opened(); }
   else layoutConfirmation = null;
   if (open) setOpen("help-toggle", "help", false);
   if (open && narrow()) setOpen("drawer-toggle", "drawer", false);
@@ -2152,7 +2159,7 @@ showCoach();
 // Any first touch counts, a button as much as the canvas: opening Learn left the hint floating over the panel.
 document.addEventListener("pointerdown", dismissCoach, { capture: true });
 
-const togglePlay = () => { if (!paused) stopDriving(); send({ type: "cmd", cmd: paused ? "play" : "pause" }); };
+const togglePlay = () => { arrangementShelf?.invalidate(); if (!paused) stopDriving(); send({ type: "cmd", cmd: paused ? "play" : "pause" }); };
 $("btn-play").addEventListener("click", togglePlay);
 function resetWorld() {
   stopDriving();
@@ -2321,7 +2328,7 @@ function onReply(msg) {
   pending.delete(msg.id);
   if (msg.ok) waiting.resolve(msg.data);
   else {
-    const localized = msg.code?.startsWith("layout_") || msg.code?.startsWith("robot_start_");
+    const localized = msg.code?.startsWith("layout_") || msg.code?.startsWith("robot_start_") || msg.code?.startsWith("arrangement_");
     const error = new Error(localized ? tOr(msg.code, msg.message) : msg.message);
     error.code = msg.code;
     waiting.reject(error);
@@ -2330,10 +2337,11 @@ function onReply(msg) {
 
 let busy = false;
 
-async function runChoice(button, msg, { frame = false, done, progress } = {}) {
+async function runChoice(button, msg, { frame = false, done, progress, failed } = {}) {
   if (busy) return;
   const changingMap = msg.type === "world" && msg.action === "scene";
   if (changingMap) {
+    arrangementShelf?.invalidate();
     // Its reply can precede the new scene/state. Never re-enable the old world's layout actions.
     ++layoutRequest; layoutLoading = false;
     layoutCatalog = layoutConfirmation = null;
@@ -2347,6 +2355,7 @@ async function runChoice(button, msg, { frame = false, done, progress } = {}) {
     await done?.(data);
   } catch (err) {
     wantFrame = false;
+    failed?.(err);
     toast(err.message);
   } finally {
     busy = false;
@@ -2367,6 +2376,7 @@ function setPanelBusy(on) {
   updateUndo();
   renderEditableObjects();
   renderLayouts();
+  arrangementShelf?.render();
   renderScreenDrive();
   renderRobotStart();
   renderObjectSelectionControls();
@@ -2418,6 +2428,8 @@ function updateEmpty() {
 $("empty-add").addEventListener("click", () => { setDrawer(true); creator.open(); });
 
 function beginCreation() {
+  arrangementShelf?.invalidate();
+  placementPreview.clear();
   clearObjectSelection();
   clearTerrainHighlight();
   if (creator.editing()?.kind === "terrain-edit") {
@@ -2444,6 +2456,7 @@ function beginCreation() {
 }
 
 function cancelCreation(force = false) {
+  arrangementShelf?.invalidate();
   clearObjectSelection();
   clearTerrainHighlight();
   if (busy && !force) return;
@@ -2732,6 +2745,7 @@ function renderObjectSelectionControls() {
     $("object-edit-hint").textContent = t(surfaceMembers.length && !eligible ? "surface_group_unsupported"
       : paused ? "prop_group_hint" : "prop_group_pause_hint");
   } else $("object-edit-hint").textContent = t("edit_prop_hint");
+  arrangementShelf?.render();
 }
 
 function beginObjectGroupSelection() {
@@ -2984,10 +2998,14 @@ $("undo-edit").addEventListener("click", async () => {
   const robotFinish = selectedReceipt.kind === "robot_surface";
   const groupMove = selectedReceipt.kind === "group-move";
   const groupSurface = selectedReceipt.kind === "surface-group";
+  const arrangementInsert = selectedReceipt.kind === "arrangement-insert";
   const { kind: _kind, objects: groupObjects, ...receipt } = selectedReceipt;
   await runChoice($("undo-edit"), { type: "world", action: terrainEdit ? "undo_terrain_edit" : robotStart ? "undo_robot_start" : robotFinish ? "undo_robot_surface" : "undo_object_edit", ...receipt }, {
     done: async (data) => {
       if ((groupMove || groupSurface) && ((groupMove && data.moved !== true) || !validGroupObjects(data.objects, groupObjects?.length, groupObjects))) {
+        throw new Error(t("create_scene_changed"));
+      }
+      if (arrangementInsert && !validGroupObjects(data.removed, groupObjects?.length, groupObjects)) {
         throw new Error(t("create_scene_changed"));
       }
       await waitForCreation(data, true); lastObjectEdit = lastRobotEdit = lastTerrainEdit = null; updateUndo();
@@ -2999,6 +3017,17 @@ $("undo-edit").addEventListener("click", async () => {
 function objectInScene(name) {
   return sceneDesc?.bodies.some((b) => b.name === name)
     || sceneDesc?.geoms.some((g) => g.name === name || g.name?.startsWith(`${name}/`));
+}
+
+function arrangementObjectsDisplayed(names) {
+  const drawn = new Set();
+  worldRoot?.traverse((node) => { if (node.isMesh && node.visible) drawn.add(node.userData.geom); });
+  const visible = new Set(sceneDesc.geoms.filter((geom) => geom.group < sceneDesc.visibleGroupLimit && geom.rgba[3] > 0).map((geom) => geom.id));
+  return names.every((name) => {
+    const entry = sceneDesc.object_edit?.objects.find((object) => object.name === name);
+    const geoms = entry?.geoms.filter((id) => visible.has(id));
+    return geoms?.length > 0 && geoms.every((id) => drawn.has(id));
+  });
 }
 
 function resolveCreatedRobot() {
@@ -3017,6 +3046,7 @@ function resolveCreatedRobot() {
   if (sceneDesc.version !== wanted.version || (wanted.robot && !robotByName(wanted.robot))
       || (wanted.object && !objectInScene(wanted.object))
       || (wanted.objects && (!Array.isArray(wanted.objects) || wanted.objects.some((name) => !objectInScene(name))))
+      || (wanted.arrangement && !arrangementObjectsDisplayed(wanted.objects))
       || (wanted.terrain && !objectInScene(wanted.terrain))
       || removed.some((name) => robotByName(name) || objectInScene(name))) {
     wanted.reject(new Error(t("create_scene_changed"))); return;
@@ -3074,6 +3104,7 @@ async function placeEntity(item, pos) {
     : item.kind === "start" ? { action: "edit_robot_start", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "edit" ? { action: "edit_object", name: item.name, world_sha256: sceneDesc.object_edit.world_sha256, yaw: item.yaw }
       : item.kind === "copy" ? { action: "duplicate_object", name: item.name, world_sha256: item.world_sha256, yaw: item.yaw }
+    : item.kind === "arrangement-insert" ? { action: "arrangement_insert", token: item.token, world_sha256: item.world_sha256, yaw: item.yaw }
     : isObjectGroup(item) ? { action: item.kind === "group-move" ? "move_object_group" : "duplicate_object_group", token: item.token, world_sha256: item.world_sha256, yaw: item.yaw }
     : item.kind === "terrain-edit" ? { action: "edit_terrain", name: item.name, yaw_delta: item.yaw_delta, world_sha256: item.world_sha256 }
     : item.kind === "terrain" ? { action: "add_terrain", preset: item.name, yaw: item.yaw, world_sha256: placementWorldSha }
@@ -3082,11 +3113,24 @@ async function placeEntity(item, pos) {
   await runChoice($("place-here"), { type: "world", ...payload, pos, version: placementVersion, generation: placementGeneration ?? undefined }, {
     frame: !repeating && (item.kind === "robot" || item.kind === "model"),
     progress: (event) => { if (placementSession === creator.session()) creator.progress(event.stage, event.fraction); },
+    failed: (error) => {
+      if (placementSession !== creator.session()) return;
+      if (item.kind === "arrangement-insert" && error.code?.startsWith("arrangement_")
+          && !["arrangement_occupied", "arrangement_target", "arrangement_busy"].includes(error.code)) {
+        cancelCreation(true); arrangementShelf?.invalidate({ clear: true });
+        selectTab("objects", false, false);
+        if ($("world-panel").hidden) setWorldPanel(true);
+        else arrangementShelf?.opened();
+      }
+    },
     done: async (data) => {
+      if (placementSession !== creator.session()) return;
       if (isObjectGroup(item) && (!validGroupObjects(data.objects, item.members.length,
           item.kind === "group-move" ? item.members.map((member) => member.name) : null)
           || !Number.isInteger(data.version) || !Number.isInteger(data.generation)
-          || (item.kind === "group-move" && !data.unchanged && data.moved !== true))) {
+          || (item.kind === "group-move" && !data.unchanged && data.moved !== true)
+          || (item.kind === "arrangement-insert" && (data.version <= item.version || data.generation <= item.generation || data.paused !== true
+            || !groupEditUndo(data, item.kind))))) {
         lastAddition = lastObjectEdit = lastRobotEdit = lastTerrainEdit = null;
         cancelCreation(true); throw new Error(t("create_scene_changed"));
       }
@@ -3107,10 +3151,10 @@ async function placeEntity(item, pos) {
       }
       if (item.kind === "model") creator.progress("display");
       try {
-        await waitForCreation(data, isObjectGroup(item) || item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || repeating || item.kind === "edit" || item.kind === "copy" || item.kind === "start", { focus: !repeating });
+        await waitForCreation(item.kind === "arrangement-insert" ? { ...data, arrangement: true } : data, isObjectGroup(item) || item.kind === "terrain-edit" || item.kind === "terrain" || item.kind === "model" || repeating || item.kind === "edit" || item.kind === "copy" || item.kind === "start", { focus: !repeating });
       } catch (error) {
         if (isObjectGroup(item)) {
-          lastObjectEdit = error.displayTimeout && stateVersion === data.version && stateGeneration === data.generation
+          lastObjectEdit = item.kind !== "arrangement-insert" && error.displayTimeout && stateVersion === data.version && stateGeneration === data.generation
             ? groupEditUndo(data, item.kind) : null;
           lastAddition = lastRobotEdit = lastTerrainEdit = null;
           cancelCreation(true);
@@ -3170,7 +3214,7 @@ async function placeEntity(item, pos) {
         creator.next(item.kind === "copy" ? { world_sha256: sceneDesc.object_edit.world_sha256 } : {});
         creationSurface = creationAnchor = null; creationMarker.visible = false; placementPreview.clear();
       } else cancelCreation(true);
-      toast(t(isObjectGroup(item) ? item.kind === "group-move" ? "prop_group_moved" : "prop_group_copied" : item.kind === "terrain-edit" ? "terrain_edited" : item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain, count: data.objects?.length }));
+      toast(t(item.kind === "arrangement-insert" ? "arrangement_inserted" : isObjectGroup(item) ? item.kind === "group-move" ? "prop_group_moved" : "prop_group_copied" : item.kind === "terrain-edit" ? "terrain_edited" : item.kind === "terrain" ? "terrain_added" : item.kind === "start" ? "robot_start_saved" : item.kind === "edit" ? "prop_edited" : item.kind === "copy" ? "prop_copied" : "robot_added", { name: data.robot || data.object || data.terrain, count: data.objects?.length }));
       canvas.focus();
     },
   });
@@ -3182,7 +3226,7 @@ async function placeEntity(item, pos) {
 function updateUndo() {
   $("undo-add").hidden = !lastAddition || creator.active() || selectingObjects || !!sceneDesc?.lesson;
   $("undo-edit").hidden = (!lastObjectEdit && !lastRobotEdit && !lastTerrainEdit) || creator.active() || selectingObjects || !!sceneDesc?.lesson;
-  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : lastObjectEdit?.kind === "surface-group" ? "undo_surface_group" : isObjectGroup(lastObjectEdit) ? lastObjectEdit.kind === "group-move" ? "undo_prop_group_move" : "undo_prop_group" : "undo_object_edit");
+  $("undo-edit").textContent = t(lastTerrainEdit ? "undo_terrain_edit" : lastRobotEdit ? "undo_robot_start" : lastObjectEdit?.kind === "robot_surface" ? "undo_robot_surface" : lastObjectEdit?.kind === "surface-group" ? "undo_surface_group" : lastObjectEdit?.kind === "arrangement-insert" ? "arrangement_undo" : isObjectGroup(lastObjectEdit) ? lastObjectEdit.kind === "group-move" ? "undo_prop_group_move" : "undo_prop_group" : "undo_object_edit");
   $("undo-edit").disabled = busy;
   $("undo-add").disabled = busy;
   $("undo-add").title = lastAddition?.name || "";
@@ -3220,8 +3264,22 @@ function choice({ title, desc, pressed, off = false, onClick }) {
   return b;
 }
 
+arrangementShelf = createArrangementShelf({
+  context: () => ({ version: sceneDesc?.version, generation: stateGeneration,
+    world_sha256: sceneDesc?.object_edit?.world_sha256, session: creator.session(), selectionEpoch: objectGroupEpoch, pointerEpoch: creationGesture.epoch(),
+    supported: !!sceneDesc?.world && !sceneDesc?.lesson, connected: ws?.readyState === WebSocket.OPEN,
+    ready: !!sceneDesc?.world && !sceneDesc?.lesson && sceneReadyToDraw()
+      && stateVersion === sceneDesc.version && posedVersion === sceneDesc.version && renderedVersion === sceneDesc.version
+      && Number.isInteger(stateGeneration) && !creationGesture.active(), paused, busy }),
+  selection: () => ({ group: selectingObjectGroup, names: [...objectGroupSelection.keys()],
+    ready: selectingObjectGroup && paused && objectGroupSelection.size >= 2 && objectGroupSelection.size <= 16
+      && objectSelectionCurrent() && [...objectGroupSelection.values()].every((member) =>
+        ["box", "sphere", "cylinder", "table", "bin"].includes(member.shape)) }),
+  request, notice: toast, prepare: (data) => creator.arrangement(data),
+});
+
 const worldTabs = [...$("world-panel").querySelectorAll("[role=tab]")];
-function selectTab(name, focus = false) {
+function selectTab(name, focus = false, load = true) {
   if (!worldTabs.some((tab) => tab.dataset.tab === name)) name = "maps";
   for (const tab of worldTabs) {
     const selected = tab.dataset.tab === name;
@@ -3231,6 +3289,8 @@ function selectTab(name, focus = false) {
   for (const body of $("world-panel").querySelectorAll(".tab-body")) body.hidden = body.dataset.body !== name;
   storageSet("robotforge.tab", name);
   if (name === "terrain") renderGround();
+  if (name === "objects" && load) arrangementShelf?.opened();
+  if (name !== "objects") arrangementShelf?.invalidate();
 }
 
 for (const tab of worldTabs) {
@@ -3245,7 +3305,7 @@ for (const tab of worldTabs) {
 }
 $("build-add-robot").addEventListener("click", () => { setWorldPanel(false); setDrawer(true); creator.open(); });
 $("build-pick-map").addEventListener("click", () => selectTab("maps", true));
-selectTab(storageGet("robotforge.tab") || "maps");
+selectTab(storageGet("robotforge.tab") || "maps", false, false);
 
 let lastMap = null; // the map picked here; a world does not remember which preset it came from
 
@@ -3705,6 +3765,8 @@ function loop() {
 }
 
 canvas.addEventListener("webglcontextlost", () => {
+  arrangementShelf?.invalidate();
+  if (creator.preview()?.members) cancelCreation(true);
   renderedVersion = 0;
   renderLayouts();
   renderRobotStart();

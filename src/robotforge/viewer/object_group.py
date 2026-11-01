@@ -33,6 +33,10 @@ PENETRATION = 0.002
 UPRIGHT = 1e-4
 
 
+class OccupiedError(PlaygroundError):
+    """A valid layout target intersects an existing solid object."""
+
+
 class Guard(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -300,12 +304,11 @@ def _collisions(model, data, world, names: set[str]) -> None:
                     finally:
                         model.opt.disableflags = flags
             if distance < -PENETRATION - 1e-9:
-                raise PlaygroundError(f"layout occupied: {owners[a]} overlaps {owners[b]}; choose a clear spot")
+                raise OccupiedError(f"layout occupied: {owners[a]} overlaps {owners[b]}; choose a clear spot")
 
 
-def _prepare(pg, request: Prepare):
-    store = pg._require_store()
-    world = _check(pg, store, request)
+def _capture(pg, request, world):
+    """Capture a supported upright live selection without changing any receipt."""
     # All queries use private model/data: collision fallback and forward never touch the live simulation.
     model, data = copy.copy(pg.session.model), copy.copy(pg.session.data)
     mujoco.mj_forward(model, data)
@@ -313,16 +316,24 @@ def _prepare(pg, request: Prepare):
     names = set(request.names)
     _collisions(model, data, world, names)
     height = _support_graph(model, data, world, names)
-    if request.mode == "move":
-        _movable(pg, world, names)
-        saved = fresh_data(model)
-        _collisions(model, saved, world, names)
-        _support_graph(model, saved, world, names)
     anchor = (
         sum(member.pos[0] for member in members) / len(members),
         sum(member.pos[1] for member in members) / len(members),
         height,
     )
+    return model, data, members, anchor
+
+
+def _prepare(pg, request: Prepare):
+    store = pg._require_store()
+    world = _check(pg, store, request)
+    model, data, members, anchor = _capture(pg, request, world)
+    names = set(request.names)
+    if request.mode == "move":
+        _movable(pg, world, names)
+        saved = fresh_data(model)
+        _collisions(model, saved, world, names)
+        _support_graph(model, saved, world, names)
     prepared = PreparedGroup(
         store,
         request.version,
@@ -465,7 +476,19 @@ def _restore_disk(store, saved, candidate_world, candidate_xml, artifacts):
     return external_world
 
 
-def _commit(pg, store, guard, change, validate, entries, *, undoing=False, moving: MoveSource | None = None):
+def _commit(
+    pg,
+    store,
+    guard,
+    change,
+    validate,
+    entries,
+    *,
+    undoing=False,
+    moving: MoveSource | None = None,
+    before_publish=None,
+    check_current=None,
+):
     """WorldStore owns the sole compile; post-compile validation precedes every persisted byte."""
     original = store.file.read_bytes()
     original_model, original_data = pg.session.model, pg.session.data
@@ -492,19 +515,27 @@ def _commit(pg, store, guard, change, validate, entries, *, undoing=False, movin
 
     def post_compile(candidate, compiled):
         nonlocal rollback, disk, candidate_bytes, candidate_xml, target_pose
-        _check(pg, store, guard)
+        if check_current is None:
+            _check(pg, store, guard)
+        else:
+            check_current()
         if not same_runtime():
             raise PlaygroundError("the simulation pose changed during preparation; select the layout again")
         validate(candidate, compiled)
         if moving is not None:
             target_pose = moving.pose if undoing else carry.take(compiled.model, fresh_data(compiled.model))
-        _check(pg, store, guard)
+        if check_current is None:
+            _check(pg, store, guard)
+        else:
+            check_current()
         if store.file.read_bytes() != original or not same_runtime():
             raise PlaygroundError("the world or pose changed during validation; select the layout again")
         candidate_bytes = candidate.to_yaml().encode("utf-8")
         candidate_xml = compiled.to_xml().encode("utf-8")
         disk = _disk_state(store)
         rollback = BuiltinLayoutState.capture(pg)
+        if before_publish is not None:
+            before_publish()
 
     try:
         result = pg._edit(change, exact_carry=True, post_compile=post_compile, artifacts=artifacts)

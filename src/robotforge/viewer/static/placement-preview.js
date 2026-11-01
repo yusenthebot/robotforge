@@ -15,10 +15,26 @@ export function createPlacementPreview(scene) {
   }
   function update(spec, point) {
     if (!spec || !point) { if (mesh) mesh.visible = false; return; }
-    const nextKey = spec.parts ? spec.key : JSON.stringify(spec.boxes || [spec.shape, spec.size]);
+    const nextKey = spec.parts || spec.members ? spec.key : JSON.stringify(spec.boxes || [spec.shape, spec.size]);
     if (key !== nextKey) {
       clear(); key = nextKey;
-      if (spec.parts) {
+      if (spec.members) {
+        mesh = new THREE.Group();
+        for (const member of spec.members) {
+          const s = member.size;
+          const geometry = member.shape === "sphere" ? new THREE.SphereGeometry(s[0] / 2, 12, 8)
+            : member.shape === "cylinder" ? new THREE.CylinderGeometry(s[0] / 2, s[0] / 2, s[1], 16)
+              : new THREE.BoxGeometry(...s);
+          if (member.shape === "cylinder") geometry.rotateX(Math.PI / 2);
+          const part = new THREE.Mesh(geometry, material);
+          part.userData.previewOwnGeometry = true;
+          part.position.fromArray(member.offset);
+          // Fixed table/bin origins sit on their support; other shapes store their centres.
+          if (member.shape === "table" || member.shape === "bin") part.position.z += s[2] / 2;
+          part.rotation.z = member.yaw * Math.PI / 180;
+          mesh.add(part);
+        }
+      } else if (spec.parts) {
         mesh = new THREE.Group();
         for (const source of spec.parts) {
           const part = new THREE.Mesh(source.geometry, material);
@@ -48,7 +64,7 @@ export function createPlacementPreview(scene) {
     }
     mesh.visible = true;
     mesh.rotation.z = spec.yaw * Math.PI / 180;
-    mesh.position.set(point[0], point[1], point[2] + (spec.parts || spec.boxes ? 0 : spec.size.at(-1) / 2) + 0.002);
+    mesh.position.set(point[0], point[1], point[2] + (spec.parts || spec.members || spec.boxes ? 0 : spec.size.at(-1) / 2) + 0.002);
   }
   return { update, clear };
 }

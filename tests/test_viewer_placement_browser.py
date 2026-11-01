@@ -29,10 +29,12 @@ async def prepare(tab, server):
     server.pg.session.paused = True
     server.pg.session.reset()
     await tab.until(READY + " && window.__robotforge.time===0")
+    # Read-only catalog refreshes are not placement submissions.
     await tab.run(
         "window.__placementMessages=[];const send=WebSocket.prototype.send;"
         "WebSocket.prototype.send=function(s){const m=JSON.parse(s);"
-        "if(m.type==='world'&&m.action!=='layout_list')window.__placementMessages.push(m);return send.call(this,s)}"
+        "if(m.type==='world'&&!['layout_list','arrangement_list'].includes(m.action))"
+        "window.__placementMessages.push(m);return send.call(this,s)}"
     )
     await tab.run("window.__robotforge.lookAt([4,-6,5],[0,0,-.3])")
     await settle_camera(tab)

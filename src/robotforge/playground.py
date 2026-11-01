@@ -58,6 +58,7 @@ from robotforge.viewer.server import ViewerHub
 if TYPE_CHECKING:
     from robotforge.design import generator
     from robotforge.design.store import ApplyArtifacts
+    from robotforge.viewer.arrangements import PreparedArrangement
     from robotforge.viewer.creation import Addition
     from robotforge.viewer.object_edit import Edit
     from robotforge.viewer.object_group import GroupCopy, PreparedGroup
@@ -107,7 +108,11 @@ def _one_edit_at_a_time(method):
             except BaseException:
                 # Existing rollback participants own the receipts; transient preparations
                 # must also survive a failed rebuild by any edit entry point.
-                self._play_group = preparation if self._play_world_sha256 is not None else None
+                self._play_group = (
+                    preparation
+                    if self._play_world_sha256 is not None and not getattr(preparation, "invalidated", False)
+                    else None
+                )
                 raise
 
     return wrapper
@@ -141,7 +146,7 @@ class Playground:
     _play_edit: Edit | SurfaceEdit | SurfaceBatchEdit | RobotSurfaceEdit | GroupCopy | None = field(
         default=None, init=False, repr=False
     )
-    _play_group: PreparedGroup | None = field(default=None, init=False, repr=False)
+    _play_group: PreparedGroup | PreparedArrangement | None = field(default=None, init=False, repr=False)
     _play_robot_edit: RobotEdit | None = field(default=None, init=False, repr=False)
     _play_terrain_edit: TerrainEdit | None = field(default=None, init=False, repr=False)
     _play_world_sha256: str | None = field(default=None, init=False, repr=False)
@@ -307,6 +312,14 @@ class Playground:
                 return self.edit_robot_surface_for_play(msg)
             if action in {"layout_list", "layout_save", "layout_restore", "layout_remove"}:
                 return self.layouts_for_play(msg)
+            if action in {
+                "arrangement_list",
+                "arrangement_save",
+                "arrangement_remove",
+                "arrangement_prepare",
+                "arrangement_insert",
+            }:
+                return self.arrangements_for_play(msg)
             if action == "add_robot":
                 return self.add_robot_for_play(msg)
             if action == "add_model":
@@ -566,6 +579,13 @@ class Playground:
     def edit_terrain_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
         """Move an authored ramp/stair block on clear ground, or undo its latest move."""
         from robotforge.viewer.terrain_edit import handle
+
+        return handle(self, message)
+
+    @_one_edit_at_a_time
+    def arrangements_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Manage reusable local prop arrangements and insert one guarded copy."""
+        from robotforge.viewer.arrangements import handle
 
         return handle(self, message)
 
