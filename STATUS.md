@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-01 natural rock ground: shared floor/terrain/detailed-preview CC0 pair (78,882 B), deterministic translated sampling, two lazy modules and an independent 1,000 ms atomic fallback; old material calls, authored tint/scale/bump and physics stay compatible.
+  The direct photo swap was rejected before the stochastic candidate; directional patterns and softened detail remain, with 24 logical fetches versus6 and several ms more on the large Malo floor.
+  Final793inputs:4205default+45actualChrome+4surfaceGPU=4254distinct passes;129default skips excluded,11/11original install/viewer budgets,423exact source/wheel files, actualMalo/Go2 product movies and four exact prototype/production native pairs pass.
+  Wheel4155676B/4058.2773KiB,42packages,0.7965s command coldstart; dog coldstart peak134.6MB and separately warehouse loading peak561.5MB. All791retainedCMF inputs/13originalWIP files remain exact. Local macOS evidence, not Windows or all-browser certification. [Report](docs/bench/2026-11-01-natural-rock.md); broad goal active, action-success tuning deferred.
+
 - 2026-11-01 concrete content screen: the fixed natural 256-square color/detail pair fails its preregistered image/module admission caps before scene rendering: 93,121/81,920 B and 124,791/114,688 B.
   Actual procedural pixels match both retained original-world browser records; numeric moment/clipping guards pass, but no candidate image or video establishes visual benefit.
   19 fresh scoped tests (two actual Chrome), Ruff/format/offline wheel pass; 421 package files/4,071,055 B/hash, 786 inputs and 13 original WIP files remain exact.

@@ -1,0 +1,55 @@
+{
+  "scope": "local macOS Chrome/Metal; source+wheel equivalence; original11install/viewer caps; no all-browser/all-slow/Windows/installed-viewer certification",
+  "source_freeze": {
+    "file": "production-source-freeze-v3.json",
+    "sha256": "84f4e1084218e938afed9eeef1a2f1d2f3c83e09fad68cf3dbb5d848c7502404",
+    "count": 793
+  },
+  "tests": {
+    "production-full-default-v1": {
+      "passed": 4205,
+      "skipped": 129,
+      "xml_sha256": "112b6751b3ae34a7dba0278021ac0d54088c7f932e42d10131b90be64c209937"
+    },
+    "production-rock-browser-v2": {
+      "passed": 16,
+      "skipped": 0,
+      "xml_sha256": "e12a7863167be877d64e71380ddb076b2ea8defc7f7b88aa493440e8808f7b4f"
+    },
+    "production-legacy-ground-browser-v1": {
+      "passed": 29,
+      "skipped": 0,
+      "xml_sha256": "31682e2989314152e70b09af501eb33603b5aa04488613e05020e870fe34a3ae"
+    },
+    "production-assets-gl-v1": {
+      "passed": 4,
+      "skipped": 0,
+      "xml_sha256": "3ecbee94763ac676b47a4ddbd0f56d9c2317e1619eb94abb2bc6440023a1bb6c"
+    }
+  },
+  "distinct_passed": 4254,
+  "default_deselected": 421,
+  "framework_cases_in_default": 39,
+  "wheel": {
+    "bytes": 4155676,
+    "sha256": "71e1dfdbfdad4757975ff5ea794a273b0335e56fa8fd0c2a0037ca287d1c2996",
+    "source_package_files": 423,
+    "all_source_wheel_files_equal": true
+  },
+  "protected": {
+    "cmf_inputs": 791,
+    "original_wip_files": 13,
+    "all_admitted_stages_unchanged": true
+  },
+  "limitations": [
+    "Directional texture structure and softened detail remain",
+    "24logicalfetches instead of6; largeMalo floor costs several ms",
+    "Earlier failedcleanup run measured12.9/4.3ms retained",
+    "CPU/Chrome/GPU counts do not include skips as passes",
+    "No matched navigation-to-READY baseline or universal speed claim"
+  ],
+  "goal_status": "active",
+  "budget_record": "../../../robotforge-evidence/2026-11-01-natural-rock/bench-v1/2026-11-01-a119711-dirty-partial.json",
+  "budget_checked": 11,
+  "report": "2026-11-01-natural-rock.md"
+}

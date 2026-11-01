@@ -148,8 +148,9 @@ function surfaceTile(style) {
   return result;
 }
 
-export function groundMaterial(style, color, anisotropy, preparedWood = null, preparedGrass = null) {
-  const tile = (style === "wood" && preparedWood) || (style === "grass" && preparedGrass) || surfaceTile(style);
+export function groundMaterial(style, color, anisotropy, preparedWood = null, preparedGrass = null, preparedRock = null) {
+  const tile = (style === "wood" && preparedWood) || (style === "grass" && preparedGrass)
+    || (style === "rock" && preparedRock) || surfaceTile(style);
   const map = new THREE.CanvasTexture(tile.color);
   map.source = tile.colorSource;
   map.colorSpace = THREE.SRGBColorSpace;
@@ -186,8 +187,10 @@ vec2 rfTileSlope() {
         "rfMetricBump( - vViewPosition, normal, rfTileSlope(), faceDirection )"));
   };
   mat.userData.groundSource = style === "wood" && preparedWood ? "natural-oak"
-    : style === "grass" && preparedGrass ? "natural-leafy-grass" : "procedural";
+    : style === "grass" && preparedGrass ? "natural-leafy-grass"
+    : style === "rock" && preparedRock ? "natural-rock-face-03" : "procedural";
   mat.customProgramCacheKey = () => "rf-ground-metric-v1";
+  if (style === "rock" && preparedRock) preparedRock.stochasticRock(mat);
   return mat;
 }
 
@@ -202,9 +205,9 @@ export function groundPreview(style, rgb, detailed = true) {
   ctx.fillRect(0, 0, 96, 64);
   if (detailed) {
     ctx.globalCompositeOperation = "multiply";
-    const natural = style === "wood" ? naturalWood : style === "grass" ? naturalGrass : null;
+    const natural = style === "wood" ? naturalWood : style === "grass" ? naturalGrass : style === "rock" ? naturalRock : null;
     ctx.drawImage((natural || surfaceTile(style)).color, 0, 0, 96, 64);
-    const pending = !natural && (style === "wood" ? loadWood() : style === "grass" ? loadGrass() : null);
+    const pending = !natural && (style === "wood" ? loadWood() : style === "grass" ? loadGrass() : style === "rock" ? loadRock() : null);
     if (pending) pending.then((tile) => {
       if (!tile) return;
       ctx.globalCompositeOperation = "source-over";
@@ -292,6 +295,47 @@ export async function prepareGrassTextures(desc) {
   try {
     return await Promise.race([loadGrass(), new Promise((resolve) => {
       timer = setTimeout(() => resolve(grassFallback("timeout")), 1000);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Rock has its own deadline and atomic pair. Decoding after installation changes
+// only this CPU cache, never the textures or shader of an installed fallback.
+let naturalRock = null, rockPending = null, rockWarned = false;
+
+function rockFallback(reason) {
+  if (!rockWarned) console.warn("robotforge: optional rock texture unavailable; using procedural ground", reason);
+  rockWarned = true;
+  return null;
+}
+
+function loadRock() {
+  if (naturalRock) return Promise.resolve(naturalRock);
+  if (!rockPending) {
+    rockPending = Promise.all([import("./ground-rock.js"), import("./ground-stochastic.js")])
+      .then(async ([images, { stochasticRock }]) => {
+        const { color, detail } = await images.rockTiles();
+        naturalRock = { color, detail, colorSource: new THREE.Source(color), detailSource: new THREE.Source(detail), stochasticRock };
+        return naturalRock;
+      })
+      .catch((error) => rockFallback(error?.name || "load"))
+      .finally(() => { rockPending = null; });
+  }
+  return rockPending;
+}
+
+export async function prepareRockTextures(desc) {
+  const usesRock = desc.geoms.some((geom) => {
+    const look = desc.grounds?.[geom.material];
+    return look && !(geom.type === "plane" && look.pattern === "checker") && groundStyle(geom.material, look) === "rock";
+  });
+  if (!usesRock) return null;
+  let timer;
+  try {
+    return await Promise.race([loadRock(), new Promise((resolve) => {
+      timer = setTimeout(() => resolve(rockFallback("timeout")), 1000);
     })]);
   } finally {
     clearTimeout(timer);
