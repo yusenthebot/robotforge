@@ -49,3 +49,57 @@ The derived albedo SHA256 is `5c76596cd17b2b516514a8ec4068e88ea8b0d07d4988af88c4
 Only used grass geometry or an explicit detailed thumbnail loads the module.
 Wood and grass prepare concurrently with independent atomic pairs and 1000 ms optional deadlines; failures use procedural fallback, while late images only fill the CPU cache for later scenes.
 Full originals and verification videos stay outside the package.
+
+## Rock
+
+Rock Face 03 by Dario Barresi (photography) and Rico Cilliers (processing), from
+[Poly Haven](https://polyhaven.com/a/rock_face_03), is [CC0-1.0](https://polyhaven.com/license).
+The two derived 256-square images in `../ground-rock.js` total 78,882 bytes:
+a grayscale JPEG albedo and lossless WebP RGB detail (height R, roughness G, B=0).
+They retain the two existing map slots, authored ground tint, UV mapping,
+metric bumpScale 0.003 and physics. Nominal GPU pixel storage is unchanged.
+The approximately 2.7 meter source is artistically rescaled to the existing
+0.8 meter application tile; this is not a physical rock-size calibration.
+
+Only used rock ground or an explicit detailed rock thumbnail loads the image
+and sampler modules together. Both imports share the rock deadline. Wood, grass
+and rock prepare independent atomic image pairs concurrently,
+each with its own 1000 ms optional deadline. Failure keeps procedural rock and
+its original shader. Late decoding only fills the CPU cache for later scenes.
+The installed app makes no external asset requests.
+
+Natural rock samples four deterministic translated copies with PCG offsets and
+quintic weights, using explicit texture gradients for albedo, roughness and the
+four central-difference height samples. This reduces obvious periodic repetition
+at a cost of 24 logical texture fetches per fragment instead of 6. Blending can
+soften contrast or reveal a square variance pattern; no geometry or UV scale is
+changed. Only natural rock extends the existing metric shader's cache key with
+`:square-quintic-rock-v1`; procedural fallback and every other material retain
+their original hooks. CPU decoding does not establish appearance or GPU cost.
+
+For offline reproduction, obtain these exact official 1k JPEGs:
+
+| Channel | Source | SHA256 |
+| --- | --- | --- |
+| Diffuse | [JPG](https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_face_03/rock_face_03_diff_1k.jpg) | `ea48e0e47ad42c8bd312476178b1248ec66f0eb19156a26a1c222f2a40caaf2d` |
+| Displacement | [JPG](https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_face_03/rock_face_03_disp_1k.jpg) | `fb053bfd46cef976da9cfee67f045367469cddd69469dcacd67d3fca4bd41545` |
+| Roughness | [JPG](https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_face_03/rock_face_03_rough_1k.jpg) | `9e3d9a2fd75244892e7acb6bab2eaed1279299510a7970672c0ee27ff1c19fea` |
+
+Run `uv run --frozen python scripts/prepare_ground_rock.py SOURCE_DIR --output src/robotforge/viewer/static/ground-rock.js`.
+The fixed recipe decodes diffuse to linear Rec.709 luminance before float32 BOX
+filtering, and uses encoded scalar displacement/roughness. It fits clipped-affine
+population moments using 64 nested bisections per solver level. Target mean/std
+are 0.8168318544161137/0.08 for linear albedo,
+0.5108787387025122/0.1611487390382267 for height, and
+0.8997186997357539/0.035 for roughness. Clipping is capped at 5% per channel;
+decoded mean/std must stay within 1%/10%. There is no crop, rotation or search.
+JPEG uses quality 90 and optimize=True; WebP uses lossless=True, quality=100,
+method=6, exact=True. CPU-decoded detail must exactly match its raw RGB bytes.
+Combined images are capped at 81,920 bytes and the module at 114,688 bytes.
+
+With the locked Pillow 12.3.0, NumPy 2.5.4 and libwebp 1.6.0, derived albedo
+SHA256 is `1d3584ea9380bc72df015815e45b192aa28c39e2ba97a9e60ce29d6509a035e8`
+and detail SHA256 is `2b8800b7edfde4969ab11de4c933cf0a7a2cecc4e0cca6d57a8fc0dbfcafa8ee`.
+The generator verifies these exact bytes before replacing its output; it never
+retunes the recipe on a failed guard. Full originals and validation captures
+remain outside the package.

@@ -1,5 +1,13 @@
 # progress
 
+## 2026-11-01 — Natural rock ground and terrain
+
+- 既有岩石样式共用两张256像素CC0小图（78,882B），覆盖地面、地形和详细缩略图；两个模块按需加载，独立1秒原子准备／回退，原同步调用、色调、0.8米尺度、凹凸和物理保持兼容。
+- 直接换图因大面积斜向平铺被否决后，保留同一像素引入平移采样与五次混合；四组盲评均优于原程序材质，但方向纹理仍在，石块细节变软，每像素逻辑采样6→24。Malo实际暖态6.8／5.6ms，早先清理失败样本12.9／4.3ms也保留。
+- 最终793输入：4205默认＋45真实Chrome＋4表面GPU＝4254不同通过用例；129默认跳过不计通过，11／11原安装／查看器预算、423包文件逐字节一致、Malo／Go2正式产品实录和四组原型／产品原生画面完全相同。
+- Wheel4,155,676B，42依赖包，冷启动0.7965秒；dog冷启动峰值134.6MB，独立仓库加载峰值561.5MB。791项保留CMF源码和13项原WIP保持原样；初始截图舍入、测试fixture、关闭连接及格式检查失败全部保留。
+- [完整报告](docs/bench/2026-11-01-natural-rock.md)与JSON记录真实成本和范围；整体材质、轻量与可玩性目标继续，单项动作成功率未动。
+
 ## Concrete content admission screen (2026-11-01)
 
 The fixed natural-concrete recipe passes its numerical moment/clipping guards but fails candidate-specific image/module caps before scene rendering: 93,121 versus 81,920 B and 124,791 versus 114,688 B.
