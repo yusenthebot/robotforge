@@ -656,6 +656,17 @@ input[type="range"]::-moz-range-thumb {
 canvas.inspecting { cursor: crosshair; }
 .view-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .view-choices [aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); }
+#camera-bookmarks { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.camera-bookmarks-title { font-size: 13px; margin: 0; }
+.camera-bookmarks-form { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.camera-bookmarks-form label { width: 100%; font-size: 12px; }
+.camera-bookmarks-name { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-solid); color: var(--ink); font: inherit; }
+.camera-bookmarks-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.camera-bookmarks-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.camera-bookmarks-view-name { width: 100%; overflow-wrap: anywhere; font-size: 13px; }
+.camera-bookmarks-confirmation { padding: 10px 0; }
+.camera-bookmarks-confirmation button + button { margin-left: 6px; }
+.camera-bookmarks-status, .camera-bookmarks-note { font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .tool[aria-expanded="true"] { background: var(--hover); color: var(--ink); }
 
 .rec .rec-dot { fill: var(--rec, #e5484d); stroke: none; }
