@@ -1721,3 +1721,16 @@ canvas.inspecting { cursor: crosshair; }
   border-color: var(--amber);
   background: var(--amber-soft);
 }
+
+/* Persistent prop arrangements use the existing native Build controls. */
+.arrangement-shelf { margin: 16px 0; border-block: 1px solid var(--line); padding: 10px 0; }
+.arrangement-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px; align-items: center; margin: 8px 0; }
+.arrangement-row strong, .arrangement-row small { display: block; overflow-wrap: anywhere; }
+.arrangement-row small { color: var(--muted); font-size: 11px; }
+.arrangement-row button { font-size: 11px; }
+.arrangement-confirm { padding: 8px; border: 1px solid var(--line); border-radius: 7px; }
+.arrangement-confirm p { overflow-wrap: anywhere; }
+.arrangement-save-form { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-width: 0; }
+.arrangement-save-form label, .arrangement-save-form p { flex: 1 1 100%; }
+.arrangement-save-form input { flex: 1 1 140px; min-width: 0; width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-solid); }
+@media (max-width: 380px) { .arrangement-row { grid-template-columns: minmax(0, 1fr) auto; } .arrangement-row > span { grid-column: 1 / -1; } }

@@ -180,6 +180,18 @@
       <p class="note lead" data-i18n="objects_lead">Place a ball, blocks or barriers, then drive and experiment. Undo add removes your latest addition.</p>
       <button class="create-toggle" id="build-add-robot" type="button" data-i18n="add_robot">Add robot</button>
       <div class="create-list" id="object-list"></div>
+      <section class="arrangement-shelf" id="arrangement-shelf" aria-labelledby="arrangement-title">
+        <h3 id="arrangement-title" data-i18n="arrangement_title">Saved arrangements</h3>
+        <p class="note" data-i18n="arrangement_lead">Save 2–16 selected props at their paused poses. Insert a reusable copy in any world.</p>
+        <button class="pill" id="arrangement-refresh" type="button" data-i18n="arrangement_refresh">Refresh shelf</button>
+        <p class="note" id="arrangement-status" role="status" data-i18n="arrangement_refresh_hint">Open Build or refresh to load your shelf.</p>
+        <div id="arrangement-list"></div>
+        <div id="arrangement-confirm" class="arrangement-confirm" hidden>
+          <p id="arrangement-confirm-text"></p>
+          <button class="pill" id="arrangement-remove-apply" type="button" data-i18n="arrangement_remove">Remove</button>
+          <button class="pill" id="arrangement-remove-cancel" type="button" data-i18n="arrangement_cancel">Cancel</button>
+        </div>
+      </section>
       <section id="edit-object-section" hidden>
         <h3 data-i18n="existing_props">Existing props</h3>
         <button class="pill" id="edit-objects" type="button" data-i18n="select_prop">Select in scene</button>
@@ -326,6 +338,14 @@
     <button class="pill" id="object-copy" type="button" data-i18n="copy_prop">Duplicate</button>
     <button class="pill" id="object-group-copy" type="button" data-i18n="copy_prop_group" hidden>Copy this group</button>
     <button class="pill" id="object-group-move" type="button" data-i18n="move_prop_group" hidden>Move / rotate this group</button>
+    <button class="pill" id="arrangement-save-open" type="button" hidden data-i18n="arrangement_save_open">Save arrangement</button>
+    <form id="arrangement-save-form" class="arrangement-save-form" hidden novalidate>
+      <label for="arrangement-name" data-i18n="arrangement_name">Arrangement name</label>
+      <input id="arrangement-name" name="arrangement-name" type="text" maxlength="64" autocomplete="off" aria-describedby="arrangement-save-error">
+      <button class="pill" id="arrangement-save" type="submit" data-i18n="arrangement_save">Save</button>
+      <button class="pill" id="arrangement-save-cancel" type="button" data-i18n="arrangement_cancel">Cancel</button>
+      <p class="note" id="arrangement-save-error" role="alert"></p>
+    </form>
     <button class="pill" id="object-remove" type="button" data-i18n="remove_prop">Remove</button>
     <button class="pill" id="object-edit-done" type="button" data-i18n="done_placing">Done</button>
     <div class="placement-options" id="object-surface-controls" hidden>

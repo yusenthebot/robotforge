@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-01 persistent prop arrangements: paused2–16 supported props save into a bounded shared named library, survive map/client/fresh-process reopen and insert with owned outlines, rotation, occupied retry and latest group Undo; authored finishes/physics preserved.
+  Final799inputs: 4281default+130complete actualChrome+4surfaceGL=4415distinct passes;129default skips excluded,7same-runtime framework, source/fresh offline60-tool-list smoke and426exact source/wheel/installed files pass.
+  Original4install budgets plus both fixed7viewer repeats pass; first6.2%CPU overrun retained, repeat baseline/candidate/candidate/baseline6.0/5.8/5.8/6.0, no budget change; wheel4,170,262B(+14,586), no assets/dependencies added.
+  10phase-aligned exact native RGBA/camera pairs, two fully decoded Malo/Go2 movies/12sample frames and2manual-final images; raw array exceptions, source-selection/spy/version failures retained;13WIP/791CMF/796unpromoted-cache/78native-input files exact.
+  [Report](docs/bench/2026-11-01-prop-arrangements.md); localMac only, broad goal active, compact material encoding next, action-success tuning deferred.
+
 - 2026-11-01 decoded mesh reuse screen: optional bounded buffer/geometry cache is not promoted; fixed real Malo/Go2 ABBA warm medians improve only4.35/27.55ms, below the preregistered50ms gate in both fixtures.
   All repeated47.06/20.33MB mesh responses and imported uploads are avoided, but this does not establish the intended total editing gain; cold/memory/heartbeat guards pass.
   70 scoped cases including67 actual browser/GPU pass,40 native stills/30 exact phase pairs/all481 model arrays and state match; four fully decoded native films,24 samples, source/Python review and Ruff/format pass.

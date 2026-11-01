@@ -1,7 +1,7 @@
 // Local starter picker. Placement/raycasting and request ownership stay with the viewer.
 import { t, tOr } from "./i18n.js";
 
-export const isObjectGroup = (entry) => entry?.kind === "group-copy" || entry?.kind === "group-move";
+export const isObjectGroup = (entry) => entry?.kind === "group-copy" || entry?.kind === "group-move" || entry?.kind === "arrangement-insert";
 
 const paths = {
   rover: "M9 15h30v14H9z M9 19H5v14h7 M39 19h5v14h-7 M17 15V9h14v6 M8 34h7m18 0h7",
@@ -118,13 +118,13 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     repeat.checked = false; syncRepeat();
     material.value = "";
     $("prop-material-control").hidden = kind !== "object" || entry.name === "table";
-    $("placement-hint").textContent = t(kind === "group-move" ? "prop_group_move_hint" : kind === "group-copy" ? "prop_group_place_hint" : kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
+    $("placement-hint").textContent = t(kind === "arrangement-insert" ? "arrangement_place_hint" : kind === "group-move" ? "prop_group_move_hint" : kind === "group-copy" ? "prop_group_place_hint" : kind === "terrain-edit" ? "terrain_edit_hint" : kind === "terrain" ? "terrain_place_hint" : kind === "model" ? "model_place_hint" : kind === "start" ? "robot_start_hint" : kind === "edit" ? "edit_place_hint" : kind === "copy" ? "copy_place_hint" : "place_hint");
     setSize(size);
     showHeading();
     $("object-placement-controls").hidden = kind === "robot" || kind === "model";
     for (const node of document.querySelectorAll(".prop-size-control")) node.hidden = isObjectGroup(item) || kind === "edit" || kind === "copy" || kind === "start" || kind === "terrain" || kind === "terrain-edit";
     $("placement-bar").querySelector(".repeat-placement").hidden = !canRepeat(kind);
-    $("placement-title").textContent = isObjectGroup(item) ? t(kind === "group-move" ? "move_named_prop_group" : "copy_named_prop_group", { count: entry.members.length })
+    $("placement-title").textContent = isObjectGroup(item) ? t(kind === "arrangement-insert" ? "arrangement_place_named" : kind === "group-move" ? "move_named_prop_group" : "copy_named_prop_group", { count: entry.members.length, name: entry.name })
       : t(kind === "terrain-edit" ? "move_named_terrain" : kind === "start" ? "robot_start_named" : kind === "edit" ? "move_named_prop" : kind === "copy" ? "copy_named_prop" : "place_robot", { name: title });
     $("placement-bar").hidden = false;
     $("place-here").disabled = true;
@@ -160,6 +160,7 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
     placingTerrain: () => item?.kind === "terrain" || item?.kind === "terrain-edit",
     duplicate: (entry) => begin(entry, "copy", entry.name),
     duplicateGroup: (entry) => begin(entry, "group-copy", ""),
+    arrangement: (entry) => begin(entry, "arrangement-insert", entry.name),
     objectGroup: (entry, mode) => begin(entry, mode === "move" ? "group-move" : "group-copy", ""),
     session: () => session,
     spacing: () => spacing.value,
@@ -170,7 +171,8 @@ export function initCreation({ start, submit, cancel, change, coordinateChange =
       $("placement-hint").textContent = t(item.kind === "terrain" ? "terrain_next_hint" : "place_next_hint");
     },
     releasePreview() { if (isObjectGroup(item)) item.previewParts = null; },
-    preview: () => isObjectGroup(item) ? (item.previewParts ? { parts: item.previewParts, key: item.token, yaw } : null)
+    preview: () => item?.kind === "arrangement-insert" ? { members: item.members, key: `arrangement:${item.token}`, yaw }
+      : isObjectGroup(item) ? (item.previewParts ? { parts: item.previewParts, key: item.token, yaw } : null)
       : item?.kind === "terrain" || item?.kind === "terrain-edit" ? { boxes: item.boxes, yaw }
       : item && item.kind !== "robot" && item.kind !== "start" && item.kind !== "model" ? { shape: item.shape, size: item.size.map((v) => v * scales[size]), yaw } : null,
     open() { setOpen(true); $("model-list").querySelector("button")?.focus(); },

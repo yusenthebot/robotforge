@@ -312,7 +312,9 @@ class ViewerHub:
             reply.update(ok=True, data=await asyncio.to_thread(admitted))
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             reply.update(ok=False, message=str(exc))
-            if isinstance(code := getattr(exc, "code", None), str) and code.startswith(("layout_", "robot_start_")):
+            if isinstance(code := getattr(exc, "code", None), str) and code.startswith(
+                ("layout_", "robot_start_", "arrangement_")
+            ):
                 reply["code"] = code
         except Exception as exc:  # a bug: log it in full, and still tell the page so it does not wait forever
             log.exception("viewer request %r failed", msg.get("type"))

@@ -1,0 +1,888 @@
+{
+  "schema_version": 1,
+  "acceptance": true,
+  "feature": "Persistent named supported prop arrangements shared across local worlds, owned outlines, guarded insertion and latest group Undo",
+  "baseline_remote_main": "f5e88c81ef0983110950fda3f8466e8f6748dd36",
+  "baseline_fixture_head": "ef2d99dcc9bde8c3afb4fad1ae746c9f3b2ece0b",
+  "source_freeze_sha256": "f9508e825b3e551b67ab6680b068460885e4527280d923b39a042ed6592c3256",
+  "frozen_input_count": 799,
+  "native_source_freeze_sha256": "e77da7bc6db0a0ab5e190de1a288f517d55fcaf4e96b1caa3e9739ed42385eda",
+  "native_to_final_bridge": {
+    "only_changed_file": "tests/test_viewer_placement_browser.py",
+    "product_and_scripts_exact": true,
+    "receipt_sha256": "240e2a3d73d75df690dfdf3d7c6e33fa272971eb796cae3f4b5cd43c82da1131"
+  },
+  "pytest": {
+    "groups": [
+      {
+        "name": "full-default-v1",
+        "passed": 4281,
+        "skipped": 129,
+        "failed": 0,
+        "receipt_sha256": "46aa5bdf6c972adcaf2ad78638fa047ebe140c29e8126c809a6b45d837cbae28"
+      },
+      {
+        "name": "final-arrangements-browser-v1",
+        "passed": 20,
+        "skipped": 0,
+        "failed": 0,
+        "receipt_sha256": "6254f540f3038da739df88e411813219a1d53fbbd71358968c1f840b50a22948"
+      },
+      {
+        "name": "compatibility-browser-v2",
+        "passed": 55,
+        "skipped": 0,
+        "failed": 0,
+        "receipt_sha256": "6f031238f069e8ad1c1a457dca63b1664e7e3d4b19a36f38327f8a0e88a32a21"
+      },
+      {
+        "name": "creation-surface-browser-v1",
+        "passed": 25,
+        "skipped": 0,
+        "failed": 0,
+        "receipt_sha256": "501a760ade0907f7521c19f939eb47916c30ba00ef71a6501e2b04db0f454c6e"
+      },
+      {
+        "name": "final-group-layout-browser-v1",
+        "passed": 30,
+        "skipped": 0,
+        "failed": 0,
+        "receipt_sha256": "9831e478d5509fbf239b91c295afe724450a07caf89c66038b67120aa870c398"
+      },
+      {
+        "name": "surface-gpu-v1",
+        "passed": 4,
+        "skipped": 0,
+        "failed": 0,
+        "receipt_sha256": "bd8812142f4d4b015fa5eeacee2b24f5985f9372569c55a0195a57a437f2f310"
+      }
+    ],
+    "distinct_passed": 4415,
+    "browser_passed": 130,
+    "surface_gl_passed": 4,
+    "provisional_and_interrupted_runs_counted": false
+  },
+  "framework": {
+    "cases": 7,
+    "same_runtime_python": "3.12.16",
+    "compared_report_sha256": "ad8be1b84fcc64ceddd5eefae77e9263f689a402db97994ec9ca4a7d21ee01d3",
+    "historical_comparison_status": "unsupported: Python3.12.13 versus3.12.16; original manifest and failure retained; validator unchanged"
+  },
+  "smoke": "Source and fresh offline locked installation CLI/viewer/MCP pass;60 tools listed, actual model/control/script/PNG calls. Installed native arrangement workflow not separately claimed.",
+  "package": {
+    "source_root": "/Users/yusenthebot/dev/robotforge-arrangements",
+    "wheel": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/wheels-v1/robotforge-0.0.1-py3-none-any.whl",
+    "wheel_bytes": 4170262,
+    "wheel_sha256": "1e8ec89c332b88b235eae6ac6cdb65be4d3b624cb8e28e4ce253dfc4e947f5d9",
+    "package_files": 426,
+    "all_source_wheel_installed_files_equal": true,
+    "installed_imports": {
+      "root": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/wheel-env-v1/lib/python3.12/site-packages/robotforge/__init__.py",
+      "storage": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/wheel-env-v1/lib/python3.12/site-packages/robotforge/design/arrangements.py",
+      "handler": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/wheel-env-v1/lib/python3.12/site-packages/robotforge/viewer/arrangements.py"
+    },
+    "fresh_locked_offline_smoke_passed": true
+  },
+  "package_inventory_sha256": "42cfb914534b2991ad9f6136e8b6ac47454cc4ccb4dcc6c0841fbdb8915b5ac9",
+  "cost": {
+    "accepted_by_fixed_repeat_rule": true,
+    "original_budget_sha256": "fa15d36e69aa2f9edd9b101d61b24a706021caf46a951d0cf9671031afb382a8",
+    "original_budget_unchanged": true,
+    "initial_result": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/candidate-bench-v1/2026-11-01-f5e88c8-dirty-partial.json",
+    "initial_sha256": "5774ccff0ce21a794df6536f475a6dd26a802d270cc169ccc26587645109a0ec",
+    "initial_failed_metric": "viewer.idle_cpu_pct",
+    "initial_idle_cpu_pct": 6.2,
+    "initial_passed_count": 10,
+    "install_checked": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok"
+    },
+    "install": {
+      "wheel_kb": {
+        "value": 4072.5215,
+        "unit": "KB",
+        "better": "lower"
+      },
+      "installed_mb": {
+        "value": 164.0738,
+        "unit": "MB",
+        "better": "lower",
+        "top": [
+          [
+            "mujoco==3.15.0",
+            71.4
+          ],
+          [
+            "numpy==2.5.4",
+            19.6
+          ],
+          [
+            "coacd==1.0.14",
+            14.2
+          ],
+          [
+            "pillow==12.3.0",
+            12.7
+          ],
+          [
+            "cryptography==50.0.2",
+            10.5
+          ],
+          [
+            "robotforge==0.0.1",
+            9.0
+          ],
+          [
+            "pyopengl==3.1.10",
+            7.5
+          ],
+          [
+            "pydantic-core==2.50.1",
+            4.5
+          ]
+        ]
+      },
+      "packages": {
+        "value": 42.0,
+        "unit": "",
+        "better": "lower",
+        "versions": [
+          "absl-py==2.5.1",
+          "annotated-types==0.8.0",
+          "anyio==4.15.1",
+          "attrs==26.1.0",
+          "cffi==2.1.1",
+          "click==8.5.0",
+          "coacd==1.0.14",
+          "cryptography==50.0.2",
+          "etils==1.14.0",
+          "fsspec==2026.9.0",
+          "glfw==2.10.2",
+          "h11==0.16.0",
+          "httpcore2==2.13.1",
+          "httpx2==2.13.1",
+          "idna==3.20",
+          "jsonschema-specifications==2025.9.1",
+          "jsonschema==4.26.0",
+          "mcp-types==2.3.0",
+          "mcp==2.3.0",
+          "mujoco==3.15.0",
+          "numpy==2.5.4",
+          "opentelemetry-api==1.45.1",
+          "pillow==12.3.0",
+          "pycparser==3.11",
+          "pydantic-core==2.50.1",
+          "pydantic==2.14.1",
+          "pyjwt==2.15.1",
+          "pyopengl==3.1.10",
+          "python-multipart==0.0.32",
+          "pyyaml==6.0.3",
+          "referencing==0.37.0",
+          "robotforge==0.0.1",
+          "rpds-py==2026.9.1",
+          "sse-starlette==3.5.0",
+          "starlette==1.8.0",
+          "trimesh==5.1.1",
+          "truststore==0.10.5",
+          "typing-extensions==4.16.0",
+          "typing-inspection==0.4.4",
+          "uvicorn==0.54.0",
+          "websockets==17.2",
+          "zipp==4.1.1"
+        ]
+      },
+      "download_mb": {
+        "value": 52.5149,
+        "unit": "MB",
+        "better": "lower"
+      }
+    },
+    "fixed_repeat_rows": [
+      {
+        "cohort": "baseline",
+        "returncode": 0,
+        "receipt": "viewer-repeat-0-baseline-v1.receipt.json",
+        "loadavg_before": [
+          4.017578125,
+          5.044921875,
+          4.94482421875
+        ],
+        "cores": 18,
+        "epoch": 1793521999.329325,
+        "bench": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/viewer-repeat-0-baseline-v1/2026-11-01-ef2d99d-partial.json",
+        "sha256": "3d6de084136e85f03060d1b240c5e0a1c21a2e516bd75e95690ed617829b2812",
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.5551,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.347
+          },
+          "fps": {
+            "value": 60.1109,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 2.4,
+            "unit": "ms",
+            "better": "lower",
+            "median": 2.400000035762787,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.247,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.7,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4.699999988079071,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 134.0,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 561.6
+          },
+          "idle_cpu_pct": {
+            "value": 6.0,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        },
+        "checked": {
+          "viewer.cold_start_s": "ok",
+          "viewer.fps": "ok",
+          "viewer.frame_ms": "ok",
+          "viewer.assets_fps": "ok",
+          "viewer.assets_frame_ms": "ok",
+          "viewer.server_peak_mb": "ok",
+          "viewer.idle_cpu_pct": "ok"
+        }
+      },
+      {
+        "cohort": "candidate",
+        "returncode": 0,
+        "receipt": "viewer-repeat-1-candidate-v1.receipt.json",
+        "loadavg_before": [
+          4.40771484375,
+          5.06884765625,
+          4.95654296875
+        ],
+        "cores": 18,
+        "epoch": 1793522024.946173,
+        "bench": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/viewer-repeat-1-candidate-v1/2026-11-01-f5e88c8-dirty-partial.json",
+        "sha256": "20ed6352f66229635dbf21ad7a921ca40d1e6d71067004066c9ad0befeeb86e7",
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.5381,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.325
+          },
+          "fps": {
+            "value": 60.0352,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 2.1,
+            "unit": "ms",
+            "better": "lower",
+            "median": 2.100000023841858,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.1289,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.5,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4.5,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 134.0,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 562.8
+          },
+          "idle_cpu_pct": {
+            "value": 5.8,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        },
+        "checked": {
+          "viewer.cold_start_s": "ok",
+          "viewer.fps": "ok",
+          "viewer.frame_ms": "ok",
+          "viewer.assets_fps": "ok",
+          "viewer.assets_frame_ms": "ok",
+          "viewer.server_peak_mb": "ok",
+          "viewer.idle_cpu_pct": "ok"
+        }
+      },
+      {
+        "cohort": "candidate",
+        "returncode": 0,
+        "receipt": "viewer-repeat-2-candidate-v1.receipt.json",
+        "loadavg_before": [
+          4.49560546875,
+          5.0439453125,
+          4.95068359375
+        ],
+        "cores": 18,
+        "epoch": 1793522050.487882,
+        "bench": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/viewer-repeat-2-candidate-v1/2026-11-01-f5e88c8-dirty-partial.json",
+        "sha256": "26f44bf701265f057811a806378a3f971e27bf1c8a8625c11fa308fe5f3eee1f",
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.5609,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.342
+          },
+          "fps": {
+            "value": 60.3273,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 2.4,
+            "unit": "ms",
+            "better": "lower",
+            "median": 2.400000035762787,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.1389,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.7,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4.699999988079071,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 133.8,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 558.8
+          },
+          "idle_cpu_pct": {
+            "value": 5.8,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        },
+        "checked": {
+          "viewer.cold_start_s": "ok",
+          "viewer.fps": "ok",
+          "viewer.frame_ms": "ok",
+          "viewer.assets_fps": "ok",
+          "viewer.assets_frame_ms": "ok",
+          "viewer.server_peak_mb": "ok",
+          "viewer.idle_cpu_pct": "ok"
+        }
+      },
+      {
+        "cohort": "baseline",
+        "returncode": 0,
+        "receipt": "viewer-repeat-3-baseline-v1.receipt.json",
+        "loadavg_before": [
+          4.4833984375,
+          5.00537109375,
+          4.93896484375
+        ],
+        "cores": 18,
+        "epoch": 1793522075.87501,
+        "bench": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/viewer-repeat-3-baseline-v1/2026-11-01-ef2d99d-partial.json",
+        "sha256": "1532c014e3b62b5b83e8e9bb44e4601b659642d8fe68b111886855a285657192",
+        "viewer": {
+          "cold_start_s": {
+            "value": 0.5252,
+            "unit": "s",
+            "better": "lower",
+            "served_s": 0.322
+          },
+          "fps": {
+            "value": 60.1089,
+            "unit": "fps",
+            "better": "higher",
+            "world": "warehouse + go2",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "frame_ms": {
+            "value": 2.8,
+            "unit": "ms",
+            "better": "lower",
+            "median": 2.800000011920929,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 151,
+            "triangles": 483270
+          },
+          "assets_fps": {
+            "value": 60.1109,
+            "unit": "fps",
+            "better": "higher",
+            "world": "centaur, arm, humanoid, dog, rover",
+            "size": [
+              1280,
+              800,
+              2
+            ]
+          },
+          "assets_frame_ms": {
+            "value": 4.8,
+            "unit": "ms",
+            "better": "lower",
+            "median": 4.799999952316284,
+            "drawing_buffer": [
+              2560,
+              1600
+            ],
+            "calls": 358,
+            "triangles": 126622
+          },
+          "server_peak_mb": {
+            "value": 133.8,
+            "unit": "MB",
+            "better": "lower",
+            "noise": [
+              0.05,
+              5.0
+            ],
+            "warehouse": 559.6
+          },
+          "idle_cpu_pct": {
+            "value": 6.0,
+            "unit": "%",
+            "better": "lower",
+            "seconds": 5.0
+          }
+        },
+        "checked": {
+          "viewer.cold_start_s": "ok",
+          "viewer.fps": "ok",
+          "viewer.frame_ms": "ok",
+          "viewer.assets_fps": "ok",
+          "viewer.assets_frame_ms": "ok",
+          "viewer.server_peak_mb": "ok",
+          "viewer.idle_cpu_pct": "ok"
+        }
+      }
+    ],
+    "rule": "Both fixed candidate repeats must independently pass all7 unchanged viewer limits, not best-of or a median. Initial failed candidate and all baseline results retained.",
+    "wheel_bytes": 4170262,
+    "wheel_increase_bytes": 14586,
+    "wheel_headroom_bytes": 24042,
+    "scope": "4 installation checks reused for identical package plus both fixed candidate repeats independently passing all7 original viewer checks. Initial full partial bench remains an overrun; no universal speed, all benchmark-section or causal CPU-noise claim."
+  },
+  "paired_controls_sha256": "19f62a4dd065e4baa567eeb41e9c0a75bfab6ce2e5297c6d6b293a9c25660b08",
+  "paired_controls": {
+    "passed": true,
+    "pair_count": 10,
+    "pairs": [
+      {
+        "kind": "malo",
+        "pair": "original",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-baseline-malo-v2/manifest.json",
+        "left_stage": "initial",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-malo-v1/manifest.json",
+        "right_stage": "initial",
+        "rgba_sha256": "d1b2c49802bfb3f3815bc64f0e6ce9626d718721c6f4ddbc184991f89c9d9064",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 481,
+        "model_arrays_raw_differences": [],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "malo",
+        "pair": "manual-baseline-candidate",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-baseline-malo-v3/manifest.json",
+        "left_stage": "manual-final",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-candidate-malo-v3/manifest.json",
+        "right_stage": "manual-final",
+        "rgba_sha256": "f7ed9d09032fe5fc6cca05cc4ea33003ee7dc98d8368cd5cb429cec5a28df344",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 479,
+        "model_arrays_raw_differences": [
+          "_sizes",
+          "mesh_pathadr"
+        ],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "malo",
+        "pair": "manual-fresh-reopen-closed-panel",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-candidate-malo-v3/manifest.json",
+        "left_stage": "manual-final",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-reopen-malo-v1/manifest.json",
+        "right_stage": "initial",
+        "rgba_sha256": "f7ed9d09032fe5fc6cca05cc4ea33003ee7dc98d8368cd5cb429cec5a28df344",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 479,
+        "model_arrays_raw_differences": [
+          "_sizes",
+          "mesh_pathadr"
+        ],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "malo",
+        "pair": "undo-keeps-first",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-malo-v1/manifest.json",
+        "left_stage": "insert-1",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-malo-v1/manifest.json",
+        "right_stage": "undo-2",
+        "rgba_sha256": "5c3c923279c22d114612dc89931ab3153b2655ad03866aec9140d2b5e2606b97",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 481,
+        "model_arrays_raw_differences": [],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "malo",
+        "pair": "final-reload-fresh-reopen-library-panel",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-malo-v1/manifest.json",
+        "left_stage": "final-reload",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-reopen-malo-v1/manifest.json",
+        "right_stage": "fresh-reopen-library",
+        "rgba_sha256": "c893514227e2ebeead046ac5c5736ec070db683f7e12778e295b2668454d7d4f",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 479,
+        "model_arrays_raw_differences": [
+          "_sizes",
+          "mesh_pathadr"
+        ],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "go2",
+        "pair": "original",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-baseline-go2-v2/manifest.json",
+        "left_stage": "initial",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-go2-v4/manifest.json",
+        "right_stage": "initial",
+        "rgba_sha256": "0d75945f038431d6ca3ddd0eca1b5f858f1162ac23c9203e85ec868c49dc40b3",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 481,
+        "model_arrays_raw_differences": [],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "go2",
+        "pair": "manual-baseline-candidate",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-baseline-go2-v3/manifest.json",
+        "left_stage": "manual-final",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-candidate-go2-v3/manifest.json",
+        "right_stage": "manual-final",
+        "rgba_sha256": "0dca5364356d4c6ff242a36be6afda25895a6d412da00fc7366e63668e7e29e8",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 481,
+        "model_arrays_raw_differences": [],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "go2",
+        "pair": "manual-fresh-reopen-closed-panel",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-candidate-go2-v3/manifest.json",
+        "left_stage": "manual-final",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-reopen-go2-v1/manifest.json",
+        "right_stage": "initial",
+        "rgba_sha256": "0dca5364356d4c6ff242a36be6afda25895a6d412da00fc7366e63668e7e29e8",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 477,
+        "model_arrays_raw_differences": [
+          "body_pos",
+          "key_qpos",
+          "qpos0",
+          "qpos_spring"
+        ],
+        "state_hash_exact": {
+          "qpos": false,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 5.551115123125783e-17,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "go2",
+        "pair": "undo-keeps-first",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-go2-v4/manifest.json",
+        "left_stage": "insert-1",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-go2-v4/manifest.json",
+        "right_stage": "undo-2",
+        "rgba_sha256": "5d7967ecc29ca42fc0b128f4dd6689260e0bb7d678014d704b95484f8f31f3c5",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 481,
+        "model_arrays_raw_differences": [],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      },
+      {
+        "kind": "go2",
+        "pair": "final-reload-fresh-reopen-library-panel",
+        "left": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-go2-v4/manifest.json",
+        "left_stage": "final-reload",
+        "right": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-reopen-go2-v1/manifest.json",
+        "right_stage": "fresh-reopen-library",
+        "rgba_sha256": "8efab2022fba368b82297f330f364708ce42e8e77f83fab0291e07e408a855d6",
+        "full_native_rgba_exact": true,
+        "camera_exact": true,
+        "model_arrays_total": 481,
+        "model_arrays_raw_exact": 481,
+        "model_arrays_raw_differences": [],
+        "state_hash_exact": {
+          "qpos": true,
+          "qvel": true,
+          "ctrl": true,
+          "time": true,
+          "paused": true
+        },
+        "world_max_position_delta_m": 0.0,
+        "world_other_fields_exact": true
+      }
+    ],
+    "manifest_inputs": {
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-baseline-malo-v2/manifest.json": "f5bb355362abffb6fe31a742371ecbeebdb56c67a703c6a530ae034b2596ff7d",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-malo-v1/manifest.json": "b345f71fc9d8baa701c073b5bdac91ed044b6bdae2af87fb7df68a974713e94a",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-reopen-malo-v1/manifest.json": "02f1d090b404eb3208432cf1804dfde016c26f6964c268d48a023751e0f93b00",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-baseline-malo-v3/manifest.json": "e29fe169ce0e0f9e345e1139c5393d2dc74fe2450bdf0a161924b8fc76cdd546",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-candidate-malo-v3/manifest.json": "3caed7ad4992da5771401113e92161946fbe9e47e0e8a4cc1be417f237b68834",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-baseline-go2-v2/manifest.json": "c755b343d1d123d88c2a074ca1ebd35adfe4326768a8f60fddc8af354fc8d534",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-workflow-go2-v4/manifest.json": "819758de73170bffb15687efbf33446dc3bd916c5b4acf3c11f655e444038669",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/arrangement-reopen-go2-v1/manifest.json": "23e93c46f3e9229f210bb1b48bbf5fc736f0d41be61d4ba23ba69f117a35f117",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-baseline-go2-v3/manifest.json": "e5d6874a087dbdb73abb5121901b89f358de8d2cae1903c609f572f7a1c3c72a",
+      "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/manual-final-candidate-go2-v3/manifest.json": "bf28ae8cb094e906196eba65f92af4e8c48589c46915942306b6fe21180f74a3"
+    },
+    "helper_sha256": "85033e16ad52d9d89003686aa43fad5bf97309759378b9fb0cba8f360e86b61e",
+    "limits": "Full RGBA/camera pairs use matching panel phases. Original scenes require full481-array/state equality. Malo cross-directory raw differences are limited to _sizes/mesh_pathadr; their cause is not independently established. Only Go2 manual versus saved-record fresh reopen permits <=1e-12m object-position roundoff and retains raw differences in body_pos/key_qpos/qpos0/qpos_spring/qpos; no all-array bitwise or independent dynamic equivalence claim. No new material-quality claim."
+  },
+  "media": [
+    {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/media-malo-v1/workflow.mp4",
+      "video_sha256": "c8e15c49aee26e8e6ec6879e6467cee7b0121c3807a09c1b3309e7fc9005faad",
+      "video_bytes": 2228634,
+      "raw_frame_count": 440,
+      "duration_seconds": 17.966667,
+      "decoded_frame_count": 539,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/media-malo-v1/decoded-contact.jpg"
+    },
+    {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/media-go2-v4/workflow.mp4",
+      "video_sha256": "ebfd8eb8b5458c3d7a9f3de995cdb443b683ceffb3d4f744f9cc2cc1ef72add3",
+      "video_bytes": 2214003,
+      "raw_frame_count": 374,
+      "duration_seconds": 15.333333,
+      "decoded_frame_count": 460,
+      "decode_exit_code": 0,
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/media-go2-v4/decoded-contact.jpg"
+    }
+  ],
+  "media_root_review": "12 decoded sample frames plus2 independent final native images, not full dynamic visual certification",
+  "protected_inputs": {
+    "original_wip_files": 13,
+    "retained_cmf_inputs": 791,
+    "unpromoted_mesh_inputs": 796,
+    "native_asset_and_world_files": 78,
+    "exact_at_stage_guards": true
+  },
+  "limits": [
+    "Local macOS Chrome156 only;320px touch is browser emulation, not native phone certification.",
+    "Historical framework baseline is unsupported across Python versions; seven-case comparison uses a fresh unchanged-main same-runtime baseline.",
+    "Initial idleCPU6.2% exceeds6.0%; both fixed candidate repeats pass5.8%; no causal explanation or budget change.",
+    "Raw cross-directory Malo _sizes/mesh_pathadr differences have no independently confirmed cause. Go2 manual-versus-reopen object position difference<=5.551115123125783e-17m retains4model-array/qpos hash differences, no all-array bitwise or independent dynamic equivalence claim.",
+    "Closed/open panel phases are not pixel-compared.",
+    "No new material-quality or single-action success-rate claim.",
+    "No Windows, paid Actions, mypy, pyright, bandit or pip-audit run."
+  ],
+  "evidence_root": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements",
+  "broad_goal": "active; compact material encoding and ordinary-view shared-quality evaluation next; single-action tuning deferred"
+}
