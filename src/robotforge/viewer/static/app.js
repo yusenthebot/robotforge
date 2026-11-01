@@ -2444,7 +2444,7 @@ let placementVersion = 0, placementGeneration = null, placementWorldSha = null, 
 let lastAddition = null, creationSurface = null, creationAnchor = null;
 const supportRay = new THREE.Raycaster();
 let objectSelection = null, selectingObjects = false, objectHighlight = null, lastObjectEdit = null, lastRobotEdit = null, lastTerrainEdit = null;
-let selectingObjectGroup = false, objectGroupEpoch = 0;
+let selectingObjectGroup = false, objectGroupEpoch = 0, objectRowEpoch = 0;
 const objectGroupSelection = new Map(), objectGroupHighlights = new Map();
 let surfaceReselect = null;
 let terrainHighlight = null, terrainListKey = null;
@@ -2776,10 +2776,13 @@ function renderObjectSelectionControls() {
   $("object-surface-apply").disabled = busy || !surfaceReady || !["", "plastic", "wood", "steel"].includes($("object-surface-material").value);
   if (!eligible) showObjectSurface(false);
   $("object-edit-done").disabled = busy;
-  for (const id of ["object-group-copy", "object-group-move"]) {
+  for (const id of ["object-group-copy", "object-group-move", "object-group-row"]) {
     $(id).hidden = !group;
     $(id).disabled = busy || !paused || objectGroupSelection.size < 2 || !objectSelectionCurrent();
   }
+  $("object-row-gap-control").hidden = !group;
+  $("object-row-gap").disabled = !paused;
+  $("object-group-row").disabled ||= objectRowGap() === null;
   if (group) {
     $("object-edit-title").textContent = t("prop_group_count", { count: objectGroupSelection.size });
     $("object-edit-hint").textContent = t(surfaceMembers.length && !eligible ? "surface_group_unsupported"
@@ -2891,16 +2894,31 @@ function pickObjectForEdit(point) {
 
 $("edit-objects").addEventListener("click", () => beginObjectSelection());
 $("select-object-group").addEventListener("click", beginObjectGroupSelection);
-async function beginObjectGroup(mode) {
+function objectRowGap() {
+  const input = $("object-row-gap"), gap = input.valueAsNumber;
+  return input.value.trim() && Number.isFinite(gap) && gap >= 0.05 && gap <= 2 ? gap : null;
+}
+$("object-row-gap").addEventListener("input", () => {
+  objectRowEpoch++;
+  // A parameter change revokes a prepared row as well as an in-flight request.
+  if (creator.editing()?.layout === "row") cancelCreation(true);
+  $("object-row-gap").setAttribute("aria-invalid", String(objectRowGap() === null));
+  renderObjectSelectionControls();
+});
+async function beginObjectGroup(mode, layout = null) {
   if (busy || !selectingObjectGroup || !paused || creationGesture.active()
       || objectGroupSelection.size < 2 || !objectSelectionCurrent()) return;
+  const gap = layout === "row" ? objectRowGap() : null;
+  if (layout === "row" && gap === null) { toast(t("prop_row_gap_invalid")); return; }
   const names = [...objectGroupSelection.keys()];
+  const selected = [...objectGroupSelection.values()];
+  const rowEpoch = objectRowEpoch;
   const guard = { version: placementVersion, generation: placementGeneration, world_sha256: sceneDesc.object_edit.world_sha256 };
   creationGesture.invalidate();
   const epoch = objectGroupEpoch, pointerEpoch = creationGesture.epoch();
   stopDriving(); endDrag();
-  await runChoice($(`object-group-${mode}`), { type: "world", action: "prepare_object_group", names, ...guard,
-    ...(mode === "move" ? { mode } : {}) }, {
+  await runChoice($(`object-group-${layout === "row" ? "row" : mode}`), { type: "world", action: "prepare_object_group", names, ...guard,
+    ...(mode === "move" ? { mode } : {}), ...(layout === "row" ? { layout, gap } : {}) }, {
     done: (data) => {
       if (!selectingObjectGroup || objectGroupEpoch !== epoch || creationGesture.epoch() !== pointerEpoch
           || creationGesture.active() || !paused || !objectSelectionCurrent()
@@ -2913,6 +2931,23 @@ async function beginObjectGroup(mode) {
           || new Set(data.members.map((member) => member.name)).size !== names.length
           || data.members.some((member) => !names.includes(member.name) || !Array.isArray(member.geoms)
             || !member.geoms.length || !member.geoms.every(Number.isInteger))) throw new Error(t("create_scene_changed"));
+      if (layout === "row") {
+        const vector = (value) => Array.isArray(value) && value.length === 3 && value.every(Number.isFinite);
+        const owned = new Set();
+        if (data.layout !== "row" || data.gap !== gap || objectRowGap() !== gap || objectRowEpoch !== rowEpoch
+            || data.members.some((member, index) => {
+              const expected = selected[index];
+              if (member.name !== names[index] || !vector(member.pos) || !vector(member.offset)
+                  || !vector(member.target_offset) || !Number.isFinite(member.yaw)
+                  || member.geoms.length !== expected.geoms.length
+                  || member.geoms.some((geom) => !expected.geoms.includes(geom) || owned.has(geom))) return true;
+              for (const geom of member.geoms) {
+                if (owned.has(geom)) return true;
+                owned.add(geom);
+              }
+              return false;
+            })) throw new Error(t("create_scene_changed"));
+      }
       // Freeze the rendered parts in anchor coordinates, including every table leg and bin wall.
       // Their buffers are borrowed read-only and must never be disposed by the ghost.
       worldRoot.updateMatrixWorld(true);
@@ -2928,9 +2963,14 @@ async function beginObjectGroup(mode) {
       if (visibleMembers.some((geoms) => !geoms.length)) throw new Error(t("create_scene_changed"));
       const geoms = new Set(visibleMembers.flat());
       const origin = new THREE.Matrix4().makeTranslation(...data.anchor.map((v) => -v));
+      const rowOrigins = new Map();
+      if (layout === "row") for (const member of data.members) {
+        const transform = new THREE.Matrix4().makeTranslation(...member.target_offset.map((value, axis) => value - member.pos[axis]));
+        for (const geom of member.geoms) rowOrigins.set(geom, transform);
+      }
       worldRoot.traverse((node) => {
         if (!node.isMesh || !node.visible || !geoms.has(node.userData.geom)) return;
-        previewParts.push({ geometry: node.geometry, matrix: origin.clone().multiply(node.matrixWorld).toArray() });
+        previewParts.push({ geometry: node.geometry, matrix: (layout === "row" ? rowOrigins.get(node.userData.geom) : origin).clone().multiply(node.matrixWorld).toArray() });
         found.add(node.userData.geom);
       });
       if (!previewParts.length || [...geoms].some((geom) => !found.has(geom))) throw new Error(t("create_scene_changed"));
@@ -2940,6 +2980,7 @@ async function beginObjectGroup(mode) {
 }
 $("object-group-copy").addEventListener("click", () => beginObjectGroup("copy"));
 $("object-group-move").addEventListener("click", () => beginObjectGroup("move"));
+$("object-group-row").addEventListener("click", () => beginObjectGroup("move", "row"));
 function finishObjectSelection() {
   if (busy) return;
   clearObjectSelection(); updateUndo(); updateEmpty(); renderDrive(); canvas.focus();
