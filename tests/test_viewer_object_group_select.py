@@ -107,8 +107,17 @@ def immutable_query(pg, monkeypatch, *, error=None, error_type=PlaygroundError, 
     return result
 
 
-def test_recursive_table_box_fixed_bin_and_top_keep_every_state_and_receipt(pg, monkeypatch):  # noqa: F811
+@pytest.mark.parametrize("finished", [False, True])
+def test_recursive_table_box_fixed_bin_and_top_keep_every_state_and_receipt(pg, monkeypatch, finished):  # noqa: F811
     four(pg)
+    if finished:
+
+        def finishes(world):
+            for entry, finish in zip(world.objects, ("wood", "steel", "plastic", "wood"), strict=True):
+                entry.surface_material = finish
+
+        pg._edit(finishes)
+        pg.session.paused = True
     prepare(pg, ["base", "box", "bin", "top"])
     pg._play_edit = object()
     pg.session.data.qvel[:] = 0.4

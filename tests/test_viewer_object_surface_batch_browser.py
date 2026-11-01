@@ -140,14 +140,13 @@ def test_native_mixed_apply_noop_original_done_undo_reload_and_bounded_highlight
     viewer(size, lang, journey, world=world)
 
 
-def test_unsupported_member_and_selection_change_never_submit_partial_surface_set(viewer):  # noqa: F811
+def test_furniture_and_selection_change_never_submit_partial_surface_set(viewer):  # noqa: F811
     async def journey(tab, server):
         await tab.page.call("Page.addScriptToEvaluateOnNewDocument", source=WIRE)
         await tab.navigate()
         await pause(tab, server)
         await select_group(tab, ("box", "desk"))
-        assert await tab.eval("document.getElementById('object-surface').hidden")
-        assert "boxes" in await tab.eval("document.getElementById('object-edit-hint').textContent")
+        assert not await tab.eval("document.getElementById('object-surface').hidden")
         assert await tab.eval("window.__batchWire.sent.length") == 0
         await click(tab, "#world-toggle")
         await click(tab, '[data-edit-object="desk"]')

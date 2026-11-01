@@ -94,14 +94,24 @@ def test_supported_layout_has_one_compile_version_history_and_undo(pg, monkeypat
 @pytest.mark.parametrize("shape,size", [("sphere", [0.2]), ("cylinder", [0.2, 0.3]), ("bin", [0.3, 0.3, 0.2])])
 @pytest.mark.parametrize("fixed", [False, True])
 def test_all_rigid_shapes_on_a_selected_table(pg, shape, size, fixed):  # noqa: F811
-    pg.add_object("base", shape="table", size=[1.0, 0.8, 0.5], pos=[-2, 0])
+    pg.add_object("base", shape="table", size=[1.0, 0.8, 0.5], pos=[-2, 0], surface_material="wood")
     z = 0.5 + (0 if shape == "bin" else size[-1] / 2)
-    pg.add_object("top", shape=shape, size=size, fixed=fixed, pos=[-2, 0, z], color=[0.1, 0.2, 0.3, 0.7], mass=1.3)
+    pg.add_object(
+        "top",
+        shape=shape,
+        size=size,
+        fixed=fixed,
+        pos=[-2, 0, z],
+        color=[0.1, 0.2, 0.3, 0.7],
+        mass=1.3,
+        surface_material="steel",
+    )
     pg.session.paused = True
     result = duplicate(pg, prepare(pg), yaw=-73.0)
     clone = pg.store.load().objects[-1]
     assert clone.name == result["objects"][-1] and clone.pos[2] == pytest.approx(z)
     assert clone.fixed is fixed and clone.mass == 1.3 and clone.color == [0.1, 0.2, 0.3, 0.7]
+    assert clone.surface_material == "steel" and pg.store.load().objects[-2].surface_material == "wood"
 
 
 def test_current_upright_pose_common_transform_and_height_shift(pg):  # noqa: F811

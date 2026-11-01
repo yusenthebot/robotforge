@@ -110,7 +110,9 @@ def test_insert_one_compile_version_history_unique_names_and_normal_undo(pg, mon
 )
 @pytest.mark.parametrize("fixed", [True, False])
 def test_every_supported_shape_preserves_full_fields_and_unwrapped_live_yaw(pg, shape, size, fixed):  # noqa: F811
-    fields = {"material": "wood", "surface_material": "steel"} if shape in {"box", "sphere", "cylinder"} else {}
+    fields = {"surface_material": "steel"}
+    if shape in {"box", "sphere", "cylinder"}:
+        fields["material"] = "wood"
     for index in range(2):
         pg.add_object(
             f"prop{index}",
@@ -159,6 +161,28 @@ def test_global_cross_world_record_needs_no_live_sources(pg, monkeypatch):  # no
     monkeypatch.setattr(object_group, "_pose_digest", forbidden)
     prepared = prepare(pg, saved)
     assert insert(pg, prepared)["objects"] == ["base_2", "top_2"]
+
+
+def test_furniture_finishes_survive_saved_library_and_cross_world_insert_inverse(pg):  # noqa: F811
+    table(pg)
+
+    def finishes(world):
+        world.objects[0].surface_material = "wood"
+        world.objects[2].surface_material = "steel"
+
+    pg._edit(finishes)
+    pg.session.paused = True
+    originals = pg.store.load().objects
+    saved = save(pg, [entry.name for entry in originals], label="Furniture")
+    pg.new_world("furniture_destination")
+    pg.session.paused = True
+    assert action(pg, "list")["entries"] == [saved]
+    result = insert(pg, prepare(pg, saved), yaw=37.0)
+    for original, cloned in zip(originals, pg.store.load().objects, strict=True):
+        assert cloned.model_dump(exclude={"name", "pos", "yaw"}) == original.model_dump(exclude={"name", "pos", "yaw"})
+    assert [entry.surface_material for entry in pg.store.load().objects] == ["wood", None, "steel"]
+    undo(pg, result)
+    assert pg.store.load().objects == [] and action(pg, "list")["entries"] == [saved]
 
 
 def test_occupied_target_preserves_prepared_for_retry(pg):  # noqa: F811

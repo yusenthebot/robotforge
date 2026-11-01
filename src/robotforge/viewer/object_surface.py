@@ -10,6 +10,7 @@ import mujoco
 from pydantic import Field, field_validator
 
 from robotforge.design import layouts, menagerie
+from robotforge.design.object_surfaces import SURFACE_SHAPES as SHAPES
 from robotforge.design.world import ObjectEntry, World, compile_world
 from robotforge.playground import PlaygroundError
 from robotforge.sim import carry
@@ -22,8 +23,6 @@ from robotforge.viewer.object_group import Guard
 if TYPE_CHECKING:
     from robotforge.design.store import WorldStore
     from robotforge.playground import Playground
-
-SHAPES = {"box", "sphere", "cylinder"}
 
 
 class SetSurface(Selection):
@@ -117,7 +116,7 @@ def handle(pg: Playground, message: dict) -> dict:
                 names = request.names if batch else [request.name]
                 by_name = {obj.name: (i, obj) for i, obj in enumerate(world.objects)}
                 if any(name not in by_name or by_name[name][1].shape not in SHAPES for name in names):
-                    raise PlaygroundError("select an existing box, ball or cylinder surface")
+                    raise PlaygroundError("select an existing box, ball, cylinder, table or bin surface")
                 members = tuple(
                     SurfaceMember(
                         index,

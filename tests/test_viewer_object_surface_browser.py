@@ -139,7 +139,12 @@ def test_native_three_finishes_noop_undo_and_reopen(viewer, size, lang, width): 
             assert await tab.run("""const p=document.getElementById('world-panel').getBoundingClientRect(),
               h=document.querySelector('.drive-hud').getBoundingClientRect();
               return h.left>=p.right && h.right<=innerWidth;""")
-        assert await tab.eval("document.getElementById('object-surface').hidden")
+        assert not await tab.eval("document.getElementById('object-surface').hidden")
+        await click(tab, "#object-surface")
+        await apply_surface(tab, "steel")
+        assert server.pg.store.load().objects[1].surface_material == "steel"
+        await apply_surface(tab, "")
+        assert server.pg.store.load().objects[1].surface_material is None
         assert not tab.errors and await tab.eval("window.__qaErrors") == []
 
     viewer(size, lang, journey, world=world)

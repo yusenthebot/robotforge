@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from test_prop_materials import materials
+from test_visuals import assert_same_physics
 
 from robotforge.design.world import ObjectEntry, World, compile_world
 
@@ -77,6 +78,73 @@ def test_unknown_finish_is_not_coerced(value):
         ObjectEntry(name="sample", surface_material=value)
 
 
-def test_surface_override_is_limited_to_supported_primitives():
+@pytest.mark.parametrize("shape", ["wall", "drawer", "shelf"])
+def test_surface_override_is_limited_to_supported_rigid_props(shape):
     with pytest.raises(ValueError, match="surface_material"):
-        ObjectEntry(name="desk", shape="table", size=[1, 0.6, 0.7], surface_material="wood")
+        ObjectEntry(name="unsupported", shape=shape, surface_material="wood")
+
+
+@pytest.mark.parametrize("shape", ["table", "bin"])
+def test_furniture_finish_does_not_expand_physical_material_eligibility(shape):
+    with pytest.raises(ValueError, match="material is for loose"):
+        ObjectEntry(name="sample", shape=shape, material="steel", surface_material="wood")
+
+
+@pytest.mark.parametrize("shape,size", [("table", [1, 0.6, 0.7]), ("bin", [0.4, 0.3, 0.2])])
+@pytest.mark.parametrize("fixed,yaw", [(False, 0), (False, 37), (True, 0), (True, 37)])
+def test_furniture_finish_keeps_all_geometry_colors_physics_and_transforms(shape, size, fixed, yaw):
+    entry = ObjectEntry(
+        name="sample", shape=shape, size=size, fixed=fixed, yaw=yaw, pos=[1, -2, 0.4], color="#5689ab", mass=0.731
+    )
+    original = compile_world(World(objects=[entry])).model
+    for finish, preset in [("plastic", "shell"), ("wood", "wood"), ("steel", "metal")]:
+        changed = ObjectEntry.model_validate({**entry.model_dump(), "surface_material": finish})
+        actual = compile_world(World(objects=[changed])).model
+        expected = [f"rf_{preset}"] * (2 if shape == "table" else 1)
+        if shape == "table":
+            expected.append("rf_rubber")
+        assert materials(actual) == expected
+        assert changed.material is None
+        assert_same_physics(original, actual, steps=12)
+        for field in (
+            "geom_size",
+            "geom_pos",
+            "geom_quat",
+            "geom_bodyid",
+            "geom_rgba",
+            "mesh_vert",
+            "mesh_face",
+            "mesh_normal",
+        ):
+            np.testing.assert_array_equal(getattr(actual, field), getattr(original, field), err_msg=field)
+    assert materials(compile_world(World(objects=[entry])).model) == materials(original)
+
+
+@pytest.mark.parametrize(
+    "name,shape,color,expected",
+    [
+        ("desk", "table", "#9c6b3f", ["rf_wood", "rf_wood", "rf_rubber"]),
+        ("desk", "table", "#5689ab", ["rf_paint", "rf_paint", "rf_rubber"]),
+        ("tray", "bin", "#5689ab", ["rf_shell"]),
+        ("kitchen_sink", "bin", "#5689ab", ["rf_metal"]),
+        ("fruit_bowl", "bin", "#5689ab", ["rf_ceramic"]),
+        ("serving_dish", "bin", "#5689ab", ["rf_ceramic"]),
+    ],
+)
+def test_original_furniture_serialization_named_inference_and_cached_defaults(name, shape, color, expected):
+    original = World(objects=[ObjectEntry(name=name, shape=shape, color=color)])
+    raw = original.to_yaml()
+    baseline = compile_world(original).model
+    assert materials(baseline) == expected and "surface_material" not in raw
+    for finish in ("steel", "wood", "plastic"):
+        changed = World.model_validate(original.model_dump())
+        changed.objects[0].surface_material = finish
+        assert World.from_yaml(changed.to_yaml()) == changed
+        compile_world(changed)
+    cleared = World.from_yaml(changed.to_yaml())
+    cleared.objects[0].surface_material = None
+    assert cleared.to_yaml() == raw
+    restored = compile_world(cleared).model
+    assert materials(restored) == expected
+    for field in ("geom_rgba", "mesh_vert", "mesh_face", "mesh_normal"):
+        np.testing.assert_array_equal(getattr(restored, field), getattr(baseline, field))

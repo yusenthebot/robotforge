@@ -12,6 +12,7 @@ import mujoco
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
+from robotforge.design.object_surfaces import SURFACE_SHAPES
 from robotforge.sim import carry, placement
 from robotforge.sim.session import fresh_data
 from robotforge.viewer.creation import Coordinate, Heading, _object_obstacles, _parse
@@ -89,11 +90,7 @@ def metadata(pg: Playground) -> dict:
                     "size": entry.size,
                     "yaw": entry.yaw,
                     "geoms": geoms,
-                    **(
-                        {"surface_material": entry.surface_material}
-                        if entry.shape in {"box", "sphere", "cylinder"}
-                        else {}
-                    ),
+                    **({"surface_material": entry.surface_material} if entry.shape in SURFACE_SHAPES else {}),
                 }
             )
         return {

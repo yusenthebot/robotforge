@@ -17,6 +17,7 @@ from collections.abc import Callable, Sequence
 import mujoco
 import numpy as np
 
+from robotforge.design.object_surfaces import SURFACE_SHAPES
 from robotforge.design.visuals import Visuals, material_name, mix, shade
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
@@ -68,7 +69,7 @@ def dress(
         return
     for geom in covered:
         vis.hide(geom)
-    authored = OBJECT_MATERIALS[material] if material is not None and shape in _PLAIN else None
+    authored = OBJECT_MATERIALS[material] if material is not None and shape in SURFACE_SHAPES else None
     for preset, color, mesh, surface in _drawn(shape, M._key(size), M._key(rgba), name, M._key(pos), M._key(quat)):
         vis.add(body, authored if authored is not None and surface else preset, color, mesh)
     vis.finish()
@@ -102,7 +103,7 @@ class Placed:
         if self.rot is not None or self.pos.any():
             mesh = mesh.moved(self.pos, self.rot)
         color = tuple(round(float(c), 4) for c in rgba)
-        # Basic objects distinguish their authored surface from attached decorative parts.
+        # Editable props distinguish their authored surface from attached decorative parts.
         # Keep that role in the cache; material selection never mutates cached meshes or colors.
         self.parts.setdefault((preset, color, surface), []).append(mesh)
 
@@ -333,7 +334,7 @@ def _table(vis: Placed, size, rgba, name) -> None:
     leg = min(0.025, length / 10, width / 10)
     wood = "wood" if woody(rgba) else "paint"
     slab = M.rounded_box(length / 2, width / 2, top / 2, min(0.008, top * 0.4), segments=3, corner=min(0.03, width / 8))
-    vis.add(wood, rgba, slab, (0, 0, height - top / 2))
+    vis.add(wood, rgba, slab, (0, 0, height - top / 2), surface=True)
     legs, apron = [], []
     leg_h = height - top
     lx, ly = length / 2 - 2 * leg, width / 2 - 2 * leg
@@ -347,7 +348,7 @@ def _table(vis: Placed, size, rgba, name) -> None:
         apron.append(M.rounded_box(lx, t, skirt / 2, t * 0.4, segments=2).moved((0, sy * ly, leg_h - skirt / 2)))
     for sx in (1, -1):
         apron.append(M.rounded_box(t, ly, skirt / 2, t * 0.4, segments=2).moved((sx * lx, 0, leg_h - skirt / 2)))
-    vis.add(wood, shade(rgba, 0.82), M.merge(legs + apron))
+    vis.add(wood, shade(rgba, 0.82), M.merge(legs + apron), surface=True)
     feet = [
         M.cylinder(leg * 0.7, 0.006, segments=12, z0=0.0).moved((sx * lx, sy * ly, 0))
         for sx in (1, -1)
@@ -375,7 +376,7 @@ def _bin(vis: Placed, size, rgba, name) -> None:
     loft = M.loft([M.at_z(M.rounded_rect(a, b, c, 5), z) for z, a, b, c in rings], sharp=(1, 2, 4, 5))
     lowered = name.lower()
     preset = "metal" if "sink" in lowered else "ceramic" if any(w in lowered for w in ("bowl", "dish")) else "shell"
-    vis.add(preset, rgba, loft)
+    vis.add(preset, rgba, loft, surface=True)
 
 
 def _shelf(vis: Placed, size, rgba, name) -> None:

@@ -5,8 +5,10 @@ from contextlib import contextmanager
 import mujoco
 import numpy as np
 import pytest
+from test_prop_materials import materials
 from test_viewer_creation import pg  # noqa: F401
 from test_viewer_terrain_create import snapshot, unchanged
+from test_visuals import assert_same_physics
 
 from robotforge.design import layouts, menagerie
 from robotforge.design.tasks.spec import TaskEntry
@@ -125,6 +127,60 @@ def test_noop_keeps_history_identity_runtime_and_prior_undo(pg):  # noqa: F811
 
 
 @pytest.mark.parametrize(
+    "shape,fixed,yaw",
+    [("table", True, 0), ("table", False, 37), ("bin", False, 37), ("bin", True, 0), ("bin", True, 37)],
+)
+def test_furniture_finish_noop_original_inverse_and_reopen_preserve_authored_physics(
+    pg,  # noqa: F811
+    monkeypatch,
+    shape,
+    fixed,
+    yaw,
+):
+    pg.add_object("block", shape=shape, fixed=fixed, yaw=yaw, color="#5689ab", mass=0.731)
+    original, original_model = pg.store.load(), pg.session.model
+    original_materials = materials(original_model)
+    assert metadata(pg)["objects"][0]["surface_material"] is None
+    if pg.session.model.nq:
+        adr = int(pg.session.model.joint("block").qposadr[0])
+        pg.session.data.qpos[adr] += 0.2
+        mujoco.mj_forward(pg.session.model, pg.session.data)
+    pose = pg.session.data.qpos.copy()
+    pg.session.data.qvel[:] = 0.3
+    pg.session.data.time = 2.0
+    applied = apply(pg, "steel")
+    np.testing.assert_allclose(pg.session.data.qpos, pose, atol=1e-12, rtol=0)
+    assert not pg.session.data.qvel.any() and pg.session.data.time == 0 and pg.session.paused
+    assert_same_physics(original_model, pg.session.model, steps=0)
+    assert set(materials(pg.session.model)) == ({"rf_metal", "rf_rubber"} if shape == "table" else {"rf_metal"})
+    entry = pg.store.load().objects[0]
+    assert entry.material is None and entry.surface_material == "steel"
+    assert entry.model_dump(exclude={"surface_material"}) == original.objects[0].model_dump()
+    assert metadata(pg)["objects"][0]["surface_material"] == "steel"
+    receipt, before = pg._play_edit, snapshot(pg)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("an unchanged furniture finish must not compile or load")
+
+    with monkeypatch.context() as context:
+        context.setattr(object_surface, "compile_world", forbidden)
+        context.setattr(pg, "_load_world", forbidden)
+        assert apply(pg, "steel")["unchanged"]
+    unchanged(pg, before)
+    assert pg._play_edit is receipt
+    undo(pg, applied)
+    assert pg.store.load() == original and materials(pg.session.model) == original_materials
+    apply(pg, "wood")
+    cleared = apply(pg, None)
+    assert pg.store.load() == original and materials(pg.session.model) == original_materials
+    undo(pg, cleared)
+    directory = str(pg.store.dir)
+    pg.open_world(directory)
+    assert pg.store.load().objects[0].surface_material == "wood"
+    assert metadata(pg)["objects"][0]["surface_material"] == "wood"
+
+
+@pytest.mark.parametrize(
     "patch",
     [
         {"surface_material": "gold"},
@@ -148,8 +204,8 @@ def test_bad_requests_leave_disk_and_runtime_unchanged(pg, patch):  # noqa: F811
 
 
 def test_finish_is_required_and_unsupported_shape_is_not_offered(pg):  # noqa: F811
-    pg.add_object("desk", shape="table", size=[1, 0.6, 0.7])
-    assert "surface_material" not in metadata(pg)["objects"][0]
+    pg.add_object("desk", shape="drawer")
+    assert metadata(pg)["objects"] == []
     with pytest.raises(PlaygroundError, match="existing box"):
         apply(pg, name="desk")
     with pytest.raises(PlaygroundError, match="invalid prop surface"):

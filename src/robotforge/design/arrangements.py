@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from robotforge.design.object_surfaces import SURFACE_SHAPES
+
 MAX_RECORDS = 16
 MAX_BYTES = 64 * 1024
 MAX_SCAN = 64
@@ -73,10 +75,8 @@ def validate_member(value: dict) -> dict:
         raise ArrangementError("damaged", "Arrangement has an invalid relative pose")
     if type(value["fixed"]) is not bool or (value["mass"] is not None and not _number(value["mass"], 0.000001, 1e6)):
         raise ArrangementError("damaged", "Arrangement has invalid physical parameters")
-    for key in ("material", "surface_material"):
-        if key in value and (
-            shape not in {"box", "sphere", "cylinder"} or value[key] not in {"plastic", "wood", "steel"}
-        ):
+    for key, shapes in (("material", {"box", "sphere", "cylinder"}), ("surface_material", SURFACE_SHAPES)):
+        if key in value and (shape not in shapes or value[key] not in {"plastic", "wood", "steel"}):
             raise ArrangementError("damaged", "Arrangement has an unsupported material")
     color = value["color"]
     if isinstance(color, str):
