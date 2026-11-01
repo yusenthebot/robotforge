@@ -11,6 +11,7 @@ import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { orientWoodGrain, surfaceMaterial } from "./look.js";
 import { createLighting } from "./lighting.js";
+import { createSceneReflections } from "./scene-reflections.js";
 import { groundMaterial, groundPreview, groundStyle, prepareGroundTextures, prepareGrassTextures } from "./ground-look.js";
 import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
 import { clothGeometry, shapeCloth } from "./cloth.js";
@@ -54,7 +55,12 @@ controls.dampingFactor = 0.12;
 
 const lighting = createLighting(scene3, renderer);
 const { sun } = lighting;
-canvas.addEventListener("webglcontextrestored", () => lighting.restore());
+const sceneReflections = createSceneReflections({ scene: scene3, renderer, camera, lighting });
+canvas.addEventListener("webglcontextlost", () => sceneReflections.contextLost());
+canvas.addEventListener("webglcontextrestored", () => {
+  lighting.restore();
+  sceneReflections.contextRestored();
+});
 
 function makeGradientTexture(top, bottom) {
   const c = document.createElement("canvas");
@@ -368,6 +374,7 @@ function buildMeshGeometries(desc, buffer) {
 }
 
 function disposeWorld() {
+  sceneReflections.unbind();
   releaseCreationPreview();
   if (!worldRoot) return;
   const textures = new Set();
@@ -772,6 +779,7 @@ function applyPoses(buffer) {
   }
   if (flexMeshes.length) updateFlexes();
   lighting.update(resetLights);
+  sceneReflections.posed();
   if (pendingFit) {
     const sphere = contentSphere();
     fitFog(sphere);
@@ -1388,6 +1396,9 @@ function onScene(desc) {
     robotBodies.get(owner).push(b.id);
     robotOfBody.set(b.id, owner);
   }
+  sceneReflections.bind(worldRoot, desc, robotOfBody, {
+    excludedObjects: new Set([water?.group, ...flexMeshes.map((f) => f.mesh)].filter(Boolean)),
+  });
   groundMeshes = [];
   worldRoot.traverse((o) => {
     const body = o.userData.body;
@@ -2231,10 +2242,12 @@ $("show-collision").addEventListener("change", (e) => {
   });
   lighting.bind(worldRoot, bodyNodes, sceneDesc);
   lighting.update(true);
+  sceneReflections.invalidate("visibility-edit");
 });
 // Reuse the existing environment and shadow map; this is a local view preference.
 function selectLighting(name) {
   if (!lighting.select(name)) return;
+  sceneReflections.invalidate("lighting-preset");
   for (const value of ["studio", "daylight"]) $("lighting-" + value).setAttribute("aria-pressed", String(value === name));
   storageSet("robotforge.lighting", name);
 }
@@ -3633,6 +3646,7 @@ function loop() {
   // Keep the initial background and UI alive, then draw the complete posed scene once it is available.
   if (sceneDesc && (!ready || !hasSize())) return;
   renderer.render(scene3, camera);
+  if (ready) sceneReflections.afterMainRender();
   if (ready && renderedVersion !== sceneDesc.version && !renderer.getContext().isContextLost()) {
     renderedVersion = sceneDesc.version;
     $("loading").hidden = true;
@@ -3801,6 +3815,7 @@ window.__robotforge = {
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, data);
     return { w, h, data };
   },
+  sceneReflections, // prototype lifecycle/receipt API; no additional user control
   three: () => ({ scene: scene3, camera, renderer, sun, lighting }), // for experiments in scripted checks
   // Flicker check: slide the camera `steps` times by `step` m along `dir` and count pixels whose brightness
   // flips there and back (A, B, A) by more than `threshold`. Steady motion shifts edges one way; depth

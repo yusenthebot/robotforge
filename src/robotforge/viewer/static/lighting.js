@@ -157,5 +157,9 @@ export function createLighting(scene, renderer) {
     return () => select(view);
   }
 
-  return { sun, bind, update, restore, select, sensorLighting, preset: () => preset, state: () => fitted };
+  // Capture is allowed only after the original main render consumed the dirty shadow.
+  const shadowReady = () => !sun.castShadow || !renderer.shadowMap.enabled
+    || (!!sun.shadow.map && !sun.shadow.needsUpdate);
+  return { sun, bind, update, restore, select, sensorLighting, preset: () => preset, state: () => fitted,
+    studio: () => scene.environment, shadowReady };
 }

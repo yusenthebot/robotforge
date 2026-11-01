@@ -339,3 +339,142 @@ roughnessFactor = clamp(roughnessFactor * mix(1.0, weaveTow > 0.5 ? 0.82 : 1.18,
   };
   mat.customProgramCacheKey = () => `rf-weave-${pitch}-${strength}-${cloth}`;
 }
+
+function replaceOnce(source, needle, replacement) {
+  if (source.split(needle).length !== 2) throw new Error(`Unsupported scene reflection shader: ${needle}`);
+  return source.replace(needle, replacement);
+}
+
+// A separate 128-face atlas has different mip and texel constants from the studio's 256.
+// Rename every helper and macro, leaving Three's shared chunks and diffuse lookup untouched.
+export function sceneReflectionCubeUV() {
+  const chunk = THREE.ShaderChunk.cube_uv_reflection_fragment;
+  for (const token of ["float getFace(", "vec2 getUV(", "vec3 bilinearCubeUV(", "float roughnessToMip(", "vec4 textureCubeUV("])
+    if (chunk.split(token).length !== 2) throw new Error("Unsupported scene reflection CubeUV chunk");
+  return chunk.replace(/\b(cubeUV_\w+|getFace|getUV|bilinearCubeUV|roughnessToMip|textureCubeUV)\b/g, "rfLocal_$1")
+    .replace(/\bCUBEUV_MAX_MIP\b/g, "7.0")
+    .replace(/\bCUBEUV_TEXEL_WIDTH\b/g, "(1.0 / 384.0)")
+    .replace(/\bCUBEUV_TEXEL_HEIGHT\b/g, "(1.0 / 512.0)");
+}
+
+const LOCAL_REFLECTION = `
+#ifdef ENVMAP_TYPE_CUBE_UV
+uniform sampler2D rfSceneEnvironment;
+uniform vec3 rfProbeCenter;
+uniform vec3 rfProbeMin;
+uniform vec3 rfProbeMax;
+varying vec3 vRFWorldPosition;
+bool rfFinite3(vec3 p) { return !any(isnan(p)) && !any(isinf(p)); }
+vec4 rfSceneRadiance(vec3 direction, float roughness) {
+  // Retain the complete original studio query for invalid rays and receivers outside the box.
+  vec3 p = vRFWorldPosition;
+  if (rfFinite3(p) && rfFinite3(direction) && dot(direction, direction) > 0.0 &&
+      all(greaterThanEqual(p, rfProbeMin)) && all(lessThanEqual(p, rfProbeMax))) {
+    float distance = 1e30;
+    for (int axis = 0; axis < 3; axis++) {
+      if (direction[axis] != 0.0) {
+        float edge = direction[axis] > 0.0 ? rfProbeMax[axis] : rfProbeMin[axis];
+        distance = min(distance, (edge - p[axis]) / direction[axis]);
+      }
+    }
+    vec3 projected = p + distance * direction - rfProbeCenter;
+    if (distance >= 0.0 && distance < 1e30 && rfFinite3(projected) && dot(projected, projected) > 0.0)
+      return rfLocal_textureCubeUV(rfSceneEnvironment, projected, roughness);
+  }
+  return textureCubeUV(envMap, envMapRotation * direction, roughness);
+}
+#endif
+`;
+
+// The two program variants deliberately separate original/offscreen from main-framebuffer
+// rendering. A boolean uniform alone is insufficient: Three can reuse a material without
+// uploading custom uniforms on consecutive draws. needsUpdate selects an already cached
+// variant and refreshes its uniforms, including when a newly built target replaces the old one.
+const sceneReflectionMaterialUniforms = new WeakMap();
+
+export function attachSceneReflectionMaterial(material, context) {
+  if (!material?.isMeshStandardMaterial || material.envMap) return null;
+  // Cached programs outlive controller bindings. Keep their uniform wrappers attached
+  // to the material lifetime so a reused program sees the next controller's values.
+  let bindingState = sceneReflectionMaterialUniforms.get(material);
+  if (!bindingState) {
+    bindingState = { uniforms: {
+      rfSceneEnvironment: { value: null }, rfProbeCenter: { value: null },
+      rfProbeMin: { value: null }, rfProbeMax: { value: null },
+    }, owner: null };
+    sceneReflectionMaterialUniforms.set(material, bindingState);
+  }
+  const owner = {};
+  bindingState.owner = owner;
+  const uniformNames = Object.keys(bindingState.uniforms);
+  const syncUniforms = () => {
+    const source = context.uniforms();
+    for (const name of uniformNames)
+      bindingState.uniforms[name].value = source[name]?.value ?? null;
+  };
+  const compile = material.onBeforeCompile, render = material.onBeforeRender;
+  const cacheKey = material.customProgramCacheKey, originalKey = cacheKey.call(material);
+  let local = false, revision = -1;
+  const key = () => local ? `${originalKey}-scene-specular-v1` : originalKey;
+  const beforeRender = function(renderer, scene, camera, ...args) {
+    render.call(this, renderer, scene, camera, ...args);
+    syncUniforms();
+    const next = !material.envMap && context.isMainPass(renderer, scene, camera);
+    const nextRevision = context.revision();
+    if (local !== next || revision !== nextRevision) {
+      local = next; revision = nextRevision; material.needsUpdate = true;
+    }
+  };
+  const beforeCompile = function(shader, renderer) {
+    let fallback = { vertexShader: shader.vertexShader, fragmentShader: shader.fragmentShader, uniforms: { ...shader.uniforms } };
+    try {
+      compile.call(this, shader, renderer);
+      fallback = { vertexShader: shader.vertexShader, fragmentShader: shader.fragmentShader, uniforms: { ...shader.uniforms } };
+      // Three keeps one uniform dictionary per material, not per cached program. Every
+      // compiled variant retains these references even if its GLSL does not use them.
+      syncUniforms();
+      Object.assign(shader.uniforms, bindingState.uniforms);
+      if (!local) return;
+      // addEnvironmentScale may already have expanded this include; preserve its multiplier.
+      let fragment = shader.fragmentShader;
+      if (fragment.includes("#include <envmap_physical_pars_fragment>"))
+        fragment = replaceOnce(fragment, "#include <envmap_physical_pars_fragment>", THREE.ShaderChunk.envmap_physical_pars_fragment);
+      fragment = replaceOnce(fragment,
+        "textureCubeUV( envMap, envMapRotation * reflectVec, roughness )", "rfSceneRadiance(reflectVec, roughness)");
+      fragment = replaceOnce(fragment, "#include <cube_uv_reflection_fragment>",
+        `#include <cube_uv_reflection_fragment>\n${sceneReflectionCubeUV()}`);
+      fragment = replaceOnce(fragment, "#include <envmap_common_pars_fragment>",
+        `#include <envmap_common_pars_fragment>\n${LOCAL_REFLECTION}`);
+      let vertex = replaceOnce(shader.vertexShader, "#include <common>", "#include <common>\nvarying vec3 vRFWorldPosition;");
+      vertex = replaceOnce(vertex, "#include <worldpos_vertex>", `#include <worldpos_vertex>
+vec4 rfWorldPosition = vec4(transformed, 1.0);
+#ifdef USE_BATCHING
+rfWorldPosition = batchingMatrix * rfWorldPosition;
+#endif
+#ifdef USE_INSTANCING
+rfWorldPosition = instanceMatrix * rfWorldPosition;
+#endif
+vRFWorldPosition = (modelMatrix * rfWorldPosition).xyz;`);
+      shader.vertexShader = vertex; shader.fragmentShader = fragment;
+    } catch (error) {
+      // Do not let an authored compile hook unwind Three's render stack, or leave a
+      // half-edited shader behind. The controller invalidates any in-flight capture.
+      Object.assign(shader, fallback);
+      context.failed(error);
+    }
+  };
+  material.onBeforeRender = beforeRender;
+  material.onBeforeCompile = beforeCompile;
+  material.customProgramCacheKey = key;
+  material.needsUpdate = true;
+  return () => {
+    if (bindingState.owner === owner) {
+      bindingState.uniforms.rfSceneEnvironment.value = null;
+      bindingState.owner = null;
+    }
+    if (material.onBeforeRender === beforeRender) material.onBeforeRender = render;
+    if (material.onBeforeCompile === beforeCompile) material.onBeforeCompile = compile;
+    if (material.customProgramCacheKey === key) material.customProgramCacheKey = cacheKey;
+    material.needsUpdate = true;
+  };
+}
