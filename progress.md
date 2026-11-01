@@ -1,5 +1,17 @@
 # progress
 
+## Decoded mesh reuse screen (2026-11-01)
+
+Do not promote the optional current-buffer/geometry cache: fixed original Malo/Go2 ABBA warm medians improve396.60→392.25ms and540.05→512.50ms, below the50ms prespecified gate.
+Candidate removes all eight repeated47.06/20.33MB responses/uploads per fixture and keeps actual geometry/attribute identities; upstream wait remains most of each action, with added server hash CPU.
+Cold, whole-cohort memory and heartbeat guards pass; resource savings alone are insufficient for the proposed local editing improvement.
+70 scoped tests including67 actual browser/GPU, source/Python review and Ruff/format pass;40 native stills yield30 exact phase-aligned full-RGBA/model481-array/state/payload pairs.
+Four complete native movies fully decode;24 root samples reviewed; the external recorder's optional-None initial comparison error and formatting failure remain retained.
+Product unchanged; no full-default/same_behavior/install/formal budget/Windows claim;793baseline/796candidate/791retainedCMF inputs and13protected WIP files stay exact.
+[Report](docs/bench/2026-11-01-mesh-reuse-screen.md).
+Next implement persistent named supported-prop arrangements that can be inserted into the current world, preserving existing guarded placement and latest Undo; current groups are transient and layouts replace the whole world.
+Do not retune rejected mesh/gzip screens to manufacture latency gains; broad visual/lightweight/creative-play goal active, single-action success tuning deferred.
+
 ## 2026-11-01 — Natural rock ground and terrain
 
 - 既有岩石样式共用两张256像素CC0小图（78,882B），覆盖地面、地形和详细缩略图；两个模块按需加载，独立1秒原子准备／回退，原同步调用、色调、0.8米尺度、凹凸和物理保持兼容。

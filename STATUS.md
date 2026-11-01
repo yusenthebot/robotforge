@@ -1,5 +1,11 @@
 # STATUS
 
+- 2026-11-01 decoded mesh reuse screen: optional bounded buffer/geometry cache is not promoted; fixed real Malo/Go2 ABBA warm medians improve only4.35/27.55ms, below the preregistered50ms gate in both fixtures.
+  All repeated47.06/20.33MB mesh responses and imported uploads are avoided, but this does not establish the intended total editing gain; cold/memory/heartbeat guards pass.
+  70 scoped cases including67 actual browser/GPU pass,40 native stills/30 exact phase pairs/all481 model arrays and state match; four fully decoded native films,24 samples, source/Python review and Ruff/format pass.
+  Product code unchanged; no full-suite/install/formal budget/Windows claim; all793baseline/796candidate/791retainedCMF inputs and13original WIP files remain exact.
+  [Report](docs/bench/2026-11-01-mesh-reuse-screen.md); next seed is persistent insertable prop arrangements; broad goal active, action-success tuning deferred.
+
 - 2026-11-01 natural rock ground: shared floor/terrain/detailed-preview CC0 pair (78,882 B), deterministic translated sampling, two lazy modules and an independent 1,000 ms atomic fallback; old material calls, authored tint/scale/bump and physics stay compatible.
   The direct photo swap was rejected before the stochastic candidate; directional patterns and softened detail remain, with 24 logical fetches versus6 and several ms more on the large Malo floor.
   Final793inputs:4205default+45actualChrome+4surfaceGPU=4254distinct passes;129default skips excluded,11/11original install/viewer budgets,423exact source/wheel files, actualMalo/Go2 product movies and four exact prototype/production native pairs pass.

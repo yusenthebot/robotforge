@@ -1,0 +1,1244 @@
+{
+  "scope": "paired external-instrumented local macOS Chrome Metal observations, two cohorts per side per fixture; first submitted frame not GPU completion",
+  "worlds": {
+    "malo": {
+      "metrics": {
+        "baseline": {
+          "warm_ms": [
+            492.0,
+            408.19999998807907,
+            415.4000000357628,
+            383.19999998807907,
+            459.69999998807907,
+            385.0,
+            382.19999998807907,
+            366.2000000476837
+          ],
+          "warm_median_ms": 396.59999999403954,
+          "warm_range_ms": [
+            366.2000000476837,
+            492.0
+          ],
+          "cold_ms": [
+            416.5775419678539,
+            425.7342919590883
+          ],
+          "cold_median_ms": 421.1559169634711,
+          "server_rss_highwater_native": [
+            2041970688,
+            2063630336
+          ],
+          "max_measured_heartbeat_late_ms": 85.65579197602347,
+          "server_rebuild_cpu_ms": [
+            30.280540999999992,
+            25.82520799999999,
+            25.60216699999995,
+            24.907249999999937,
+            27.563792000000003,
+            25.251666999999976,
+            24.652125000000026,
+            24.590541999999992
+          ],
+          "total_warm_mesh_bytes": 376517376,
+          "total_warm_imported_upload_bytes": 376517376,
+          "details": [
+            {
+              "cohort": "A1",
+              "phase": "wood",
+              "send_to_first_submitted_ms": 492.0,
+              "send_to_ready_ms": 497.69999998807907,
+              "mesh_bytes": 47064672,
+              "imported_upload_bytes": 47064672,
+              "imported_upload_calls": 80,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "A1",
+              "phase": "steel",
+              "send_to_first_submitted_ms": 408.19999998807907,
+              "send_to_ready_ms": 410.0999999642372,
+              "mesh_bytes": 47064672,
+              "imported_upload_bytes": 47064672,
+              "imported_upload_calls": 80,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "A1",
+              "phase": "original",
+              "send_to_first_submitted_ms": 415.4000000357628,
+              "send_to_ready_ms": 431.7000000476837,
+              "mesh_bytes": 47064672,
+              "imported_upload_bytes": 47064672,
+              "imported_upload_calls": 80,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "A1",
+              "phase": "undo",
+              "send_to_first_submitted_ms": 383.19999998807907,
+              "send_to_ready_ms": 384.39999997615814,
+              "mesh_bytes": 47064672,
+              "imported_upload_bytes": 47064672,
+              "imported_upload_calls": 80,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "A2",
+              "phase": "wood",
+              "send_to_first_submitted_ms": 459.69999998807907,
+              "send_to_ready_ms": 531.7999999523163,
+              "mesh_bytes": 47064672,
+              "imported_upload_bytes": 47064672,
+              "imported_upload_calls": 80,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "A2",
+              "phase": "steel",
+              "send_to_first_submitted_ms": 385.0,
+              "send_to_ready_ms": 398.7000000476837,
+              "mesh_bytes": 47064672,
+              "imported_upload_bytes": 47064672,
+              "imported_upload_calls": 80,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "A2",
+              "phase": "original",
+              "send_to_first_submitted_ms": 382.19999998807907,
+              "send_to_ready_ms": 448.5,
+              "mesh_bytes": 47064672,
+              "imported_upload_bytes": 47064672,
+              "imported_upload_calls": 80,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "A2",
+              "phase": "undo",
+              "send_to_first_submitted_ms": 366.2000000476837,
+              "send_to_ready_ms": 367.30000001192093,
+              "mesh_bytes": 47064672,
+              "imported_upload_bytes": 47064672,
+              "imported_upload_calls": 80,
+              "geometry_count": 50
+            }
+          ]
+        },
+        "candidate": {
+          "warm_ms": [
+            450.69999998807907,
+            376.39999997615814,
+            376.60000002384186,
+            359.0,
+            476.0,
+            394.39999997615814,
+            393.0,
+            391.5
+          ],
+          "warm_median_ms": 392.25,
+          "warm_range_ms": [
+            359.0,
+            476.0
+          ],
+          "cold_ms": [
+            411.3032919703983,
+            420.72237498359755
+          ],
+          "cold_median_ms": 416.0128334769979,
+          "server_rss_highwater_native": [
+            2069970944,
+            2043199488
+          ],
+          "max_measured_heartbeat_late_ms": 104.8123330110684,
+          "server_rebuild_cpu_ms": [
+            47.025457999999965,
+            39.88204100000004,
+            38.602417,
+            40.034208000000014,
+            43.881583,
+            40.22958399999999,
+            40.30850000000008,
+            39.926083
+          ],
+          "total_warm_mesh_bytes": 0,
+          "total_warm_imported_upload_bytes": 0,
+          "details": [
+            {
+              "cohort": "B1",
+              "phase": "wood",
+              "send_to_first_submitted_ms": 450.69999998807907,
+              "send_to_ready_ms": 481.80000001192093,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "B1",
+              "phase": "steel",
+              "send_to_first_submitted_ms": 376.39999997615814,
+              "send_to_ready_ms": 378.19999998807907,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "B1",
+              "phase": "original",
+              "send_to_first_submitted_ms": 376.60000002384186,
+              "send_to_ready_ms": 398,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "B1",
+              "phase": "undo",
+              "send_to_first_submitted_ms": 359.0,
+              "send_to_ready_ms": 360.10000002384186,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "B2",
+              "phase": "wood",
+              "send_to_first_submitted_ms": 476.0,
+              "send_to_ready_ms": 531.3000000119209,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "B2",
+              "phase": "steel",
+              "send_to_first_submitted_ms": 394.39999997615814,
+              "send_to_ready_ms": 396.30000001192093,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "B2",
+              "phase": "original",
+              "send_to_first_submitted_ms": 393.0,
+              "send_to_ready_ms": 394.69999998807907,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 50
+            },
+            {
+              "cohort": "B2",
+              "phase": "undo",
+              "send_to_first_submitted_ms": 391.5,
+              "send_to_ready_ms": 498.7000000476837,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 50
+            }
+          ]
+        }
+      },
+      "warm_gain_ms": 4.3499999940395355,
+      "required_gain_ms": 50,
+      "gates": {
+        "warm_latency": false,
+        "cold_latency": true,
+        "server_highwater": true,
+        "heartbeat": true,
+        "no_warm_mesh_or_imported_upload": true
+      },
+      "comparisons": [
+        {
+          "phase": "initial",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "initial",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "initial",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "wood",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "wood",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "wood",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "steel",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "steel",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "steel",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "original",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "original",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "original",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "undo",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "undo",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "undo",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        }
+      ],
+      "candidate_admitted": false
+    },
+    "go2": {
+      "metrics": {
+        "baseline": {
+          "warm_ms": [
+            561.0,
+            539.6000000238419,
+            540.2999999523163,
+            539.0999999642372,
+            552.4000000357628,
+            523.7999999523163,
+            540.0999999642372,
+            540
+          ],
+          "warm_median_ms": 540.0499999821186,
+          "warm_range_ms": [
+            523.7999999523163,
+            561.0
+          ],
+          "cold_ms": [
+            419.7042500018142,
+            435.3121249587275
+          ],
+          "cold_median_ms": 427.50818748027086,
+          "server_rss_highwater_native": [
+            1002782720,
+            1002209280
+          ],
+          "max_measured_heartbeat_late_ms": 344.1698749666102,
+          "server_rebuild_cpu_ms": [
+            16.126625000000004,
+            15.976875000000001,
+            16.316917000000043,
+            15.850209000000115,
+            16.164082999999994,
+            16.128291999999988,
+            15.872875000000008,
+            15.640292000000056
+          ],
+          "total_warm_mesh_bytes": 162660096,
+          "total_warm_imported_upload_bytes": 162660096,
+          "details": [
+            {
+              "cohort": "A1",
+              "phase": "wood",
+              "send_to_first_submitted_ms": 561.0,
+              "send_to_ready_ms": 563.2000000476837,
+              "mesh_bytes": 20332512,
+              "imported_upload_bytes": 20332512,
+              "imported_upload_calls": 252,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "A1",
+              "phase": "steel",
+              "send_to_first_submitted_ms": 539.6000000238419,
+              "send_to_ready_ms": 541.4000000357628,
+              "mesh_bytes": 20332512,
+              "imported_upload_bytes": 20332512,
+              "imported_upload_calls": 252,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "A1",
+              "phase": "original",
+              "send_to_first_submitted_ms": 540.2999999523163,
+              "send_to_ready_ms": 542,
+              "mesh_bytes": 20332512,
+              "imported_upload_bytes": 20332512,
+              "imported_upload_calls": 252,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "A1",
+              "phase": "undo",
+              "send_to_first_submitted_ms": 539.0999999642372,
+              "send_to_ready_ms": 540.0999999642372,
+              "mesh_bytes": 20332512,
+              "imported_upload_bytes": 20332512,
+              "imported_upload_calls": 252,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "A2",
+              "phase": "wood",
+              "send_to_first_submitted_ms": 552.4000000357628,
+              "send_to_ready_ms": 554.6000000238419,
+              "mesh_bytes": 20332512,
+              "imported_upload_bytes": 20332512,
+              "imported_upload_calls": 252,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "A2",
+              "phase": "steel",
+              "send_to_first_submitted_ms": 523.7999999523163,
+              "send_to_ready_ms": 525.5999999642372,
+              "mesh_bytes": 20332512,
+              "imported_upload_bytes": 20332512,
+              "imported_upload_calls": 252,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "A2",
+              "phase": "original",
+              "send_to_first_submitted_ms": 540.0999999642372,
+              "send_to_ready_ms": 541.8999999761581,
+              "mesh_bytes": 20332512,
+              "imported_upload_bytes": 20332512,
+              "imported_upload_calls": 252,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "A2",
+              "phase": "undo",
+              "send_to_first_submitted_ms": 540,
+              "send_to_ready_ms": 541,
+              "mesh_bytes": 20332512,
+              "imported_upload_bytes": 20332512,
+              "imported_upload_calls": 252,
+              "geometry_count": 137
+            }
+          ]
+        },
+        "candidate": {
+          "warm_ms": [
+            555.0,
+            521.0,
+            519.8999999761581,
+            503.30000001192093,
+            537.6999999880791,
+            503.9000000357628,
+            505.10000002384186,
+            487.19999998807907
+          ],
+          "warm_median_ms": 512.5,
+          "warm_range_ms": [
+            487.19999998807907,
+            555.0
+          ],
+          "cold_ms": [
+            446.0212500416674,
+            422.8096249862574
+          ],
+          "cold_median_ms": 434.4154375139624,
+          "server_rss_highwater_native": [
+            1004027904,
+            999358464
+          ],
+          "max_measured_heartbeat_late_ms": 348.8509159651585,
+          "server_rebuild_cpu_ms": [
+            22.364125000000012,
+            22.736208999999953,
+            22.305792000000046,
+            21.028791999999854,
+            22.51608300000002,
+            23.150541999999994,
+            22.464083000000024,
+            20.826791999999816
+          ],
+          "total_warm_mesh_bytes": 0,
+          "total_warm_imported_upload_bytes": 0,
+          "details": [
+            {
+              "cohort": "B1",
+              "phase": "wood",
+              "send_to_first_submitted_ms": 555.0,
+              "send_to_ready_ms": 557,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "B1",
+              "phase": "steel",
+              "send_to_first_submitted_ms": 521.0,
+              "send_to_ready_ms": 522.7000000476837,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "B1",
+              "phase": "original",
+              "send_to_first_submitted_ms": 519.8999999761581,
+              "send_to_ready_ms": 521.6999999880791,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "B1",
+              "phase": "undo",
+              "send_to_first_submitted_ms": 503.30000001192093,
+              "send_to_ready_ms": 504.2000000476837,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "B2",
+              "phase": "wood",
+              "send_to_first_submitted_ms": 537.6999999880791,
+              "send_to_ready_ms": 539.8000000119209,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "B2",
+              "phase": "steel",
+              "send_to_first_submitted_ms": 503.9000000357628,
+              "send_to_ready_ms": 515.4000000357628,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "B2",
+              "phase": "original",
+              "send_to_first_submitted_ms": 505.10000002384186,
+              "send_to_ready_ms": 506.80000001192093,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 137
+            },
+            {
+              "cohort": "B2",
+              "phase": "undo",
+              "send_to_first_submitted_ms": 487.19999998807907,
+              "send_to_ready_ms": 488.30000001192093,
+              "mesh_bytes": 0,
+              "imported_upload_bytes": 0,
+              "imported_upload_calls": 0,
+              "geometry_count": 137
+            }
+          ]
+        }
+      },
+      "warm_gain_ms": 27.549999982118607,
+      "required_gain_ms": 50,
+      "gates": {
+        "warm_latency": false,
+        "cold_latency": true,
+        "server_highwater": true,
+        "heartbeat": true,
+        "no_warm_mesh_or_imported_upload": true
+      },
+      "comparisons": [
+        {
+          "phase": "initial",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "initial",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "initial",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "wood",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "wood",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "wood",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "steel",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "steel",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "steel",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "original",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "original",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "original",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "undo",
+          "other": "B1",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "undo",
+          "other": "B2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        },
+        {
+          "phase": "undo",
+          "other": "A2",
+          "native_rgba_exact": true,
+          "model_array_differences": {},
+          "state_equal": true,
+          "payload_equal": true
+        }
+      ],
+      "candidate_admitted": false
+    }
+  },
+  "promote": false,
+  "decision": "Do not promote decoded mesh reuse; both fixtures fail the preregistered warm-latency gate. This documentation-only record leaves product code unchanged.",
+  "baseline_commit": "7318b9984372cf0b78b314edb889adc994e0c2f4",
+  "baseline_inputs": 793,
+  "candidate_inputs": 796,
+  "retained_unpromoted_cmf_inputs": 791,
+  "protected_original_wip_files": 13,
+  "method_files": {
+    "plan-v1.md": "c302a2744b070b4b08558fb18b682fb75d438e0bec18c26fc3a9e3b424481765",
+    "method-v2.md": "a2d367134b2c1edec1ecd2903cc178ff5c62f1aae1edbd0ea20aa03a8a23515e",
+    "mesh_edit_capture_v2.py": "0fcecb3fd7545f4f06a3fee50f79a56278a12ce8bb498742cf930f8c68e721f2",
+    "baseline-source-freeze-v1.json": "6ac84acaf8ccc07297f114eee2e9699993efd52cdd86b5a8b60bb21af5fb652d",
+    "candidate-source-freeze-v1.json": "b0ba4aa01489920a40d29a70c0ea6bf5bb52c8f440e7e755629873d1d5a6f02a",
+    "candidate-v1.patch": "e4ad6bd0ea24194ec3d74d81e6eef26de57725a387df4de92fd6e3cfc4dc9daa",
+    "analysis-v1.json": "e16ce7fa0ea8cd8c1675e0b38df0195f57334336a20d4bdcda265e94aa4c7f5d",
+    "analyze_v1.py": "dcddb746b3f417f27fbbcc9a3b76cbf1f12a8ce6b2e976364b10992e7f4ffd1d"
+  },
+  "observations": [
+    {
+      "kind": "malo",
+      "cohort": "A1",
+      "manifest_sha256": "a4017b2d8e263e86668ea4c1a99193cc14e94485d2d4f553777ff43fd3a92f84",
+      "passed": true,
+      "cleanup_errors": [],
+      "source_unchanged": true,
+      "original_unchanged": true,
+      "model_ndarray_count": 481,
+      "mesh_bytes": 47064672,
+      "renderer_geometries": [
+        50,
+        50,
+        50,
+        50,
+        50
+      ],
+      "raw_frames": 329,
+      "profile_audit_sha256": "a88f1123864834a482f141d078b06874b6be8ad0b35e37aede90ddd40be02cc8"
+    },
+    {
+      "kind": "malo",
+      "cohort": "B1",
+      "manifest_sha256": "5a8baac75a3d727e227d4e20244a6ed1658844b664a3e3863c583b17537f72b2",
+      "passed": true,
+      "cleanup_errors": [],
+      "source_unchanged": true,
+      "original_unchanged": true,
+      "model_ndarray_count": 481,
+      "mesh_bytes": 47064672,
+      "renderer_geometries": [
+        50,
+        50,
+        50,
+        50,
+        50
+      ],
+      "raw_frames": 317,
+      "profile_audit_sha256": "def8304e249368c3fbc5940dbfb50309a1a528d5d34099f1a14b92b968e13363"
+    },
+    {
+      "kind": "malo",
+      "cohort": "B2",
+      "manifest_sha256": "e698ee86d6df29c98bf20d99820571b6eeb9e57ae3c546078dd0d8abd7b20963",
+      "passed": true,
+      "cleanup_errors": [],
+      "source_unchanged": true,
+      "original_unchanged": true,
+      "model_ndarray_count": 481,
+      "mesh_bytes": 47064672,
+      "renderer_geometries": [
+        50,
+        50,
+        50,
+        50,
+        50
+      ],
+      "raw_frames": 317,
+      "profile_audit_sha256": "f1d4558d0b362491598a6c408073a85cbd361f63104b2990b54c763c3f51ae2f"
+    },
+    {
+      "kind": "malo",
+      "cohort": "A2",
+      "manifest_sha256": "5844ea6539f13dcf72b16f2a7a584245bbe30d38f8538099061f6ba63bfc70e7",
+      "passed": true,
+      "cleanup_errors": [],
+      "source_unchanged": true,
+      "original_unchanged": true,
+      "model_ndarray_count": 481,
+      "mesh_bytes": 47064672,
+      "renderer_geometries": [
+        50,
+        50,
+        50,
+        50,
+        50
+      ],
+      "raw_frames": 328,
+      "profile_audit_sha256": "ea9731c2ec94a6b27a8b5be09f11a591dc3c88ee252eb463c739aa7906fc535f"
+    },
+    {
+      "kind": "go2",
+      "cohort": "A1",
+      "manifest_sha256": "ee5c153a9095fa64c83651714141c207cf3f57bd2ba85e8fe9bca03e2f96e45d",
+      "passed": true,
+      "cleanup_errors": [],
+      "source_unchanged": true,
+      "original_unchanged": true,
+      "model_ndarray_count": 481,
+      "mesh_bytes": 20332512,
+      "renderer_geometries": [
+        137,
+        137,
+        137,
+        137,
+        137
+      ],
+      "raw_frames": 331,
+      "profile_audit_sha256": "aaddcdee004e2919224b94e0894cddc082acc0184a3b89a9111bd2db866857ed"
+    },
+    {
+      "kind": "go2",
+      "cohort": "B1",
+      "manifest_sha256": "feb9d5232efa57785460e034d089a90ac20c8cd830a7788af585084ac0770ea4",
+      "passed": true,
+      "cleanup_errors": [],
+      "source_unchanged": true,
+      "original_unchanged": true,
+      "model_ndarray_count": 481,
+      "mesh_bytes": 20332512,
+      "renderer_geometries": [
+        137,
+        137,
+        137,
+        137,
+        137
+      ],
+      "raw_frames": 326,
+      "profile_audit_sha256": "83dc105888268245f2d38f015fe7db16e59750286cae9c112d2dbcbbbb346195"
+    },
+    {
+      "kind": "go2",
+      "cohort": "B2",
+      "manifest_sha256": "706774ba378f12b5f70cefd2d40a74e3eedc32c68ea93cf53ebb5c1ec4eea1ae",
+      "passed": true,
+      "cleanup_errors": [],
+      "source_unchanged": true,
+      "original_unchanged": true,
+      "model_ndarray_count": 481,
+      "mesh_bytes": 20332512,
+      "renderer_geometries": [
+        137,
+        137,
+        137,
+        137,
+        137
+      ],
+      "raw_frames": 318,
+      "profile_audit_sha256": "55cd40e1e9dce3f8a2371185905637c5d7010f56b7ce1f26507399dcfc956d26"
+    },
+    {
+      "kind": "go2",
+      "cohort": "A2",
+      "manifest_sha256": "d51053c2f50f4645d8ac3887fac3003f76db254a6c57cf60c6fad2caccc5651b",
+      "passed": true,
+      "cleanup_errors": [],
+      "source_unchanged": true,
+      "original_unchanged": true,
+      "model_ndarray_count": 481,
+      "mesh_bytes": 20332512,
+      "renderer_geometries": [
+        137,
+        137,
+        137,
+        137,
+        137
+      ],
+      "raw_frames": 329,
+      "profile_audit_sha256": "7a23f96d228538d5598e5afd5cf5890333125d32e481e75ba5d9abc4e82193ff"
+    }
+  ],
+  "movies": [
+    {
+      "name": "media-go2-A1-v1",
+      "workflow_sha256": "42e2269742b884995bbd1ab12d23f7e54274cf7adbcb2a228518864ec61d63ea",
+      "media_qa_sha256": "6b48d0fe4d5174be033e82114ba06b867468729749869cdd155bc31fa0a67b1d",
+      "qa": {
+        "source_manifest_sha256": "1157ab131bd7ce0bb869536c58d8c55a332fac61d9293287bf87a906d8ff9e92",
+        "helper_sha256": "1c871c0be5a1b39787d28f2e3975a2000ff66e114d26d08d570fd9b643a9bd04",
+        "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/media-go2-A1-v1/workflow.mp4",
+        "video_sha256": "42e2269742b884995bbd1ab12d23f7e54274cf7adbcb2a228518864ec61d63ea",
+        "video_bytes": 1963505,
+        "raw_frame_count": 331,
+        "raw_timestamp_span_seconds": 13.032830953598022,
+        "raw_arrival_inversions": [],
+        "maximum_arrival_inversion_seconds": 0,
+        "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+        "encoding_cap_seconds": null,
+        "duration_capped": false,
+        "duration_seconds": 13.133333,
+        "expected_duration_from_raw_seconds": 13.099497620264689,
+        "decoded_frame_count": 394,
+        "decode_exit_code": 0,
+        "decode_stderr": "",
+        "probe": {
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 1280,
+              "height": 800,
+              "r_frame_rate": "30/1",
+              "duration": "13.133333",
+              "nb_read_frames": "394"
+            }
+          ]
+        },
+        "decoded_contacts": [
+          {
+            "seconds": 0.26266666,
+            "path": "t0.263.png",
+            "sha256": "988a6e2adea7b57e480dde246571e435b3ef525ef8b96bfe8fcd0ddc8d5ada2d"
+          },
+          {
+            "seconds": 2.6266666,
+            "path": "t2.627.png",
+            "sha256": "8ad575ad3b76ea9543ab290f34df3c5d5a66c27150eefc4993468bced61fdbcf"
+          },
+          {
+            "seconds": 5.2533332,
+            "path": "t5.253.png",
+            "sha256": "eb7e15cab0fc1fb8385946b7bbef9f2b1b8ea07c2950ea7cb62cdb1d145760a9"
+          },
+          {
+            "seconds": 7.8799998,
+            "path": "t7.880.png",
+            "sha256": "c911ebb0ce23798473f502530d4ffdec7fa698fc47d37a56bdf9fe128fec9e92"
+          },
+          {
+            "seconds": 10.5066664,
+            "path": "t10.507.png",
+            "sha256": "dbe791466384f59a9435cde89e5d1bcef118cdcd834a8be28e7958a00f2169cb"
+          },
+          {
+            "seconds": 12.87066634,
+            "path": "t12.871.png",
+            "sha256": "42f09026647504e31a462d5c8dc70347aeca627ac0d6d9e26133a5e8a03198fc"
+          }
+        ],
+        "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/media-go2-A1-v1/decoded-contact.jpg",
+        "decoded_contact_sheet_sha256": "576d18ae57ef2ccd43ad753ce594a0a49619d64837bf8b5710364f05872f2e0b",
+        "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+      }
+    },
+    {
+      "name": "media-go2-B1-v1",
+      "workflow_sha256": "9120826265bf04717e5a27b4a86f52fe3f19fa0072505b73069b450a544b0460",
+      "media_qa_sha256": "439fa219c1feb7efd9525eaa83c748a1eaae23b1111273f74246ec16a55ddd00",
+      "qa": {
+        "source_manifest_sha256": "4bc91fbc5d0518cb96505ab4ac05c20595224969b91b9ec39420c3d935417abc",
+        "helper_sha256": "1c871c0be5a1b39787d28f2e3975a2000ff66e114d26d08d570fd9b643a9bd04",
+        "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/media-go2-B1-v1/workflow.mp4",
+        "video_sha256": "9120826265bf04717e5a27b4a86f52fe3f19fa0072505b73069b450a544b0460",
+        "video_bytes": 1908101,
+        "raw_frame_count": 326,
+        "raw_timestamp_span_seconds": 12.832839012145996,
+        "raw_arrival_inversions": [],
+        "maximum_arrival_inversion_seconds": 0,
+        "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+        "encoding_cap_seconds": null,
+        "duration_capped": false,
+        "duration_seconds": 12.933333,
+        "expected_duration_from_raw_seconds": 12.899505678812663,
+        "decoded_frame_count": 388,
+        "decode_exit_code": 0,
+        "decode_stderr": "",
+        "probe": {
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 1280,
+              "height": 800,
+              "r_frame_rate": "30/1",
+              "duration": "12.933333",
+              "nb_read_frames": "388"
+            }
+          ]
+        },
+        "decoded_contacts": [
+          {
+            "seconds": 0.25866666,
+            "path": "t0.259.png",
+            "sha256": "d6e33a4651e20013aa1a19785c01716a825cd6a3067362234b9fa33f84f47021"
+          },
+          {
+            "seconds": 2.5866666,
+            "path": "t2.587.png",
+            "sha256": "04d7909e720f8ee4bad1a3838ef3fee7e75495b9d799c46cd0f789c51f82d103"
+          },
+          {
+            "seconds": 5.1733332,
+            "path": "t5.173.png",
+            "sha256": "fbb13aeb0fff58c4397575e9046c733d13007fdfe663d8a290306c5c82582673"
+          },
+          {
+            "seconds": 7.759999799999999,
+            "path": "t7.760.png",
+            "sha256": "e23b65573b09478078f9acdae6285d4e4c04fde07ef67c6bcf532a323f2e12ba"
+          },
+          {
+            "seconds": 10.3466664,
+            "path": "t10.347.png",
+            "sha256": "bbb60d9d4a22ba325c621a56a88787a817a946ba5b0884c4daaea6bf6ebe4666"
+          },
+          {
+            "seconds": 12.67466634,
+            "path": "t12.675.png",
+            "sha256": "2524242beaa0ee4223cc68bbd7736fce98a22ca5627a5a1cfdc4b6fe446b8104"
+          }
+        ],
+        "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/media-go2-B1-v1/decoded-contact.jpg",
+        "decoded_contact_sheet_sha256": "898194fcd3c7890916bb601b7f80b0bf888fd620a0b2fa5e725551c7ccab0255",
+        "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+      }
+    },
+    {
+      "name": "media-malo-A1-v1",
+      "workflow_sha256": "26600976661fe64c66287336b70326182e12cbc617263ca337002ef75c48ba71",
+      "media_qa_sha256": "16b66d6a99ee6e0f1ca11222435e96cd56926cf0c718d4fed07581526fa4493f",
+      "qa": {
+        "source_manifest_sha256": "7f86af3e138936112175f8173e23e3a8495f2db7781fc343274e00b75a416ce9",
+        "helper_sha256": "1c871c0be5a1b39787d28f2e3975a2000ff66e114d26d08d570fd9b643a9bd04",
+        "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/media-malo-A1-v1/workflow.mp4",
+        "video_sha256": "26600976661fe64c66287336b70326182e12cbc617263ca337002ef75c48ba71",
+        "video_bytes": 1944456,
+        "raw_frame_count": 329,
+        "raw_timestamp_span_seconds": 13.016162872314453,
+        "raw_arrival_inversions": [],
+        "maximum_arrival_inversion_seconds": 0,
+        "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+        "encoding_cap_seconds": null,
+        "duration_capped": false,
+        "duration_seconds": 13.1,
+        "expected_duration_from_raw_seconds": 13.08282953898112,
+        "decoded_frame_count": 393,
+        "decode_exit_code": 0,
+        "decode_stderr": "",
+        "probe": {
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 1280,
+              "height": 800,
+              "r_frame_rate": "30/1",
+              "duration": "13.100000",
+              "nb_read_frames": "393"
+            }
+          ]
+        },
+        "decoded_contacts": [
+          {
+            "seconds": 0.262,
+            "path": "t0.262.png",
+            "sha256": "4ac699a055b43f81fa8f2ed8133ffacfe39a2141efc311fe23ffc56c5ef9dd36"
+          },
+          {
+            "seconds": 2.62,
+            "path": "t2.620.png",
+            "sha256": "791e4047d7575f6a5dbb5f40d7d8c8e38ca76939ec193adc759fac90c99c224a"
+          },
+          {
+            "seconds": 5.24,
+            "path": "t5.240.png",
+            "sha256": "9f94621b050067663457610dc70c19b8f6aa110b50e8d4da9b6cdd966e81bf52"
+          },
+          {
+            "seconds": 7.859999999999999,
+            "path": "t7.860.png",
+            "sha256": "b71e8ba6c98c794f4957bba4a12711134c8d831b06139b3d5e3b9cfd1b1d8d2e"
+          },
+          {
+            "seconds": 10.48,
+            "path": "t10.480.png",
+            "sha256": "760ee884f73d13b6e7328f1a0053fb7919b6307934ab217c419ea5c8c9f0ec08"
+          },
+          {
+            "seconds": 12.838,
+            "path": "t12.838.png",
+            "sha256": "a7f742d82c81d8c98a3bb28f03a54749cefd6b5c77c0c81bb1e94def5eaa3a70"
+          }
+        ],
+        "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/media-malo-A1-v1/decoded-contact.jpg",
+        "decoded_contact_sheet_sha256": "984c3c6178ed081663384f05f576c59cdd4e65596187dd1d8322b4016fc85136",
+        "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+      }
+    },
+    {
+      "name": "media-malo-B1-v1",
+      "workflow_sha256": "20ab93b02eea4d11551b39a1dd563a1118adb3034aa4776197a983591d8f3c89",
+      "media_qa_sha256": "524632aa1f3bd3dc73b300cea842762f1e3e88c3875c36a474a0449e2e3a08f7",
+      "qa": {
+        "source_manifest_sha256": "194b04c8b7a2812eb58872efb0ef489643c9a2bfa0ac8839abdb44be8fd13ef9",
+        "helper_sha256": "1c871c0be5a1b39787d28f2e3975a2000ff66e114d26d08d570fd9b643a9bd04",
+        "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/media-malo-B1-v1/workflow.mp4",
+        "video_sha256": "20ab93b02eea4d11551b39a1dd563a1118adb3034aa4776197a983591d8f3c89",
+        "video_bytes": 1684776,
+        "raw_frame_count": 317,
+        "raw_timestamp_span_seconds": 12.466186046600342,
+        "raw_arrival_inversions": [],
+        "maximum_arrival_inversion_seconds": 0,
+        "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+        "encoding_cap_seconds": null,
+        "duration_capped": false,
+        "duration_seconds": 12.566667,
+        "expected_duration_from_raw_seconds": 12.532852713267008,
+        "decoded_frame_count": 377,
+        "decode_exit_code": 0,
+        "decode_stderr": "",
+        "probe": {
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 1280,
+              "height": 800,
+              "r_frame_rate": "30/1",
+              "duration": "12.566667",
+              "nb_read_frames": "377"
+            }
+          ]
+        },
+        "decoded_contacts": [
+          {
+            "seconds": 0.25133334,
+            "path": "t0.251.png",
+            "sha256": "4ac699a055b43f81fa8f2ed8133ffacfe39a2141efc311fe23ffc56c5ef9dd36"
+          },
+          {
+            "seconds": 2.5133334000000005,
+            "path": "t2.513.png",
+            "sha256": "e60ac93de9c443775c18a3eb421585d2d963670ec83e4248886819b6d35a0d60"
+          },
+          {
+            "seconds": 5.026666800000001,
+            "path": "t5.027.png",
+            "sha256": "ec332124ea9e579d5e21ff3360675e3139876783176448ac21859c541c99f74f"
+          },
+          {
+            "seconds": 7.5400002,
+            "path": "t7.540.png",
+            "sha256": "61a7ac5e8f89d33ef65d8a93b5dd38491868fd21e96ef510a801554a3cc733e4"
+          },
+          {
+            "seconds": 10.053333600000002,
+            "path": "t10.053.png",
+            "sha256": "d5c38708de6198840f2a2f5a7f813f06cc321e3eabbf4d08a6ec4c8a6c133cc0"
+          },
+          {
+            "seconds": 12.31533366,
+            "path": "t12.315.png",
+            "sha256": "81cecf5561b6a6be194f7337b2588e6525a8df93e2d438100f25eeba735684f1"
+          }
+        ],
+        "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/media-malo-B1-v1/decoded-contact.jpg",
+        "decoded_contact_sheet_sha256": "c8a66ea56d01abd0fcd9f369052b8475a92e90b07139ed56b5d3475f9c6bb798",
+        "limits": "Full timestamped workflow retained; six decoded stills cannot establish dynamic quality or replace viewing the full video."
+      }
+    }
+  ],
+  "verification_scope": "70 distinct scoped pytest cases passed on final candidate source (3 pure/server and 67 actual browser/GPU), plus Ruff/format and read-only source/Python review. No full-default-suite, full same_behavior, install/wheel/formal 11-budget, GPU-completion, uninstrumented performance or Windows claim for this unpromoted candidate.",
+  "retained_failure": "malo-A1-v1 stopped at initial world comparison before any mutation because the external recorder inserted an optional None field excluded by model serialization. V2 fixes only this expected-world representation; timing/actions/thresholds are unchanged. Original and sources stayed exact; all cleanup passed.",
+  "verification_receipts": {
+    "final-mesh-tests-v1": "72335362e1177e6d3e4ada25c29c60b2fa7a329282f6fd7d01f49876d46a6cf2",
+    "legacy-browser-v1": "3362c8ba8db09d4021a74d2e3abd40e406edcd92405a0d848033d844979e7bf1",
+    "native-surface-gpu-v1": "db64029c930109c2dc997b7390855358c7d722f31c81a11ee27a4135af80a7f8",
+    "format-final-v1": "d4ecc9017a4f9aad4c7d6ae452bd0b715a22bd519b12648a8989b13b99c4ccb2",
+    "lint-final-v1": "b966a5e448e755884edf0c654a01bf2d1dd926a0c139da0763609e6d3b0318e7"
+  },
+  "root_media_review": "All four movies fully decoded successfully; root visually inspected all four six-sample decoded contact sheets (24 samples). Samples do not establish continuous dynamic quality or a perceptible speed improvement."
+}
