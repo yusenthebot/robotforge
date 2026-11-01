@@ -1,0 +1,483 @@
+{
+  "date": "2026-11-02",
+  "main": "77172e681c2e8540b8da77999ee16e2d659a8ba4",
+  "source_input_count": 809,
+  "source_sha256": "be101ce1bc54199db2856ddeb47ed058ff2435b78121ad3fe8f27c9408ae7cd0",
+  "decision": "Prerequisite not established; no geometry candidate or product change.",
+  "geometry_case_count": 39,
+  "geometry_facts": [
+    {
+      "id": "warehouse_rack_0.45_0.32",
+      "size": [
+        0.45,
+        0.4,
+        0.32
+      ],
+      "positive_overlap_pairs": 392,
+      "pairwise_overlap_area_sum_m2": 0.017604002262741714,
+      "bounds": [
+        [
+          -0.225,
+          -0.2,
+          -0.16000003333333335
+        ],
+        [
+          0.225,
+          0.2,
+          0.16000003333333335
+        ]
+      ],
+      "bounds_match_requested": false,
+      "triangles": 2320,
+      "array_bytes": 128752
+    },
+    {
+      "id": "warehouse_pallet",
+      "size": [
+        0.5,
+        0.36,
+        0.3
+      ],
+      "positive_overlap_pairs": 396,
+      "pairwise_overlap_area_sum_m2": 0.017243887996075017,
+      "bounds": [
+        [
+          -0.25,
+          -0.18000000000000002,
+          -0.15
+        ],
+        [
+          0.25,
+          0.18000000000000002,
+          0.15
+        ]
+      ],
+      "bounds_match_requested": true,
+      "triangles": 2320,
+      "array_bytes": 128752
+    },
+    {
+      "id": "harbor_floating",
+      "size": [
+        0.6,
+        0.5,
+        0.3
+      ],
+      "positive_overlap_pairs": 400,
+      "pairwise_overlap_area_sum_m2": 0.019991857462741677,
+      "bounds": [
+        [
+          -0.3,
+          -0.25,
+          -0.15
+        ],
+        [
+          0.3,
+          0.25,
+          0.15
+        ]
+      ],
+      "bounds_match_requested": true,
+      "triangles": 2512,
+      "array_bytes": 139344
+    },
+    {
+      "id": "small_50mm",
+      "size": [
+        0.05,
+        0.05,
+        0.05
+      ],
+      "positive_overlap_pairs": 1088,
+      "pairwise_overlap_area_sum_m2": 0.003503996485281372,
+      "bounds": [
+        [
+          -0.025,
+          -0.025,
+          -0.025
+        ],
+        [
+          0.025,
+          0.025,
+          0.025
+        ]
+      ],
+      "bounds_match_requested": true,
+      "triangles": 1552,
+      "array_bytes": 86384
+    },
+    {
+      "id": "small_20mm",
+      "size": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "positive_overlap_pairs": 1488,
+      "pairwise_overlap_area_sum_m2": 0.0010559962509667997,
+      "bounds": [
+        [
+          -0.01,
+          -0.01,
+          -0.01
+        ],
+        [
+          0.01,
+          0.01,
+          0.01
+        ]
+      ],
+      "bounds_match_requested": true,
+      "triangles": 1552,
+      "array_bytes": 86384
+    },
+    {
+      "id": "small_10mm",
+      "size": [
+        0.01,
+        0.01,
+        0.01
+      ],
+      "positive_overlap_pairs": 2572,
+      "pairwise_overlap_area_sum_m2": 0.0011747886793939241,
+      "bounds": [
+        [
+          -0.007,
+          -0.007,
+          -0.005000000000000001
+        ],
+        [
+          0.007,
+          0.007,
+          0.005000000000000001
+        ]
+      ],
+      "bounds_match_requested": false,
+      "triangles": 1552,
+      "array_bytes": 86384
+    },
+    {
+      "id": "small_1mm",
+      "size": [
+        0.001,
+        0.001,
+        0.001
+      ],
+      "positive_overlap_pairs": 48,
+      "pairwise_overlap_area_sum_m2": 7.793137084989868e-08,
+      "bounds": [
+        [
+          -0.0115,
+          -0.0115,
+          -0.0055
+        ],
+        [
+          0.0115,
+          0.0115,
+          0.0055
+        ]
+      ],
+      "bounds_match_requested": false,
+      "triangles": 1552,
+      "array_bytes": 86384
+    }
+  ],
+  "geometry_area_scope": "Strict positive projected rational triangle-pair intersection; plane tolerance1e-12m/normal1e-9; sums count multiplicity, not union; no visible-defect proof.",
+  "captures": {
+    "go2-baseline-v1": {
+      "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-baseline-v1/manifest.json",
+      "sha256": "89b6611ef8e673a707740a3e564c17d8cf07013b670a0d3baa4609cb7b02bbae",
+      "world_sha256": "a4c86e31af6c2eaf8922aabb6cefcb9545d315619d2eb931955a04323748c036",
+      "native_arrays": 481,
+      "frames": 4,
+      "target_crates": 29,
+      "paused": true,
+      "time": 0
+    },
+    "harbor-baseline-v1": {
+      "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-baseline-v1/manifest.json",
+      "sha256": "53c9f08660eee05d5777380ccba7e9a773e95e34e71d8baec72bbda8cd55dbd5",
+      "world_sha256": "65a76f8dac7ee1954154925f94c58a965fa759179d97e3a22f99d8df38fbe203",
+      "native_arrays": 481,
+      "frames": 4,
+      "target_crates": 3,
+      "paused": true,
+      "time": 0
+    },
+    "malo-baseline-v1": {
+      "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/malo-baseline-v1/manifest.json",
+      "sha256": "6483f0244bfea6d77c2022374c9e0738098589dace07dd75ead71057f5eacef1",
+      "world_sha256": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+      "native_arrays": 481,
+      "frames": 4,
+      "target_crates": 0,
+      "paused": true,
+      "time": 0
+    },
+    "go2-motion-v1": {
+      "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-v1/manifest.json",
+      "sha256": "f17fb335026373f051d763b6166ecacc6e82586144e77b3da0dffaceabff0632",
+      "world_sha256": "a4c86e31af6c2eaf8922aabb6cefcb9545d315619d2eb931955a04323748c036",
+      "native_arrays": 481,
+      "frames": 4,
+      "target_crates": 29,
+      "paused": true,
+      "time": 0
+    },
+    "harbor-motion-v1": {
+      "manifest": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-v1/manifest.json",
+      "sha256": "3089cbf66d258135159cc75dad062209847e363f546d8c5f010ec629b1cdf4dc",
+      "world_sha256": "65a76f8dac7ee1954154925f94c58a965fa759179d97e3a22f99d8df38fbe203",
+      "native_arrays": 481,
+      "frames": 4,
+      "target_crates": 3,
+      "paused": true,
+      "time": 0
+    }
+  },
+  "within_run_static_repeat_pairs": 10,
+  "cross_helper_static_comparisons": [
+    {
+      "world": "go2",
+      "view": "front",
+      "phase": "baseline",
+      "rgba_sha256": "9c743516671f525bc5e5a593fe3c0465c5bcc09fe3ad565ab7842ae01356de49"
+    },
+    {
+      "world": "go2",
+      "view": "side",
+      "phase": "baseline",
+      "rgba_sha256": "8c992cfa020244cacd63fbba5dbed1ce4b10d096972bd43c9a4915207ec7e519"
+    },
+    {
+      "world": "go2",
+      "view": "front",
+      "phase": "repeat",
+      "rgba_sha256": "9c743516671f525bc5e5a593fe3c0465c5bcc09fe3ad565ab7842ae01356de49"
+    },
+    {
+      "world": "go2",
+      "view": "side",
+      "phase": "repeat",
+      "rgba_sha256": "8c992cfa020244cacd63fbba5dbed1ce4b10d096972bd43c9a4915207ec7e519"
+    },
+    {
+      "world": "harbor",
+      "view": "overview",
+      "phase": "baseline",
+      "rgba_sha256": "b44cd431dd6ef49bd4d499010ca1daf44c6a227b402a900a4233364c9ece700a"
+    },
+    {
+      "world": "harbor",
+      "view": "crate",
+      "phase": "baseline",
+      "rgba_sha256": "c597631fbca15e45fb82182d9991ea2d72d1a7446cf9cb83db6c2caa7960da9d"
+    },
+    {
+      "world": "harbor",
+      "view": "overview",
+      "phase": "repeat",
+      "rgba_sha256": "b44cd431dd6ef49bd4d499010ca1daf44c6a227b402a900a4233364c9ece700a"
+    },
+    {
+      "world": "harbor",
+      "view": "crate",
+      "phase": "repeat",
+      "rgba_sha256": "c597631fbca15e45fb82182d9991ea2d72d1a7446cf9cb83db6c2caa7960da9d"
+    }
+  ],
+  "cross_helper_note": "Eight phase-aligned comparisons, correlated with repeats; unchanged product source.",
+  "films": [
+    {
+      "world": "go2",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-media-v1/workflow.mp4",
+      "sha256": "119fdc5fd03b96037589dd2da079e9380d4bee6e932ddbdcdcb8fa4263476176",
+      "duration_s": 3.333333,
+      "decoded_frames": 100,
+      "raw_samples": 16,
+      "raw_span_s": 3.2659794589853846,
+      "duration_error_s": 0.0006868743479486739
+    },
+    {
+      "world": "harbor",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-media-v1/workflow.mp4",
+      "sha256": "cfe63cf1c41ab95a4423b8dbe1399c8666681680663775b945a899e9ead1eaa8",
+      "duration_s": 3.333333,
+      "decoded_frames": 100,
+      "raw_samples": 16,
+      "raw_span_s": 3.2652514170040376,
+      "duration_error_s": 0.001414916329295579
+    }
+  ],
+  "raw_jpeg_samples": 32,
+  "root_visual_review": {
+    "viewed_files": [
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-baseline-v1/front-baseline.png",
+        "sha256": "18820302b499016b717bc37c40fb09efefe66d5b56f2d9243db427e30ce62d21"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-baseline-v1/side-baseline.png",
+        "sha256": "cf38be8fd293467f7de58086dd03541f55724f30d38cb8b8e6ea386d2606d92f"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-baseline-v1/overview-baseline.png",
+        "sha256": "e4b3b919c86279e4d963fdd67165a728a34dd635a811599b02328ed823d53d4c"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-baseline-v1/crate-baseline.png",
+        "sha256": "10bbd9daecca5339c7b4c1b4b3766d964b1d2505351df078fb75ffe05db64719"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/malo-baseline-v1/front-baseline.png",
+        "sha256": "460ce9eecb9d3611f26786c135a5d7467f3b83c1e8b544f9b8d3886d30829aa4"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/malo-baseline-v1/side-baseline.png",
+        "sha256": "8dab4085f1b225195eb29ad0f7282dd5ac4cebb3105296f709eac67890486bac"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-media-v1/decoded-contact.jpg",
+        "sha256": "a20d9bb272d35aa37d99d8ae79082e0b27268ad84f285882d6c25798db7aef68"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-media-v1/decoded-contact.jpg",
+        "sha256": "de90734d0130466350cbe4dae195af75d2f0a52ccd275ddc26f65f93a089f68c"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-v1/motion/raw-frames/f00000.jpg",
+        "sha256": "25144bb6bf3a241b5df20dabbad07094b1803d7f18e10b044b1bbe3fce48d811"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-v1/motion/raw-frames/f00015.jpg",
+        "sha256": "d7142e48381d8329bafd3724910dba2848f7c4573428f41c726ac1212552e877"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-v1/motion/raw-frames/f00000.jpg",
+        "sha256": "a4bac36e8b82faad70af1ac089ade541fc5155016991836e8829cdc80773864a"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-v1/motion/raw-frames/f00015.jpg",
+        "sha256": "8fda459e244ef730020904e2ae4a7b0b9060eb6a8199184174eabffd070ea3eb"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-media-v1/decoded-frames/t1.333.png",
+        "sha256": "c07061ec4ae8bd9bb692edd07a41c63bd2d3f9d709a8224e8face07c8565066a"
+      },
+      {
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-media-v1/decoded-frames/t1.333.png",
+        "sha256": "7e76efeb51b1bd0179953126aa09aa978862d381f6a70705474f6b2cc58bb850"
+      }
+    ],
+    "scope": "Six baseline PNGs, two decoded contact sheets (12 cells), four native raw JPEG endpoints and two native decoded PNGs; not continuous playback.",
+    "decision": "No salient shared ordinary-view joint deficit established; do not admit a geometry candidate. Does not rule out flicker or prove causality."
+  },
+  "independent_review_scope": "Four baseline target PNGs and ten native raw JPEG samples indices0/4/8/12/15 from each target; no continuous playback; same insufficient-deficit decision.",
+  "inputs": {
+    "baseline-source-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/baseline-source-v1.json",
+      "sha256": "be101ce1bc54199db2856ddeb47ed058ff2435b78121ad3fe8f27c9408ae7cd0"
+    },
+    "run_guarded_v1.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/run_guarded_v1.py",
+      "sha256": "ada2a86affda3483bb2fb0cf721cb37703a2c80ac7d8aae3c89d91e352dae2f2"
+    },
+    "crate_baseline_capture_v1.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/crate_baseline_capture_v1.py",
+      "sha256": "041c7f64b33853f5a92574d76fc2424080e537997e144de5e901f274c495ad68"
+    },
+    "CRATE-BASELINE-v1.md": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/CRATE-BASELINE-v1.md",
+      "sha256": "3560f09a1e8d1194adb8ea2cfc71f687066524fd1638b9e42bb6ab6b999b445a"
+    },
+    "crate_motion_capture_v2.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/crate_motion_capture_v2.py",
+      "sha256": "3559ec034087bc3cbe72a7f537e54e46a307091dbaedff0b2add8c5abf92667e"
+    },
+    "CRATE-MOTION-v2.md": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/CRATE-MOTION-v2.md",
+      "sha256": "7ba4e7daf8576f8fec5fdea01d96f915085a64e679ddfe7e90ca3a24a9e74b11"
+    },
+    "analyze_crate_geometry_v1.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/analyze_crate_geometry_v1.py",
+      "sha256": "762f8e0122b9b4b22bbcaad8529b002421a26e36d42cf2dbf6a0b003122842e2"
+    },
+    "METHOD-GEOMETRY-v1.md": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/METHOD-GEOMETRY-v1.md",
+      "sha256": "2bbfc545473f59bb2879709cd57c935e5b5be71dc692542c8e120b0dde3851b5"
+    },
+    "prepare_motion_media_v1.py": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/prepare_motion_media_v1.py",
+      "sha256": "48f2ee956fb7ef3797ef394f3217b8ec4b3be60f07a9f994a116433eff539065"
+    },
+    "baseline-geometry-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/baseline-geometry-v1.json",
+      "sha256": "f1adde6480c7f934d82d1434136cc4c69b13f41e2a5ea47aede1d9aa9ab3a054"
+    },
+    "root-visual-review-v1.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/root-visual-review-v1.json",
+      "sha256": "75ebe41868bd9d694f565c29efee4fdb1dd12cd6fbc829a5b687cf50b97a989d"
+    },
+    "baseline-geometry-v1-receipt": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/baseline-geometry-v1.receipt.json",
+      "sha256": "60bb9c36bad6b5f0e1bbf0b45d46cb5d4bc29885a9453becdf33f1decfa4f6f9"
+    },
+    "go2-baseline-capture-v1-receipt": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-baseline-capture-v1.receipt.json",
+      "sha256": "79c494892b0eb71f14236d406f72dc10b9b87ee8e3828b0e0cb2e49bbad7e968"
+    },
+    "harbor-baseline-capture-v1-receipt": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-baseline-capture-v1.receipt.json",
+      "sha256": "e78b0cd7975ecf8629f46733526404421edc7439174802cc1053f87e90bbb24a"
+    },
+    "malo-baseline-capture-v1-receipt": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/malo-baseline-capture-v1.receipt.json",
+      "sha256": "954e0cb71cdc52b4279d9452a143f8fcc2f47cb38d6af1a5537e0b53c4abfca2"
+    },
+    "go2-motion-capture-v1-receipt": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-capture-v1.receipt.json",
+      "sha256": "ec4cde15166bf54ea319e9629417c3445c7361a6716fa366728e2de5760d67b6"
+    },
+    "harbor-motion-capture-v1-receipt": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-capture-v1.receipt.json",
+      "sha256": "942fefb055d18fd4a07df8f3ebdff5d3060d4b9ee815c93bc353dd79386280b6"
+    },
+    "go2-motion-media-v1-receipt": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-media-v1.receipt.json",
+      "sha256": "69c7325febb591789362d1eca78dffdd8c536e25b45e81b4b1e7bb55e4732b7c"
+    },
+    "harbor-motion-media-v1-receipt": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-media-v1.receipt.json",
+      "sha256": "4250a4ed9a9b105ef82457044ad36ffbd492a912406e43eab5b36c7c206eb1cf"
+    },
+    "go2-media-manifest.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-media-v1/manifest.json",
+      "sha256": "26eb23c9037edf19f43e3ec32d4f8abd5003538040c83c613a37efe7a93c1dee"
+    },
+    "go2-media-media-qa.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-media-v1/media-qa.json",
+      "sha256": "f7f943a1fb4f0c897fa64a84525fe96b56bc40ef989dbc07fd11c5a883858279"
+    },
+    "go2-media-fps-preflight.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/go2-motion-media-v1/fps-preflight.json",
+      "sha256": "b31e65cdcfbb87bd30dbbe5f89628646620ddac14852c171a647afca10ebe8e7"
+    },
+    "harbor-media-manifest.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-media-v1/manifest.json",
+      "sha256": "22f9cf368e3d206ed89eccb078c5da16fdf80041d1c4f147d6b990899512af26"
+    },
+    "harbor-media-media-qa.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-media-v1/media-qa.json",
+      "sha256": "e33464c956876670f7451a65dcc64e268b84f884585675d46730db48cca51003"
+    },
+    "harbor-media-fps-preflight.json": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-crate-joints/harbor-motion-media-v1/fps-preflight.json",
+      "sha256": "b37ff7716e48433c0b971abd7893172faf52c93ef8de365bd337dbc088f26bfd"
+    }
+  },
+  "cost_scope": "No fresh package/install/bench/defaultpytest/GPU test claims; runtime inputs remain identical to main and PR75. No asset/dependency/project configuration changes.",
+  "operational_deviation": "Planning agent invoked uv run Ruff and automatically created an ignored checkout .venv with48packages; left intact. All actual captures/analysis/encoding used the pre-existing prop-materials interpreter. Prototype media timeout and timestamp issues corrected during source review before any media execution.",
+  "next": "Real baseline of table+two tabletop items+one stacked item, then explicit read-only recursive carried-item selection feeding existing group move/copy/save/Undo; preserve16limit and stale/state guards.",
+  "delivery": "Push/merge pending at report creation; separate verified delivery receipt required.",
+  "goal_status": "active"
+}
