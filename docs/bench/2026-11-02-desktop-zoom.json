@@ -1,0 +1,210 @@
+{
+  "date": "2026-11-02",
+  "kind": "native_desktop_zoom_observation",
+  "product_changed": false,
+  "source_root": "/Users/yusenthebot/dev/robotforge-native-capture",
+  "source_head": "1ba3c476ee97068d9abfdc4d785890bb5aaa7970",
+  "merged_base": "5908f79a7d0781f59176a59c8776d2e179527cfb",
+  "source_tree": "d8a60a08cf19782febdb70f95831ae2c9eaa1d84",
+  "source_freeze": {
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+    "sha256": "a46de89cbfbf38121b8ed7b94419ad67cff1fd60e1762a9f6d9ccb6da9014c45",
+    "count": 817
+  },
+  "world": "zeno_malo_workshop",
+  "world_sha256": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+  "sequence": [
+    "100% save",
+    "110% transit",
+    "125% Fit / Side / Restore",
+    "150% Fit / Front / Tab to Restore / Enter",
+    "100% Fit / Restore"
+  ],
+  "stage_metrics": [
+    {
+      "label": "100-initial",
+      "dpr": 2,
+      "css": [
+        1512,
+        717
+      ],
+      "outer": [
+        1512,
+        894
+      ],
+      "viewport": {
+        "scale": 1,
+        "width": 1512,
+        "height": 717
+      },
+      "rendererDpr": 2,
+      "buffer": [
+        3024,
+        1434
+      ]
+    },
+    {
+      "label": "125-before-actions",
+      "dpr": 2.5,
+      "css": [
+        1209,
+        573
+      ],
+      "outer": [
+        1512,
+        894
+      ],
+      "viewport": {
+        "scale": 1,
+        "width": 1209.5999755859375,
+        "height": 573.5999755859375
+      },
+      "rendererDpr": 2,
+      "buffer": [
+        2418,
+        1146
+      ]
+    },
+    {
+      "label": "150-before-actions",
+      "dpr": 3,
+      "css": [
+        1008,
+        478
+      ],
+      "outer": [
+        1512,
+        894
+      ],
+      "viewport": {
+        "scale": 1,
+        "width": 1008,
+        "height": 478
+      },
+      "rendererDpr": 2,
+      "buffer": [
+        2016,
+        956
+      ]
+    },
+    {
+      "label": "100-returned",
+      "dpr": 2,
+      "css": [
+        1512,
+        717
+      ],
+      "outer": [
+        1512,
+        894
+      ],
+      "viewport": {
+        "scale": 1,
+        "width": 1512,
+        "height": 717
+      },
+      "rendererDpr": 2,
+      "buffer": [
+        3024,
+        1434
+      ]
+    }
+  ],
+  "restore_checks": [
+    {
+      "label": "125-restored",
+      "maximum_camera_error": 2.398081733190338e-14,
+      "tolerance": 1e-09
+    },
+    {
+      "label": "150-restored",
+      "maximum_camera_error": 2.398081733190338e-14,
+      "tolerance": 1e-09
+    },
+    {
+      "label": "100-final-restored",
+      "maximum_camera_error": 2.398081733190338e-14,
+      "tolerance": 1e-09
+    }
+  ],
+  "model_arrays_unchanged": 481,
+  "physics_qpos_qvel_ctrl_time_paused_unchanged": true,
+  "world_and_owned_home_files_unchanged": true,
+  "source_inputs_verified_before_and_after": 817,
+  "console_warn_error_entries": 0,
+  "server_stopped": true,
+  "renderer_closed": true,
+  "tab_closed": true,
+  "zoom_restored_percent": 100,
+  "observed_limitations": [
+    "First native app binding addressed an unrelated front window; group button then selected the correct test tab. Early Cmd+0 is not an accepted test-page zoom observation.",
+    "One interim screenshot was unavailable and one app action reported a changed application; fresh state and explicit group selection recovered the target.",
+    "chrome-menu-100.png retains its original filename but the image shows the page, not the Chrome menu or zoom percentage.",
+    "First typeText attempt left the bookmark name empty; Save validation rejected it. The observation label100-bookmark-saved is an attempt, not a successful save. Native setValue then saved Zoom check successfully.",
+    "150% panel has vertical overflow. Native AX scroll returned noWindowsAvailable; no pointer wheel scrolling pass is claimed. Six native Tab keys focused Restore and scrolled it visibly into the panel; Return restored the saved pose.",
+    "125-side was sampled while tweening; its later selected Side control and stable restoration support behavior, not that intermediate pose as a settled view."
+  ],
+  "not_claimed": [
+    "all robots / devices / OS zoom",
+    "pointer wheel scrolling",
+    "full suite",
+    "new package or performance budgets",
+    "Windows",
+    "remote CI",
+    "new movie",
+    "material quality gain",
+    "retrospective closure of failed E83 captures"
+  ],
+  "next": "Screen native-image anisotropy only if bounded ordinary views justify it; no sampler candidate or runtime screen in this record.",
+  "witnesses": {
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/browser-v1.json": {
+      "sha256": "3fc7e80faceade0370d8f15200b1e4d62cb2cb552eac75013f36780cb0090554",
+      "bytes": 176
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/chrome-menu-100.png": {
+      "sha256": "798b7fd2f475ea0f85802421a8a5cf805e8354254f2fc9150a726caf4d628912",
+      "bytes": 593478
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/console-v1.json": {
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "bytes": 2
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/native-100-final.png": {
+      "sha256": "b588437f8f22ce1e348835348f512f83ad9f88d4c36d61ab3a9e64eb67324fa6",
+      "bytes": 559123
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/native-125-before.png": {
+      "sha256": "752979487e49d18c1aacf37c449b36c7bf628b082d7c97b19238720f9d815b30",
+      "bytes": 583262
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/native-150-controls.txt": {
+      "sha256": "e4e10aa69ed3c904061534679ad635fb6615ad0e2535085f9613c53cdfd1f709",
+      "bytes": 510
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/native-150-keyboard-reach.png": {
+      "sha256": "a28650220179aa1c160b2841c30a615ce638ce5f989a258bf9aedafdba140ceb",
+      "bytes": 526538
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/native-150-panel.png": {
+      "sha256": "4f98ea6b8fdfe8a4f137a93654f70eb1acd912b096ec35c16d32e75e2d8402b1",
+      "bytes": 585519
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/native-150-restored.png": {
+      "sha256": "6ff1ef035304b7c7ba01173a1e8e7d7fdf3944925ca36b7c92569eda8d4e500b",
+      "bytes": 531828
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/observations-v1.json": {
+      "sha256": "f8c0920f9d805fc6bf16ecd377caa8b24fd9c01e14cc6a79e149049a531efa0e",
+      "bytes": 11142
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/serve_v1.py": {
+      "sha256": "7eedf2003fb3f4b2676ddb0692944c2ff61f8b4a8bcde44d85bc5df7149a6bcd",
+      "bytes": 3923
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-desktop-zoom/server-v1.json": {
+      "sha256": "d8ebf2c78ec149ca4385c1015c0c033a6eed2cb633e0fca05a70641d263af14d",
+      "bytes": 88644
+    }
+  }
+}
