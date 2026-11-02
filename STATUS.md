@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-02 near-focus depth screen closed without a product candidate: camera-history clipping changes are real, but a shared ordinary-view defect was not established.
+  Four fixed paths ran once: Go2 DPR1 passed, Malo DPR1 failed fog/repeat controls, both DPR2 paths failed first native-click delivery. Retained24/48planned frames and152nativeJPEGs; no retakes or weakened gates.
+  All481model arrays/runtime and frozen814source inputs remain unchanged; all cleanup/input guards pass. One complete54.267s Go2 sampled film fully decodes; no new regression/package/budget/Windows/CI/desktop-zoom pass claimed.
+  [Report](docs/bench/2026-11-02-depth-precision-screen.md). Broad visual/lightweight/play goal active; action-success tuning deferred.
+
 - 2026-11-02 group Focus: the existing action frames current selected prop groups, preserving direction, membership, Undo and single-prop behavior. Fixed a real toolbar-wrap projection regression and an inherited furniture Surface assertion reproduced on baseline.
   66 distinct phased Chrome passes, fresh offline installed viewer/WebSocket/60-tool MCP smoke and430-file equivalence,4install and fixedABBA4×7viewer budgets pass; wheel4152068B(+185), no new assets/dependencies/passes.
   Actual Malo/Go2 four accepted captures:16nativeframes,4exact initial/pre-Focus RGBA pairs,481unchanged model arrays; group projected area1.762×/3.254×. Four media packages retain84JPEGs and timestamps; films fully decode,24decoded panels inspected.
