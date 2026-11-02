@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-02 native capture at high DPR: fixed test-tool screenshot/pointer competition with one per-tab gate around complete gestures and screenshot RPCs; CSS coordinates and trusted delivery checks remain.
+  Fixed16-slot probe retains14correct/2DPR2-overlap wrong-target timeouts.40distinct scoped tests pass; actual original Malo/Go2 DPR2 runs each pass7clicks/20nativeJPEGs,481unchanged model arrays/runtime and cleanup.
+  Two media packages retain40original JPEGs/timestamps;2560×1600films fully decode;12contact panels and2native endpoints reviewed.430product files/dependencies identical; no fresh package/performance/Windows/CI/desktop-zoom pass or visual-gain claim.
+  [Report](docs/bench/2026-11-02-native-capture.md). Broad visual/lightweight/play goal continues; E83 remains closed and action-success tuning deferred.
+
 - 2026-11-02 near-focus depth screen closed without a product candidate: camera-history clipping changes are real, but a shared ordinary-view defect was not established.
   Four fixed paths ran once: Go2 DPR1 passed, Malo DPR1 failed fog/repeat controls, both DPR2 paths failed first native-click delivery. Retained24/48planned frames and152nativeJPEGs; no retakes or weakened gates.
   All481model arrays/runtime and frozen814source inputs remain unchanged; all cleanup/input guards pass. One complete54.267s Go2 sampled film fully decodes; no new regression/package/budget/Windows/CI/desktop-zoom pass claimed.

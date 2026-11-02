@@ -1,0 +1,3032 @@
+{
+  "kind": "test-only-native-capture-exclusion",
+  "baseline_main": "bc46a7c1497c3180bbecd0d4b64f5c8cf2f21f13",
+  "source_sha256": "a46de89cbfbf38121b8ed7b94419ad67cff1fd60e1762a9f6d9ccb6da9014c45",
+  "source_inputs": 817,
+  "unchanged_product_files": 430,
+  "original_814_inputs_unchanged": true,
+  "probe": {
+    "slots": [
+      {
+        "name": "dpr1-P-1",
+        "dpr": 1,
+        "condition": "P",
+        "repeat": 1,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 655.1999999880791,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 1,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 655.6000000238419,
+              "origin": 1793586775605,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 655.6000000238419,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr1-P-2",
+        "dpr": 1,
+        "condition": "P",
+        "repeat": 2,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 610.3000000119209,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 1,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 610.6999999880791,
+              "origin": 1793586777004.7,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 610.6999999880791,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr1-C-1",
+        "dpr": 1,
+        "condition": "C",
+        "repeat": 1,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 584.3000000119209,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 1,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 584.6000000238419,
+              "origin": 1793586778243.7,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 584.6000000238419,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr1-C-2",
+        "dpr": 1,
+        "condition": "C",
+        "repeat": 2,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 582.1999999880791,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 1,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 582.6000000238419,
+              "origin": 1793586779703.7,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 582.6000000238419,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr1-S-1",
+        "dpr": 1,
+        "condition": "S",
+        "repeat": 1,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 702.1000000238419,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 1,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 702.3000000119209,
+              "origin": 1793586780941.6,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 702.3000000119209,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr1-S-2",
+        "dpr": 1,
+        "condition": "S",
+        "repeat": 2,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 684.5999999642372,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 1,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 684.8000000119209,
+              "origin": 1793586782382.2,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 684.8000000119209,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr1-O-1",
+        "dpr": 1,
+        "condition": "O",
+        "repeat": 1,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": true,
+        "overlap": [
+          {
+            "inside": true,
+            "ns": 354363376661875,
+            "sent_ns": 354363376708000,
+            "type": "mouseMoved"
+          },
+          {
+            "inside": true,
+            "ns": 354363392862916,
+            "sent_ns": 354363392952750,
+            "type": "mousePressed"
+          },
+          {
+            "inside": true,
+            "ns": 354363393897000,
+            "sent_ns": 354363393942375,
+            "type": "mouseReleased"
+          }
+        ],
+        "window": {
+          "screenshot_reply_ns": 354363471820208,
+          "screenshot_sent_ns": 354363376607291
+        },
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 606.8000000119209,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 1,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 607.1000000238419,
+              "origin": 1793586783828.1,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 607.1000000238419,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr1-O-2",
+        "dpr": 1,
+        "condition": "O",
+        "repeat": 2,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": true,
+        "overlap": [
+          {
+            "inside": true,
+            "ns": 354364616937666,
+            "sent_ns": 354364617015833,
+            "type": "mouseMoved"
+          },
+          {
+            "inside": true,
+            "ns": 354364633625250,
+            "sent_ns": 354364633701291,
+            "type": "mousePressed"
+          },
+          {
+            "inside": true,
+            "ns": 354364634699083,
+            "sent_ns": 354364634758666,
+            "type": "mouseReleased"
+          }
+        ],
+        "window": {
+          "screenshot_reply_ns": 354364713582916,
+          "screenshot_sent_ns": 354364616849208
+        },
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 597.2999999523163,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 1,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 597.5,
+              "origin": 1793586785078.6,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 597.5,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr2-P-1",
+        "dpr": 2,
+        "condition": "P",
+        "repeat": 1,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 631.6000000238419,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 2,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 632.1999999880791,
+              "origin": 1793586786476,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 632.1999999880791,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr2-P-2",
+        "dpr": 2,
+        "condition": "P",
+        "repeat": 2,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 612.3999999761581,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 2,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 612.5999999642372,
+              "origin": 1793586787872.2,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 612.5999999642372,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr2-C-1",
+        "dpr": 2,
+        "condition": "C",
+        "repeat": 1,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 621.5,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 2,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 621.8000000119209,
+              "origin": 1793586789133.7,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 621.8000000119209,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr2-C-2",
+        "dpr": 2,
+        "condition": "C",
+        "repeat": 2,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 623.2000000476837,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 2,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 623.7000000476837,
+              "origin": 1793586790530.3,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 623.7000000476837,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr2-S-1",
+        "dpr": 2,
+        "condition": "S",
+        "repeat": 1,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 706.8000000119209,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 2,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 707.0999999642372,
+              "origin": 1793586791825.2,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 707.0999999642372,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr2-S-2",
+        "dpr": 2,
+        "condition": "S",
+        "repeat": 2,
+        "click_outcome": "delivered",
+        "click_error": null,
+        "overlap_observed": null,
+        "overlap": null,
+        "window": null,
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              658,
+              754
+            ],
+            "eventTime": 738.5,
+            "offset": [
+              12,
+              9
+            ],
+            "page": [
+              658,
+              754
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 2,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 738.7999999523163,
+              "origin": 1793586793313.6,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "",
+              "tag": "SPAN"
+            },
+            "time": 738.7999999523163,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr2-O-1",
+        "dpr": 2,
+        "condition": "O",
+        "repeat": 1,
+        "click_outcome": "timeout",
+        "click_error": "TimeoutError('laptop_en: never window.__nativeClickDelivered || !window.__nativeClickNeedsDelivery')",
+        "overlap_observed": true,
+        "overlap": [
+          {
+            "inside": true,
+            "ns": 354374521385791,
+            "sent_ns": 354374521467708,
+            "type": "mouseMoved"
+          },
+          {
+            "inside": true,
+            "ns": 354374537523583,
+            "sent_ns": 354374537611333,
+            "type": "mousePressed"
+          },
+          {
+            "inside": true,
+            "ns": 354374542435333,
+            "sent_ns": 354374542493458,
+            "type": "mouseReleased"
+          }
+        ],
+        "window": {
+          "screenshot_reply_ns": 354374618316416,
+          "screenshot_sent_ns": 354374521286125
+        },
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              329,
+              377
+            ],
+            "eventTime": 594.5,
+            "offset": [
+              329,
+              377
+            ],
+            "page": [
+              329,
+              377
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "view",
+                "tag": "CANVAS"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 2,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 594.7999999523163,
+              "origin": 1793586794988.9,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "view",
+              "tag": "CANVAS"
+            },
+            "time": 594.7999999523163,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      },
+      {
+        "name": "dpr2-O-2",
+        "dpr": 2,
+        "condition": "O",
+        "repeat": 2,
+        "click_outcome": "timeout",
+        "click_error": "TimeoutError('laptop_en: never window.__nativeClickDelivered || !window.__nativeClickNeedsDelivery')",
+        "overlap_observed": true,
+        "overlap": [
+          {
+            "inside": true,
+            "ns": 354378792354250,
+            "sent_ns": 354378792427500,
+            "type": "mouseMoved"
+          },
+          {
+            "inside": true,
+            "ns": 354378809628458,
+            "sent_ns": 354378809762375,
+            "type": "mousePressed"
+          },
+          {
+            "inside": true,
+            "ns": 354378811049125,
+            "sent_ns": 354378811104500,
+            "type": "mouseReleased"
+          }
+        ],
+        "window": {
+          "screenshot_reply_ns": 354378890374458,
+          "screenshot_sent_ns": 354378792272083
+        },
+        "trusted_clicks": [
+          {
+            "button": 0,
+            "buttons": 0,
+            "client": [
+              329,
+              377
+            ],
+            "eventTime": 647.1000000238419,
+            "offset": [
+              329,
+              377
+            ],
+            "page": [
+              329,
+              377
+            ],
+            "screen": [
+              680,
+              863
+            ],
+            "snapshot": {
+              "active": {
+                "id": "view",
+                "tag": "CANVAS"
+              },
+              "center": [
+                658.8515625,
+                754
+              ],
+              "dpr": 2,
+              "focus": true,
+              "hit": {
+                "id": "",
+                "tag": "SPAN"
+              },
+              "inner": [
+                1280,
+                800
+              ],
+              "now": 647.3999999761581,
+              "origin": 1793586799205.1,
+              "outer": [
+                756,
+                556
+              ],
+              "rect": {
+                "bottom": 771,
+                "height": 34,
+                "left": 613.1875,
+                "right": 704.515625,
+                "top": 737,
+                "width": 91.328125,
+                "x": 613.1875,
+                "y": 737
+              },
+              "scroll": [
+                0,
+                0
+              ],
+              "target": {
+                "id": "btn-frame",
+                "tag": "BUTTON"
+              },
+              "viewport": {
+                "height": 800,
+                "offsetLeft": 0,
+                "offsetTop": 0,
+                "pageLeft": 0,
+                "pageTop": 0,
+                "scale": 1,
+                "width": 1280
+              }
+            },
+            "target": {
+              "id": "view",
+              "tag": "CANVAS"
+            },
+            "time": 647.3999999761581,
+            "trusted": true,
+            "type": "click"
+          }
+        ]
+      }
+    ],
+    "correct_clicks": 14,
+    "retained_wrong_target_timeouts": 2
+  },
+  "pytest": {
+    "candidate_unit": 7,
+    "candidate_new_browser": 4,
+    "candidate_existing_browser": 29,
+    "candidate_distinct_passed": 40,
+    "earlier_baseline_cases_included_in_existing_29": 2
+  },
+  "captures": {
+    "malo": {
+      "passed": true,
+      "native_jpegs": 20,
+      "native_size": [
+        2560,
+        1600
+      ],
+      "actions": [
+        {
+          "label": "fit",
+          "selector": "#btn-frame",
+          "sampled": true
+        },
+        {
+          "label": "views",
+          "selector": "#view-toggle",
+          "sampled": true
+        },
+        {
+          "label": "name",
+          "selector": ".camera-bookmarks-name",
+          "sampled": false
+        },
+        {
+          "label": "save",
+          "selector": ".camera-bookmarks-save",
+          "sampled": true
+        },
+        {
+          "label": "close-views",
+          "selector": "#view-toggle",
+          "sampled": false
+        },
+        {
+          "label": "reopen-views",
+          "selector": "#view-toggle",
+          "sampled": false
+        },
+        {
+          "label": "restore",
+          "selector": ".camera-bookmarks-row .camera-bookmarks-restore",
+          "sampled": true
+        }
+      ],
+      "model_arrays_unchanged": 481,
+      "world_wire": [],
+      "observations": {
+        "fit-00": {
+          "eye": [
+            2.742516497705204,
+            -2.2364192916701566,
+            1.991922828637968
+          ],
+          "target": [
+            1.1226122985269478,
+            -0.1305438327384273,
+            0.695999469295365
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "fit-01": {
+          "eye": [
+            2.740955953003807,
+            -2.237619710671235,
+            1.9919228286379698
+          ],
+          "target": [
+            1.1210517538255504,
+            -0.13174425173950227,
+            0.695999469295365
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "fit-02": {
+          "eye": [
+            2.740954621167691,
+            -2.2376207351605464,
+            1.9919228286379664
+          ],
+          "target": [
+            1.1210504219894353,
+            -0.13174527622882168,
+            0.6959994692953649
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "fit-03": {
+          "eye": [
+            2.74095462116769,
+            -2.2376207351605357,
+            1.9919228286379616
+          ],
+          "target": [
+            1.1210504219894353,
+            -0.13174527622882168,
+            0.6959994692953649
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "front": {
+          "eye": [
+            0,
+            -5.799999999999956,
+            3.09999999999998
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "other": {
+          "eye": [
+            5.999999999999997,
+            -7.999999999999945,
+            6.999999999999965
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "ready": {
+          "eye": [
+            2.7542484313064017,
+            -2.2273947273615144,
+            1.9919228286379536
+          ],
+          "target": [
+            1.1343442321281474,
+            -0.1215192684298109,
+            0.6959994692953649
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restore-00": {
+          "eye": [
+            0.4840846518504956,
+            -6.301959932055221,
+            3.476170400530034
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restore-01": {
+          "eye": [
+            0.0002888581581354764,
+            -5.8003380793978305,
+            3.1002361287776816
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restore-02": {
+          "eye": [
+            0,
+            -5.799999999999718,
+            3.0999999999998833
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restore-03": {
+          "eye": [
+            0,
+            -5.79999999999969,
+            3.0999999999998744
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restored": {
+          "eye": [
+            0,
+            -5.799999999999654,
+            3.099999999999863
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restored-final": {
+          "eye": [
+            0,
+            -5.799999999999638,
+            3.0999999999998566
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "save-00": {
+          "eye": [
+            0,
+            -5.799999999999743,
+            3.099999999999894
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "save-01": {
+          "eye": [
+            0,
+            -5.799999999999743,
+            3.099999999999894
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "save-02": {
+          "eye": [
+            0,
+            -5.799999999999743,
+            3.099999999999894
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "save-03": {
+          "eye": [
+            0,
+            -5.799999999999743,
+            3.099999999999894
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "views-00": {
+          "eye": [
+            0,
+            -5.7999999999999154,
+            3.099999999999965
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "views-01": {
+          "eye": [
+            0,
+            -5.7999999999998835,
+            3.099999999999948
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "views-02": {
+          "eye": [
+            0,
+            -5.79999999999985,
+            3.099999999999934
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "views-03": {
+          "eye": [
+            0,
+            -5.799999999999814,
+            3.0999999999999233
+          ],
+          "target": [
+            0,
+            0.6,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        }
+      },
+      "cleanup": {
+        "reader_stopped": true,
+        "socket_closed": true,
+        "chrome_stopped": true,
+        "server_stopped": true,
+        "renderer_closed": true
+      }
+    },
+    "go2": {
+      "passed": true,
+      "native_jpegs": 20,
+      "native_size": [
+        2560,
+        1600
+      ],
+      "actions": [
+        {
+          "label": "fit",
+          "selector": "#btn-frame",
+          "sampled": true
+        },
+        {
+          "label": "views",
+          "selector": "#view-toggle",
+          "sampled": true
+        },
+        {
+          "label": "name",
+          "selector": ".camera-bookmarks-name",
+          "sampled": false
+        },
+        {
+          "label": "save",
+          "selector": ".camera-bookmarks-save",
+          "sampled": true
+        },
+        {
+          "label": "close-views",
+          "selector": "#view-toggle",
+          "sampled": false
+        },
+        {
+          "label": "reopen-views",
+          "selector": "#view-toggle",
+          "sampled": false
+        },
+        {
+          "label": "restore",
+          "selector": ".camera-bookmarks-row .camera-bookmarks-restore",
+          "sampled": true
+        }
+      ],
+      "model_arrays_unchanged": 481,
+      "world_wire": [],
+      "observations": {
+        "fit-00": {
+          "eye": [
+            9.550996161804083,
+            -9.881423408314625,
+            6.699282562280394
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804215,
+            1.4534866173362682
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "fit-01": {
+          "eye": [
+            9.550996161804084,
+            -9.881423408314635,
+            6.699282562280401
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804213,
+            1.4534866173362682
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "fit-02": {
+          "eye": [
+            9.550996161804083,
+            -9.881423408314621,
+            6.699282562280392
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804213,
+            1.4534866173362682
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "fit-03": {
+          "eye": [
+            9.550996161804083,
+            -9.881423408314621,
+            6.699282562280392
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804213,
+            1.4534866173362682
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "front": {
+          "eye": [
+            6.000000000000002,
+            -7.999999999999966,
+            4.999999999999969
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "other": {
+          "eye": [
+            5.999999999999994,
+            -7.999999999999895,
+            6.999999999999933
+          ],
+          "target": [
+            1,
+            -1.9,
+            0.2
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "ready": {
+          "eye": [
+            9.550996161804076,
+            -9.881423408314548,
+            6.699282562280362
+          ],
+          "target": [
+            2.993751230623916,
+            -1.3570049977804235,
+            1.4534866173362684
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restore-00": {
+          "eye": [
+            6.013447788915229,
+            -8.015053574550622,
+            5.2159391104721875
+          ],
+          "target": [
+            1.442130682805378,
+            -2.5189829559275294,
+            0.2884261365610755
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restore-01": {
+          "eye": [
+            6.000009999284323,
+            -8.00001116738868,
+            5.00014122662595
+          ],
+          "target": [
+            1.4999617675115167,
+            -2.599946474516124,
+            0.2999923535023033
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restore-02": {
+          "eye": [
+            5.99999999999999,
+            -7.9999999999997495,
+            4.999999999999791
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restore-03": {
+          "eye": [
+            5.999999999999989,
+            -7.999999999999721,
+            4.99999999999977
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restored": {
+          "eye": [
+            5.999999999999985,
+            -7.999999999999686,
+            4.999999999999745
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "restored-final": {
+          "eye": [
+            5.999999999999983,
+            -7.99999999999967,
+            4.999999999999731
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "save-00": {
+          "eye": [
+            5.999999999999997,
+            -7.999999999999746,
+            4.999999999999788
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "save-01": {
+          "eye": [
+            5.999999999999999,
+            -7.999999999999718,
+            4.999999999999769
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "save-02": {
+          "eye": [
+            5.999999999999998,
+            -7.999999999999693,
+            4.999999999999752
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "save-03": {
+          "eye": [
+            5.999999999999991,
+            -7.999999999999664,
+            4.99999999999973
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "views-00": {
+          "eye": [
+            6.000000000000001,
+            -7.99999999999992,
+            4.99999999999993
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "views-01": {
+          "eye": [
+            6.000000000000002,
+            -7.999999999999895,
+            4.99999999999991
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "views-02": {
+          "eye": [
+            5.999999999999997,
+            -7.9999999999998685,
+            4.999999999999888
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        },
+        "views-03": {
+          "eye": [
+            5.9999999999999964,
+            -7.999999999999838,
+            4.999999999999862
+          ],
+          "target": [
+            1.5000000000000002,
+            -2.600000000000001,
+            0.3
+          ],
+          "buffer": [
+            2560,
+            1600
+          ],
+          "dpr": 2,
+          "gl": 0,
+          "contextLost": false
+        }
+      },
+      "cleanup": {
+        "reader_stopped": true,
+        "socket_closed": true,
+        "chrome_stopped": true,
+        "server_stopped": true,
+        "renderer_closed": true
+      }
+    }
+  },
+  "media": {
+    "malo": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/workflow.mp4",
+      "video_sha256": "ae0993fe605c52294cefb77f93e9c13aea1797fbd6aaa3221ab5a217555cfe1f",
+      "video_bytes": 1504310,
+      "duration_seconds": 6.033333,
+      "decoded_frame_count": 181,
+      "decode_exit_code": 0,
+      "raw_frame_count": 20,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "decoded_contacts": [
+        {
+          "seconds": 0.12066666,
+          "path": "t0.121.png",
+          "sha256": "10a47e744fdd26eb20ac1febe4dd6e2232f6ede69032288b2d38b304e9f99ddd"
+        },
+        {
+          "seconds": 1.2066666000000001,
+          "path": "t1.207.png",
+          "sha256": "d81dec13c95a62d62a2fd0fc6a1735a2f332c217dc202f210a2b0877093f09d8"
+        },
+        {
+          "seconds": 2.4133332000000003,
+          "path": "t2.413.png",
+          "sha256": "4f8db91461a592043f2310626d779429de19abc7edc8118e0d38bbacb0a502f9"
+        },
+        {
+          "seconds": 3.6199997999999995,
+          "path": "t3.620.png",
+          "sha256": "c60bd6bcef612117da2b9c2674469b7e08e1577fbb401954b3c4137fd1cc98ea"
+        },
+        {
+          "seconds": 4.826666400000001,
+          "path": "t4.827.png",
+          "sha256": "bfcac2c530b1661777518a8669509b927f86b823c1bc5a94a33982ee27bc77a0"
+        },
+        {
+          "seconds": 5.9126663399999995,
+          "path": "t5.913.png",
+          "sha256": "a73bb00b5de074efd8d99c44308b0ee666a11de1efe310b67a29f8735d528eca"
+        }
+      ],
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/decoded-contact.jpg",
+      "decoded_contact_sheet_sha256": "9eaacfab61eb56899d8f4da4a095ccc5849e6eff0d43d3ac5ad5d1f34a83a549"
+    },
+    "go2": {
+      "video": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/workflow.mp4",
+      "video_sha256": "ecb126b4095bc7024138830f69eaf99bd7cd7bd03ad5658f378dbca134558326",
+      "video_bytes": 1983871,
+      "duration_seconds": 6.066667,
+      "decoded_frame_count": 182,
+      "decode_exit_code": 0,
+      "raw_frame_count": 20,
+      "ordering": "All original arrival-order manifest/JPEG bytes preserved. Concat uses complete timestamp/original-index permutation; strict unique increasing playback timestamps. 30fps CFR resamples encoding inputs and does not promise every JPEG in the output movie. Inversion cause not established.",
+      "decoded_contacts": [
+        {
+          "seconds": 0.12133334,
+          "path": "t0.121.png",
+          "sha256": "44e95c0eb0cd97fb9b70708bbc7f72993518a04bb9949107ec2895c1a0cf9031"
+        },
+        {
+          "seconds": 1.2133334,
+          "path": "t1.213.png",
+          "sha256": "3d9ece8143a185f1b992e8fc7567eff7654be46591e1597e369279dc3a76a1bc"
+        },
+        {
+          "seconds": 2.4266668,
+          "path": "t2.427.png",
+          "sha256": "f0d6ea74467fcbe2cfa09229cb75739454a78fc7a489604e602dd59aad14859c"
+        },
+        {
+          "seconds": 3.6400002,
+          "path": "t3.640.png",
+          "sha256": "199b8667168ad4ba8a1313eb5aa3f2452101b280f44e6f7110f5f8944aea2412"
+        },
+        {
+          "seconds": 4.8533336,
+          "path": "t4.853.png",
+          "sha256": "07b1e794cdb670141abd36d71ac34640e0683a7340a7aa38403c5b72b1897cb9"
+        },
+        {
+          "seconds": 5.945333659999999,
+          "path": "t5.945.png",
+          "sha256": "f74e31cb611324785dd3ff38b63d47eee7c7cf3090314a9bebf1f4ba33cc5475"
+        }
+      ],
+      "decoded_contact_sheet": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/decoded-contact.jpg",
+      "decoded_contact_sheet_sha256": "0700f61957dc8b912549f60a6c210632720fb84a0f9ec4480b6a49c063970278"
+    }
+  },
+  "receipts": {
+    "baseline-direct-input-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-m",
+        "browser",
+        "tests/test_viewer_drive_dock_browser.py",
+        "-k",
+        "1280 and en"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-input",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/baseline-source-v1.json",
+      "seconds": 13.374400083033834,
+      "status": "passed"
+    },
+    "input-probe-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/probe_input_v1.py",
+        "--root",
+        "/Users/yusenthebot/dev/robotforge-native-input",
+        "--source-freeze",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/baseline-source-v1.json",
+        "--source-sha",
+        "7948fbbaac1efe7cdb2154d0d1835f7d07169277196d84681923dae8e29a6dcd",
+        "--external-freeze",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/external-inputs-v1.json",
+        "--external-sha",
+        "35853defe33b8f1cd66daabc24405786efc6bb3444820cfd1d06e6f88bcce87a",
+        "--output",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1",
+        "--expected-helper",
+        "5388943989f8b1f16e17ce2187c64a678141ed12973d0d4b4836adf7feb6d596",
+        "--expected-plan",
+        "49f8c401ac5e3e9fc79ed37257b2fc253f1ace8618a9dff5759d42d1d19dbeaa",
+        "--expected-method",
+        "37f6d466cd694c829213d2a11f4e936d49b096e358fe5e293b132e42a69dd50e"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-input",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/baseline-source-v1.json",
+      "seconds": 32.78955375001533,
+      "status": "passed"
+    },
+    "gate-unit-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_viewer_capture.py"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-capture",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+      "seconds": 2.978815082984511,
+      "status": "passed"
+    },
+    "gate-browser-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-m",
+        "browser",
+        "--basetemp",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1",
+        "tests/test_viewer_capture_browser.py"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-capture",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+      "seconds": 21.475741999980528,
+      "status": "passed"
+    },
+    "compatibility-browser-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "-m",
+        "pytest",
+        "-q",
+        "-m",
+        "browser",
+        "tests/test_viewer_resolution_browser.py",
+        "tests/test_viewer_drive_dock_browser.py",
+        "tests/test_viewer_camera_views_browser.py"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-capture",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+      "seconds": 109.3961932079983,
+      "status": "passed"
+    },
+    "malo-input-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/capture_input_v1.py",
+        "--root",
+        "/Users/yusenthebot/dev/robotforge-native-capture",
+        "--world",
+        "malo",
+        "--source-freeze",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+        "--source-sha",
+        "a46de89cbfbf38121b8ed7b94419ad67cff1fd60e1762a9f6d9ccb6da9014c45",
+        "--references",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/references-v1.json",
+        "--references-sha",
+        "9f364258e1993e6f5b5326a9896eaa404832cbcb66e1d61642f097b9e89c25d9",
+        "--external-freeze",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/external-inputs-v1.json",
+        "--external-sha",
+        "35853defe33b8f1cd66daabc24405786efc6bb3444820cfd1d06e6f88bcce87a",
+        "--output",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1",
+        "--expected-helper",
+        "509020edad3e4313717a1ddad8d73e97a33eb400d3b1b81e0ba11cf14848cc72",
+        "--expected-plan",
+        "44f4b81bc289b00303514b4e227d252caa1f7581c8b8df8ef139f05656267e63",
+        "--expected-method",
+        "59e948c7bd71a02d39b3b53808105cef4de72b8816240a404c34e706a9aedcf6"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-capture",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+      "seconds": 13.762143291009124,
+      "status": "passed"
+    },
+    "go2-input-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/capture_input_v1.py",
+        "--root",
+        "/Users/yusenthebot/dev/robotforge-native-capture",
+        "--world",
+        "go2",
+        "--source-freeze",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+        "--source-sha",
+        "a46de89cbfbf38121b8ed7b94419ad67cff1fd60e1762a9f6d9ccb6da9014c45",
+        "--references",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/references-v1.json",
+        "--references-sha",
+        "9f364258e1993e6f5b5326a9896eaa404832cbcb66e1d61642f097b9e89c25d9",
+        "--external-freeze",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/external-inputs-v1.json",
+        "--external-sha",
+        "35853defe33b8f1cd66daabc24405786efc6bb3444820cfd1d06e6f88bcce87a",
+        "--output",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1",
+        "--expected-helper",
+        "509020edad3e4313717a1ddad8d73e97a33eb400d3b1b81e0ba11cf14848cc72",
+        "--expected-plan",
+        "44f4b81bc289b00303514b4e227d252caa1f7581c8b8df8ef139f05656267e63",
+        "--expected-method",
+        "59e948c7bd71a02d39b3b53808105cef4de72b8816240a404c34e706a9aedcf6"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-capture",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+      "seconds": 12.949364292027894,
+      "status": "passed"
+    },
+    "malo-media-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/prepare_motion_media_v1.py",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/manifest.json",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1",
+        "--expected-helper",
+        "81be282cc9829fdb9e817f2b096483ddbc4c11644d058ed933eab2dfd1e40d5a"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-capture",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+      "seconds": 12.39524112502113,
+      "status": "passed"
+    },
+    "go2-media-v1": {
+      "command": [
+        "/Users/yusenthebot/dev/robotforge-prop-materials/.venv/bin/python3",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/prepare_motion_media_v1.py",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/manifest.json",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1",
+        "--expected-helper",
+        "81be282cc9829fdb9e817f2b096483ddbc4c11644d058ed933eab2dfd1e40d5a"
+      ],
+      "cwd": "/Users/yusenthebot/dev/robotforge-native-capture",
+      "source_freeze": "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json",
+      "seconds": 12.934986416017637,
+      "status": "passed"
+    }
+  },
+  "witnesses": {
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-prop-row/run_frozen_stage_v1.py": "a77527db4a7d6e6c11d0c77f33d1fba2d3631b7c71943dc77341d0819ceca366",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/baseline-source-v1.json": "7948fbbaac1efe7cdb2154d0d1835f7d07169277196d84681923dae8e29a6dcd",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-agx-display/freeze-v1.json": "aa384cbc25a72ffb57295709cb16eb06532f7508105956ec3baaf902fb1321a7",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-mesh-reuse/candidate-source-freeze-v1.json": "b0ba4aa01489920a40d29a70c0ea6bf5bb52c8f440e7e755629873d1d5a6f02a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-arrangements/external-inputs-v1.json": "64c757b5583f49333274250acb24069650cb070935c290a64c6f23debc17fca5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/baseline-source-v1.json": "9f8e2e3a22aa9dbdf12cb81ba234526f7ee7dd8c4dd845982e1a893bbe3cf3da",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-01-compact-materials/candidate-source-v2.json": "ef7f406e3aee24b8528ca27c0c2d7611f49fa0ee269f1d8ef2620dd38f02fb18",
+    "/Users/yusenthebot/dev/robotforge-native-input/tests/test_viewer_drive_dock_browser.py": "99ce13823bf2d9af99d94b5691cbca6188b8ee28bfd7c1384b0df03020d23eba",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/baseline-direct-input-v1.receipt.json": "6073ee9b2c084c912742700b5cd69c80ac40223db2a5cc2b545d0f0fd1a288e3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/baseline-direct-input-v1.log": "c25d0043983e3b0a1cb6da688fde1eb4ce6e2b56e3999a89f2a1da35a05cb0c6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/probe_input_v1.py": "5388943989f8b1f16e17ce2187c64a678141ed12973d0d4b4836adf7feb6d596",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/external-inputs-v1.json": "35853defe33b8f1cd66daabc24405786efc6bb3444820cfd1d06e6f88bcce87a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1.receipt.json": "38cc450711e907a6d1d5f0a28530278f4af0bf4ba6d1a3e665322c9e47603e09",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/candidate-source-v1.json": "a46de89cbfbf38121b8ed7b94419ad67cff1fd60e1762a9f6d9ccb6da9014c45",
+    "/Users/yusenthebot/dev/robotforge-native-capture/tests/test_viewer_capture.py": "20620d93ea33f7226367e7b44d66c28a25e8c782dd7abd5ae47b8b501d445733",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/gate-unit-v1.receipt.json": "33165de8301bebf73a1d049022264684fde299cd7f49b4f8768eb298c8b121aa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/gate-unit-v1.log": "186c19ffd26f40cb3e4599212e3e9160acf3a6cbd850bcc2f5280ffcc368f226",
+    "/Users/yusenthebot/dev/robotforge-native-capture/tests/test_viewer_capture_browser.py": "3e890561803a9ff53f91e8ac11fd9410c0e4ccf16ac3b9ed75d6fe517b0df3ca",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/gate-browser-v1.receipt.json": "d40459ac87eba55a13dc274ec4d0dfb6665d361d4112dbff086a3dcafbcf4a31",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/gate-browser-v1.log": "62d9036fcc0e8a83cd81044606fe1fef87a5dd9e6d85c1400719b197368197c8",
+    "/Users/yusenthebot/dev/robotforge-native-capture/tests/test_viewer_resolution_browser.py": "033cbfd374372d7b872a438243116b71abf6f9aff76cb66827fe8328b6ca7bdc",
+    "/Users/yusenthebot/dev/robotforge-native-capture/tests/test_viewer_drive_dock_browser.py": "99ce13823bf2d9af99d94b5691cbca6188b8ee28bfd7c1384b0df03020d23eba",
+    "/Users/yusenthebot/dev/robotforge-native-capture/tests/test_viewer_camera_views_browser.py": "3b4837dc9dd1cc351b297e4b74fa36496771e6c1757c1fb2a514d21667576ecd",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/compatibility-browser-v1.receipt.json": "d58b8f930c86cedb2f176d55171154eb86c7950d7e01d85305d2310b26152ea2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/compatibility-browser-v1.log": "6e3111b22f5b3af574c094225694671ac8c18313ea10bddc21330f488e3a97b7",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/capture_input_v1.py": "509020edad3e4313717a1ddad8d73e97a33eb400d3b1b81e0ba11cf14848cc72",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-carried-selection/references-v1.json": "9f364258e1993e6f5b5326a9896eaa404832cbcb66e1d61642f097b9e89c25d9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1.receipt.json": "b2976ce80f8929a303dbec40008532110f948fff8d5faf51d9e89c8a45e9f02e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1.receipt.json": "4cf3daeb4c665facf90060008722dcb943f155144d8d96865d391fd89f1a69de",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/prepare_motion_media_v1.py": "81be282cc9829fdb9e817f2b096483ddbc4c11644d058ed933eab2dfd1e40d5a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/manifest.json": "baf2dad9a51a0cfcc9ef78717bdcc2ae66848f7b647b0e24164574f6802b5aaa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1.receipt.json": "b66eac2a6dd7c95d8a3d7f5988335f75293e0504f95537a9c58cbc746a2f8693",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1.log": "0845aec484980bdea3b922a2ca8eb96233e3b8589e5bf1183e2c9fe84c05eba8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/manifest.json": "80d7d95ea4aa453207fa42392a5059ce3b9d062096edab4bbc901b136c305c7a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1.receipt.json": "605d80e786710528c7fa54a3ee3e1e008c2353e87fc6f31db0b731ed5db17faa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1.log": "9920160a19246a37c42baf92a63afc3369ae9560ee376f823ba6b025d593749a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/run_guarded_v1.py": "d99dc3ebb303cdc146065b834ed85996ef0007aed4707b5e9a0d023f041f91df",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/run_guarded_v2.py": "165d9183496b93826ba684894652cc444e4b3c23c36a0a05ebaeaaf69a91060d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/build_record_v1.py": "37622cb904b5eeca58c5439598d8ab7b0e0ad7ed64f6f64b764d76754b31bbd5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/PLAN-v1.md": "49f8c401ac5e3e9fc79ed37257b2fc253f1ace8618a9dff5759d42d1d19dbeaa",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/FIX-PLAN-v1.md": "b9db35c79ed82e5488d8d7dc380a7e8482e49d2032f138ec62dc55aa75657e21",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/CAPTURE-METHOD-v1.md": "59e948c7bd71a02d39b3b53808105cef4de72b8816240a404c34e706a9aedcf6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/METHOD-v1.md": "37f6d466cd694c829213d2a11f4e936d49b096e358fe5e293b132e42a69dd50e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/CAPTURE-PLAN-v1.md": "44f4b81bc289b00303514b4e227d252caa1f7581c8b8df8ef139f05656267e63",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/manifest.json": "9c5fb8854c4e11ce41bfa5fe71461fd3271ec288d248da1c4f50d5b660c3aee2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-O-2/screenshot.jpg": "b556ccb0cc87b03d84985947abb145c02ac649dc7080ddef535a85cc90f590f3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-O-2/observations.json": "db9ba4569bea41841febb0ae307e09e3040e1b44f572d6f3a91792f9b701c6c4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-O-2/rpc.jsonl": "26cbc9e72d6050d95f6f3f014743e389df91d5f2e271fa425a372688544d631d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-C-1/observations.json": "cb21a5eedb36609106397ce1a2cf2a0edd86acf156ed18284f7f3d25221e478a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-C-1/rpc.jsonl": "0b1936e2e68b8cccb4059686309e620c8b709de6f73863454dbf65393fc04d75",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-O-2/screenshot.jpg": "6c58a7792abb78632c27855decd994e6a76e9a89714cef2f6f45b808af71417f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-O-2/observations.json": "e20eb2f707c116f6b3b0f3b8fa0ebe3a9d45e352f6498bbb24fddff933774cd4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-O-2/rpc.jsonl": "fd3bc1be0c113f2ed2ca865a457fd148a460bbf83c2832755c42d0d8436cae27",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-C-1/observations.json": "6b2ef69e8615eb31e11c456600d0d3a299f5cb36a4f6b2700968e9d87aed3e8b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-C-1/rpc.jsonl": "eef4377f5008a62ecf4cd5a5ec92b02be91850babd707061be368cf25b5e295d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-S-2/screenshot.jpg": "564725aa3403ff9a63d8465df0ad23072ddcda0cbcd9ffbaa8e4eaa65bf56f88",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-S-2/observations.json": "8d176c3c623d2a693f938d8f3f1df0e1d00f022acfcba6a3e0cead642e8f8097",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-S-2/rpc.jsonl": "62f12c7bdfbd1d80c8d4641aa9d26b2bc42a44012dc7449e1f58fc17d8273f77",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-S-2/screenshot.jpg": "e0f8de922c39e19f40a6154345a275d09700068621d4096c58aa29322a83bf5e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-S-2/observations.json": "16e2a17e9b63879da976af38fc016a2a5f5e1f31cd34bf00dee7253539af7b2d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-S-2/rpc.jsonl": "aedf6ca13d3c9238d563894460c6583818e76d75d12ba86024a020c6881a9e14",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-P-2/observations.json": "1ba21707b5e40439d4dd61ed7fd18d6f8e4496270163ca1986fe5bcb98c0e583",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-P-2/rpc.jsonl": "ae3399381dab7146835c6f14393e6fa3e2556fe1b854eb99935e35dbc4e549dc",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-P-2/observations.json": "37799cb2cecf50d34fe67787a94da30e3f8431708187539978810b1e8351ac17",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-P-2/rpc.jsonl": "33e353cc243a1e03e5c41ace928ef1f45bce02a11a4a174efbecfe56c5e204f9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-C-2/observations.json": "5d6590979d67d8f85027a98658d78593885b94a6e4c83b101f351bb5ff041378",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-C-2/rpc.jsonl": "43f50394f2b16e07b86b2191db0b360896c92a5ea0ed0d5754f520634d40b5ca",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-O-1/screenshot.jpg": "b556ccb0cc87b03d84985947abb145c02ac649dc7080ddef535a85cc90f590f3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-O-1/observations.json": "d677c983567f67e963da1de4a0f667ceb4d95af3974c946fc3b3e9b55658ad55",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-O-1/rpc.jsonl": "fa1607b57cc6a65be23122234231bf51a747163026c8090f02fb30a1646e2aa8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-C-2/observations.json": "ecd9b08fd497a8cfa8008e84bbfc2bb0f66eee3f1d73d6206c368146b3adc1f2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-C-2/rpc.jsonl": "026b3563f66f4a8f7f5f286c1b1eff3f02203e63ea18ddb5b11a9c58d4925c64",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-O-1/screenshot.jpg": "332755097db6ea281f229fee9b0b3cc8974fa1c23a0a8f959c550d4b0b45ef49",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-O-1/observations.json": "07e2f8ffcc3d93f2162ea6e254f36d26018c4b8a204aca3db8e9c61b0eaae2f3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-O-1/rpc.jsonl": "4f2db31be51176e8774b5f8768e01954daef3275140c42af0fca511075ec7760",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-S-1/screenshot.jpg": "564725aa3403ff9a63d8465df0ad23072ddcda0cbcd9ffbaa8e4eaa65bf56f88",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-S-1/observations.json": "75749e189a3f49b336556780e631f962ee158569f8143859a494a9afd1460183",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-S-1/rpc.jsonl": "ce85f46c09c16116f3a713f56f3f0e36bbcada400c17781d4525df730da85c75",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-S-1/screenshot.jpg": "e0f8de922c39e19f40a6154345a275d09700068621d4096c58aa29322a83bf5e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-S-1/observations.json": "b2a9ef6524370f5f9bbb3e6aec95663bb3eacf427b7d91f6ec90f67e6eada47a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-S-1/rpc.jsonl": "ccc185b84827bed6f76609ac773dfea714fb09cd63960b7c1acdc174912c52bb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-P-1/observations.json": "c3f64aa140c1d3fca56b9f56cc69b21d53bc3fcd8423bb8a2dc43874c0f02741",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr1-P-1/rpc.jsonl": "35f0d69ac2164c767420a109063547310cae1979403ca31979651e7ee224b6a0",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-P-1/observations.json": "0147c3739adb6ee2e1b37d427df2f9a94611710bc60abd9cad35ccd06e5c494c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/input-probe-v1/dpr2-P-1/rpc.jsonl": "ca0f490ec532709f382d7afbba97a10a312124e0cd9266602465e0a7c337a5f3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na1/phone-1-trace.json": "16f4ec9dcbd8a2e5ce11c9694b4fc46e850f1feed46c67f5a12ab0bf399c8f46",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na1/phone-1-1.jpg": "d9d9ebda4aae3fe5154e71ec818c41403b788a8bd7a1a8dd3842472bc2d9f5b2",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na1/phone-1-0.jpg": "61192cdb56a7e979167b02593a4bd7e2198de021a17d7441a5eb810ad62de0b4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na0/laptop-1-0.jpg": "564725aa3403ff9a63d8465df0ad23072ddcda0cbcd9ffbaa8e4eaa65bf56f88",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na0/laptop-1-1.jpg": "7d87552e3c54f000b0febb3ceb52f3d586fc11c3dc33a5d7b0be0e18de20cffc",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na0/laptop-1-trace.json": "9005428cf11175598c20d45a0a40b4877b4acf4f1bee561cc03fcd1ce05852ef",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na2/laptop-2-trace.json": "eb69fbe0414f9369682d4bf69f4b4c9ffeba4796f299021431bbd2ef351979ab",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na2/laptop-2-1.jpg": "b5d457868f08002b8275eac47cb24bbe19fb0561629a82398753bec94064390b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na2/laptop-2-0.jpg": "e0f8de922c39e19f40a6154345a275d09700068621d4096c58aa29322a83bf5e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na3/phone-2-0.jpg": "cd51e32bdc99259b0d2e862b6c1b19f89920c7aabc9661b8a2cacaa0d2c5fe4a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na3/phone-2-1.jpg": "effb4eb0c9261457b1233cdbf9cd7e72d765679b6befccaa0ebcaae11c6b6c9f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/pytest-native-v1/test_concurrent_capture_and_na3/phone-2-trace.json": "1ba7cd2e0c8e1acc4697227812c10a70227327fc3f2fba8ebd69ef2674f0d61b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0000-ready.jpg": "8f8027133b260b5b6d09c42c8c8a324ec9fd29ae0c24614580a62ff6f8dbb07f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0001-fit-00.jpg": "b6297e56124484222cb4dc2400271128eb1110f9d467ec210ca49a64989b0135",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0002-fit-01.jpg": "1c60080214fa206667a2397322dc92def10964ab86e9fbb7a041618c1ae37ba5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0003-fit-02.jpg": "dd78f2393d664a434188d8ea60be7bb16512f494569ee617ad7cfbbd71ffa326",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0004-fit-03.jpg": "dd78f2393d664a434188d8ea60be7bb16512f494569ee617ad7cfbbd71ffa326",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0005-front.jpg": "1379978eaf0c471e648deee2395754ce578d894e0adb06c4f6710e1af68273ca",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0006-views-00.jpg": "d101144f837d3ce0da19b8e4d547071e4d3ab71b2aded16717818b86e9e648eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0007-views-01.jpg": "d101144f837d3ce0da19b8e4d547071e4d3ab71b2aded16717818b86e9e648eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0008-views-02.jpg": "d101144f837d3ce0da19b8e4d547071e4d3ab71b2aded16717818b86e9e648eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0009-views-03.jpg": "d101144f837d3ce0da19b8e4d547071e4d3ab71b2aded16717818b86e9e648eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0010-save-00.jpg": "e709bc777c33454926b26c3e4135a66ab3a5359d88a98d86a4e0fabfb6a12211",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0011-save-01.jpg": "e709bc777c33454926b26c3e4135a66ab3a5359d88a98d86a4e0fabfb6a12211",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0012-save-02.jpg": "e709bc777c33454926b26c3e4135a66ab3a5359d88a98d86a4e0fabfb6a12211",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0013-save-03.jpg": "e709bc777c33454926b26c3e4135a66ab3a5359d88a98d86a4e0fabfb6a12211",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0014-other.jpg": "f7a871a03fc90bec63a03c51a7882c87dfaa94d61dbe581ac910bfa0e5faf69c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0015-restore-00.jpg": "c65feffee088b5273fce840d706f6a66fa42023a4469b16a8b7471925e59968d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0016-restore-01.jpg": "df1d9ce85c1de58107c42627a70ee5b0ae48292a07b2951b82c91bebc71951ee",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0017-restore-02.jpg": "31bb99381124b3702d77e77dec8be03e1ef3e773b56dbb60ef17455e8ebe1c6a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0018-restore-03.jpg": "31bb99381124b3702d77e77dec8be03e1ef3e773b56dbb60ef17455e8ebe1c6a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/0019-restored-final.jpg": "31bb99381124b3702d77e77dec8be03e1ef3e773b56dbb60ef17455e8ebe1c6a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/manifest.partial.json": "3cd6e5ad69b5c64dc113c5e0b1a8012828fb9459660e64d9c4c1bb3f9abe729b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/cache-meta-derived.json": "a7cc319158818545b3f4f87c3d69756da5ecc845706d5a77644467596a5ab96f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/rpc.jsonl": "462496f07525bc3bcdc4652c641afb2dfd1a3bc654a1505e785680460eea8373",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/cache-meta-original.json": "d3abe4f093586aa66ffd348115c560a583523b116361687a67491786f1882f5c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/authored-world.yaml": "b20fc344b7b8d08581a8dafa17dbb2fa9a89444f4adcc93feae44aae9c22f7db",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-input-v1/workflow/timestamps.json": "adac902ae1ece7da2d0e49dc09c1a348ce8ab9701177302d117e946a7c226d45",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/workflow.mp4": "ae0993fe605c52294cefb77f93e9c13aea1797fbd6aaa3221ab5a217555cfe1f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/fps-preflight.json": "2bf4aa343472e36761862737bcfc564dacd31b3f42bb88c95d833c5b8819f5f3",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/concat-input-probe.json": "5e8cb21f14442cb735a580918ee7de3b69b3b2cbe58d11e74aed319bf00fb8e4",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/decoded-contact.jpg": "9eaacfab61eb56899d8f4da4a095ccc5849e6eff0d43d3ac5ad5d1f34a83a549",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/frames.ffconcat": "a60d583292751f2cf8faf7cc4dfd3a50f26d4b2d5d494003c80f0379f11f9e51",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/manifest.json": "c240b022077fe9698cdab22bf431fda6a10b07c8c4d8bccc6085c8d02ec327ea",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/media-qa.json": "f6d8d7f93e409e3da5083d4f71fb3cfee3e9c111fa4a89b79816d92bb8ec3570",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/fps-preflight.log": "29f8dc8afb638c780da33229612bd4305f9398fb5fe1ca25908a9390dd17398b",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/decoded-frames/t5.913.png": "a73bb00b5de074efd8d99c44308b0ee666a11de1efe310b67a29f8735d528eca",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/decoded-frames/t2.413.png": "4f8db91461a592043f2310626d779429de19abc7edc8118e0d38bbacb0a502f9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/decoded-frames/t1.207.png": "d81dec13c95a62d62a2fd0fc6a1735a2f332c217dc202f210a2b0877093f09d8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/decoded-frames/t4.827.png": "bfcac2c530b1661777518a8669509b927f86b823c1bc5a94a33982ee27bc77a0",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/decoded-frames/t0.121.png": "10a47e744fdd26eb20ac1febe4dd6e2232f6ede69032288b2d38b304e9f99ddd",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/decoded-frames/t3.620.png": "c60bd6bcef612117da2b9c2674469b7e08e1577fbb401954b3c4137fd1cc98ea",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00017.jpg": "31bb99381124b3702d77e77dec8be03e1ef3e773b56dbb60ef17455e8ebe1c6a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00003.jpg": "dd78f2393d664a434188d8ea60be7bb16512f494569ee617ad7cfbbd71ffa326",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00002.jpg": "1c60080214fa206667a2397322dc92def10964ab86e9fbb7a041618c1ae37ba5",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00016.jpg": "df1d9ce85c1de58107c42627a70ee5b0ae48292a07b2951b82c91bebc71951ee",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00000.jpg": "8f8027133b260b5b6d09c42c8c8a324ec9fd29ae0c24614580a62ff6f8dbb07f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00014.jpg": "f7a871a03fc90bec63a03c51a7882c87dfaa94d61dbe581ac910bfa0e5faf69c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00015.jpg": "c65feffee088b5273fce840d706f6a66fa42023a4469b16a8b7471925e59968d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00001.jpg": "b6297e56124484222cb4dc2400271128eb1110f9d467ec210ca49a64989b0135",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00005.jpg": "1379978eaf0c471e648deee2395754ce578d894e0adb06c4f6710e1af68273ca",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00011.jpg": "e709bc777c33454926b26c3e4135a66ab3a5359d88a98d86a4e0fabfb6a12211",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00010.jpg": "e709bc777c33454926b26c3e4135a66ab3a5359d88a98d86a4e0fabfb6a12211",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00004.jpg": "dd78f2393d664a434188d8ea60be7bb16512f494569ee617ad7cfbbd71ffa326",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00012.jpg": "e709bc777c33454926b26c3e4135a66ab3a5359d88a98d86a4e0fabfb6a12211",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00006.jpg": "d101144f837d3ce0da19b8e4d547071e4d3ab71b2aded16717818b86e9e648eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00007.jpg": "d101144f837d3ce0da19b8e4d547071e4d3ab71b2aded16717818b86e9e648eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00013.jpg": "e709bc777c33454926b26c3e4135a66ab3a5359d88a98d86a4e0fabfb6a12211",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00009.jpg": "d101144f837d3ce0da19b8e4d547071e4d3ab71b2aded16717818b86e9e648eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00008.jpg": "d101144f837d3ce0da19b8e4d547071e4d3ab71b2aded16717818b86e9e648eb",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00018.jpg": "31bb99381124b3702d77e77dec8be03e1ef3e773b56dbb60ef17455e8ebe1c6a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/malo-media-v1/raw-frames/f00019.jpg": "31bb99381124b3702d77e77dec8be03e1ef3e773b56dbb60ef17455e8ebe1c6a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0000-ready.jpg": "6c98e3a2b98224ad4e5b665cd487d90548cab471ad38b24bf23d0e66d14c4c48",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0001-fit-00.jpg": "6c98e3a2b98224ad4e5b665cd487d90548cab471ad38b24bf23d0e66d14c4c48",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0002-fit-01.jpg": "6c98e3a2b98224ad4e5b665cd487d90548cab471ad38b24bf23d0e66d14c4c48",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0003-fit-02.jpg": "6bc3dcd38302177c5bbb60757b18211639c2f961292ef671db76bb42f1b7f399",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0004-fit-03.jpg": "6bc3dcd38302177c5bbb60757b18211639c2f961292ef671db76bb42f1b7f399",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0005-front.jpg": "8a4bde7455bb9a8e08d0828effa1f3fd87d93dd8b8dd1b6c3181c302c24dc887",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0006-views-00.jpg": "eeb4814e3eb6f56da8c040738ee76f609fa2945787545da77b01bfac7dce2454",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0007-views-01.jpg": "5a48afa1c219efdd10033bbdcc937c3785b1c88ed6b3faac60d8d6d681571bba",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0008-views-02.jpg": "98b547d4d703df76599e07e7ce8a06dc0c9be97162bfbf2f2cb8e85690cce114",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0009-views-03.jpg": "98b547d4d703df76599e07e7ce8a06dc0c9be97162bfbf2f2cb8e85690cce114",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0010-save-00.jpg": "ca7aaab85102b6fffd579c3e2515a1b74c135600a191101fa506a0c0146e8e4d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0011-save-01.jpg": "ca7aaab85102b6fffd579c3e2515a1b74c135600a191101fa506a0c0146e8e4d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0012-save-02.jpg": "ca7aaab85102b6fffd579c3e2515a1b74c135600a191101fa506a0c0146e8e4d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0013-save-03.jpg": "ca7aaab85102b6fffd579c3e2515a1b74c135600a191101fa506a0c0146e8e4d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0014-other.jpg": "bdf43c32486528230e887a3bfb9fa9b09372f6db003916062d9f2a37ba591ff6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0015-restore-00.jpg": "2e9b650132f129b8e6b3427dc355dce78de6016eec5984b0f481c8d1288bc353",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0016-restore-01.jpg": "32c51eb7f48754ab3460576c2b7ed225c040b493a75f778b410859aec96ec39e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0017-restore-02.jpg": "709b6c3de1e8f25d87c58bb0988f1782c54565afa7b7982abac947faf12ead2f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0018-restore-03.jpg": "709b6c3de1e8f25d87c58bb0988f1782c54565afa7b7982abac947faf12ead2f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/0019-restored-final.jpg": "709b6c3de1e8f25d87c58bb0988f1782c54565afa7b7982abac947faf12ead2f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/manifest.partial.json": "d2aff7cadfec0ae179880c1b2875a15f18ae0ca12a02673e44dfb8253d17f3ac",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/rpc.jsonl": "96b90f40876edfbbac4a2a31375d1c532b2793077bbf442ae1004bb8d07963c7",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/authored-world.yaml": "a4c86e31af6c2eaf8922aabb6cefcb9545d315619d2eb931955a04323748c036",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-input-v1/workflow/timestamps.json": "9c346cfd09a507a6a3883e65332dc5279fd0f57c13d5d82ba3c73a050bfa54bc",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/workflow.mp4": "ecb126b4095bc7024138830f69eaf99bd7cd7bd03ad5658f378dbca134558326",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/fps-preflight.json": "7b36a9122d6bdb8922577e11d51a89def7d698d41234e7b3758f425b94da751a",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/concat-input-probe.json": "c0f14933957989587067fd4e831fea21791432576418b733411550e1a493d153",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/decoded-contact.jpg": "0700f61957dc8b912549f60a6c210632720fb84a0f9ec4480b6a49c063970278",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/frames.ffconcat": "325d9f7c9e28f9269db4db0a7b029f70c812c8247db7a2620c84cd7787702ad8",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/manifest.json": "25e33aaed03d1e2cdc5e3a5e2b10fbb5237234881aceeef3136ff4529d411805",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/media-qa.json": "96899e23f2b8eb201447ff90511007d7efca510ad39ce8a6e3bd0cbacf7aa1fc",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/fps-preflight.log": "2d24a3f706a52608c6705d3f56f59db0cde0d1fc09498cd548fc0d5a9296b8d0",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/decoded-frames/t1.213.png": "3d9ece8143a185f1b992e8fc7567eff7654be46591e1597e369279dc3a76a1bc",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/decoded-frames/t5.945.png": "f74e31cb611324785dd3ff38b63d47eee7c7cf3090314a9bebf1f4ba33cc5475",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/decoded-frames/t3.640.png": "199b8667168ad4ba8a1313eb5aa3f2452101b280f44e6f7110f5f8944aea2412",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/decoded-frames/t0.121.png": "44e95c0eb0cd97fb9b70708bbc7f72993518a04bb9949107ec2895c1a0cf9031",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/decoded-frames/t4.853.png": "07b1e794cdb670141abd36d71ac34640e0683a7340a7aa38403c5b72b1897cb9",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/decoded-frames/t2.427.png": "f0d6ea74467fcbe2cfa09229cb75739454a78fc7a489604e602dd59aad14859c",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00017.jpg": "709b6c3de1e8f25d87c58bb0988f1782c54565afa7b7982abac947faf12ead2f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00003.jpg": "6bc3dcd38302177c5bbb60757b18211639c2f961292ef671db76bb42f1b7f399",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00002.jpg": "6c98e3a2b98224ad4e5b665cd487d90548cab471ad38b24bf23d0e66d14c4c48",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00016.jpg": "32c51eb7f48754ab3460576c2b7ed225c040b493a75f778b410859aec96ec39e",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00000.jpg": "6c98e3a2b98224ad4e5b665cd487d90548cab471ad38b24bf23d0e66d14c4c48",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00014.jpg": "bdf43c32486528230e887a3bfb9fa9b09372f6db003916062d9f2a37ba591ff6",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00015.jpg": "2e9b650132f129b8e6b3427dc355dce78de6016eec5984b0f481c8d1288bc353",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00001.jpg": "6c98e3a2b98224ad4e5b665cd487d90548cab471ad38b24bf23d0e66d14c4c48",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00005.jpg": "8a4bde7455bb9a8e08d0828effa1f3fd87d93dd8b8dd1b6c3181c302c24dc887",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00011.jpg": "ca7aaab85102b6fffd579c3e2515a1b74c135600a191101fa506a0c0146e8e4d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00010.jpg": "ca7aaab85102b6fffd579c3e2515a1b74c135600a191101fa506a0c0146e8e4d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00004.jpg": "6bc3dcd38302177c5bbb60757b18211639c2f961292ef671db76bb42f1b7f399",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00012.jpg": "ca7aaab85102b6fffd579c3e2515a1b74c135600a191101fa506a0c0146e8e4d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00006.jpg": "eeb4814e3eb6f56da8c040738ee76f609fa2945787545da77b01bfac7dce2454",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00007.jpg": "5a48afa1c219efdd10033bbdcc937c3785b1c88ed6b3faac60d8d6d681571bba",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00013.jpg": "ca7aaab85102b6fffd579c3e2515a1b74c135600a191101fa506a0c0146e8e4d",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00009.jpg": "98b547d4d703df76599e07e7ce8a06dc0c9be97162bfbf2f2cb8e85690cce114",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00008.jpg": "98b547d4d703df76599e07e7ce8a06dc0c9be97162bfbf2f2cb8e85690cce114",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00018.jpg": "709b6c3de1e8f25d87c58bb0988f1782c54565afa7b7982abac947faf12ead2f",
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-11-02-native-input-dpr/go2-media-v1/raw-frames/f00019.jpg": "709b6c3de1e8f25d87c58bb0988f1782c54565afa7b7982abac947faf12ead2f"
+  },
+  "limits": [
+    "E83 remains closed and failed captures stay failed; no recapture replaces them.",
+    "No product/material/renderer/asset/dependency edit or visual-quality claim.",
+    "Local Chrome emulation only; no native desktop zoom, Windows, remote-CI or full-suite claim.",
+    "No fresh build/install/performance-budget qualification; product inputs are identical.",
+    "CFR resamples native samples; full decode and discrete contacts do not certify continuous smoothness."
+  ]
+}
