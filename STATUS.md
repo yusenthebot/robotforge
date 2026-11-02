@@ -1,5 +1,10 @@
 # STATUS
 
+- 2026-11-02 native desktop zoom: actual macOS Chrome100→125→150→100 Chinese Malo Fit/views/bookmark recovery observed, after selecting the correct native window.
+  At150% the panel requires internal scrolling; six native Tabs reveal Restore and Enter restores the saved pose. Maximum camera error2.40e-14;481model arrays/runtime/owned files and817source inputs unchanged, console warn/error empty, tab/server/renderer closed.
+  Five native screenshots reviewed; AX scroll tool failure retained, pointer-wheel/system-scale/Windows/CI/new suite/package/budget/movie/visual-gain claims excluded. [Report](docs/bench/2026-11-02-desktop-zoom.md).
+  Shared visual/lightweight/play goal continues; no native-image sampler candidate yet and action-success tuning remains deferred.
+
 - 2026-11-02 native capture at high DPR: fixed test-tool screenshot/pointer competition with one per-tab gate around complete gestures and screenshot RPCs; CSS coordinates and trusted delivery checks remain.
   Fixed16-slot probe retains14correct/2DPR2-overlap wrong-target timeouts.40distinct scoped tests pass; actual original Malo/Go2 DPR2 runs each pass7clicks/20nativeJPEGs,481unchanged model arrays/runtime and cleanup.
   Two media packages retain40original JPEGs/timestamps;2560×1600films fully decode;12contact panels and2native endpoints reviewed.430product files/dependencies identical; no fresh package/performance/Windows/CI/desktop-zoom pass or visual-gain claim.
